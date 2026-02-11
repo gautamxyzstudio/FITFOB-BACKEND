@@ -21,13 +21,16 @@
     "@strapi/plugin-users-permissions": "5.35.0",
     "@strapi/provider-upload-aws-s3": "^5.35.0",
     "@strapi/strapi": "5.35.0",
+    "bcryptjs": "^3.0.3",
     "better-sqlite3": "12.4.1",
     "jsonwebtoken": "^9.0.3",
     "jwks-rsa": "^3.2.2",
+    "pg": "^8.18.0",
     "react": "^18.0.0",
     "react-dom": "^18.0.0",
     "react-router-dom": "^6.0.0",
-    "styled-components": "^6.0.0"
+    "styled-components": "^6.0.0",
+    "twilio": "^5.12.1"
   },
   "devDependencies": {
     "@types/jsonwebtoken": "^9.0.10",

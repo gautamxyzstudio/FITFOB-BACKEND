@@ -24,7 +24,7 @@
       "type": "email",
       "minLength": 6,
       "configurable": false,
-      "required": true
+      "required": false
     },
     "provider": {
       "type": "string",
@@ -68,6 +68,9 @@
     },
     "cognitoSub": {
       "type": "string"
+    },
+    "phoneNumber": {
+      "type": "biginteger"
     }
   }
 }
