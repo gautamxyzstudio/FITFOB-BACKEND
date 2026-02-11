@@ -167,7 +167,7 @@ export default {
 
       strapi.log.info("[CLEANUP] Pending signup removed");
 
-      // ---------- LOGIN ----------
+      
       const jwt = strapi
         .plugin("users-permissions")
         .service("jwt")
