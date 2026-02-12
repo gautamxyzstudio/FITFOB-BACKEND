@@ -430,6 +430,111 @@ export interface AdminUser extends Struct.CollectionTypeSchema {
   };
 }
 
+export interface ApiClubOwnerClubOwner extends Struct.CollectionTypeSchema {
+  collectionName: 'club_owners';
+  info: {
+    displayName: 'Club-Owner';
+    pluralName: 'club-owners';
+    singularName: 'club-owner';
+  };
+  options: {
+    draftAndPublish: true;
+  };
+  attributes: {
+    city: Schema.Attribute.String;
+    closingTime: Schema.Attribute.Time;
+    clubAddress: Schema.Attribute.String;
+    clubName: Schema.Attribute.String;
+    clubPhotos: Schema.Attribute.Media<
+      'images' | 'files' | 'videos' | 'audios',
+      true
+    >;
+    createdAt: Schema.Attribute.DateTime;
+    createdBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
+      Schema.Attribute.Private;
+    email: Schema.Attribute.Email;
+    facilities: Schema.Attribute.JSON;
+    latitude: Schema.Attribute.String;
+    locale: Schema.Attribute.String & Schema.Attribute.Private;
+    localizations: Schema.Attribute.Relation<
+      'oneToMany',
+      'api::club-owner.club-owner'
+    > &
+      Schema.Attribute.Private;
+    logo: Schema.Attribute.Media<'images' | 'files' | 'videos' | 'audios'>;
+    longitude: Schema.Attribute.String;
+    openingTime: Schema.Attribute.Time;
+    ownerName: Schema.Attribute.String;
+    phoneNumber: Schema.Attribute.String;
+    pincode: Schema.Attribute.String;
+    publishedAt: Schema.Attribute.DateTime;
+    services: Schema.Attribute.JSON;
+    state: Schema.Attribute.String;
+    updatedAt: Schema.Attribute.DateTime;
+    updatedBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
+      Schema.Attribute.Private;
+    user: Schema.Attribute.Relation<
+      'oneToOne',
+      'plugin::users-permissions.user'
+    >;
+    weekday: Schema.Attribute.String;
+    weekend: Schema.Attribute.String;
+  };
+}
+
+export interface ApiPendingClubOwnerPendingClubOwner
+  extends Struct.CollectionTypeSchema {
+  collectionName: 'pending_club_owners';
+  info: {
+    displayName: 'Pending-Club-Owner';
+    pluralName: 'pending-club-owners';
+    singularName: 'pending-club-owner';
+  };
+  options: {
+    draftAndPublish: false;
+  };
+  attributes: {
+    city: Schema.Attribute.String;
+    closingTime: Schema.Attribute.Time;
+    clubAddress: Schema.Attribute.String;
+    clubName: Schema.Attribute.String;
+    clubPhotos: Schema.Attribute.Media<'images', true>;
+    createdAt: Schema.Attribute.DateTime;
+    createdBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
+      Schema.Attribute.Private;
+    currentStep: Schema.Attribute.Integer & Schema.Attribute.DefaultTo<1>;
+    email: Schema.Attribute.Email;
+    facilities: Schema.Attribute.JSON;
+    latitude: Schema.Attribute.String;
+    locale: Schema.Attribute.String & Schema.Attribute.Private;
+    localizations: Schema.Attribute.Relation<
+      'oneToMany',
+      'api::pending-club-owner.pending-club-owner'
+    > &
+      Schema.Attribute.Private;
+    logo: Schema.Attribute.Media<'images'>;
+    longitude: Schema.Attribute.String;
+    openingTime: Schema.Attribute.Time;
+    ownerName: Schema.Attribute.String;
+    phoneNumber: Schema.Attribute.String;
+    pincode: Schema.Attribute.String;
+    publishedAt: Schema.Attribute.DateTime;
+    services: Schema.Attribute.JSON;
+    state: Schema.Attribute.String;
+    status: Schema.Attribute.Enumeration<['draft', 'completed']> &
+      Schema.Attribute.DefaultTo<'draft'>;
+    updatedAt: Schema.Attribute.DateTime;
+    updatedBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
+      Schema.Attribute.Private;
+    user: Schema.Attribute.Relation<
+      'oneToOne',
+      'plugin::users-permissions.user'
+    >;
+    weekday: Schema.Attribute.String;
+    weekend: Schema.Attribute.String;
+  };
+}
+
 export interface ApiPendingSignupPendingSignup
   extends Struct.CollectionTypeSchema {
   collectionName: 'pending_signups';
@@ -1002,6 +1107,8 @@ declare module '@strapi/strapi' {
       'admin::transfer-token': AdminTransferToken;
       'admin::transfer-token-permission': AdminTransferTokenPermission;
       'admin::user': AdminUser;
+      'api::club-owner.club-owner': ApiClubOwnerClubOwner;
+      'api::pending-club-owner.pending-club-owner': ApiPendingClubOwnerPendingClubOwner;
       'api::pending-signup.pending-signup': ApiPendingSignupPendingSignup;
       'api::reset-password-session.reset-password-session': ApiResetPasswordSessionResetPasswordSession;
       'plugin::content-releases.release': PluginContentReleasesRelease;
