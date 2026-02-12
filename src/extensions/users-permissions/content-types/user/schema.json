@@ -70,7 +70,7 @@
       "type": "string"
     },
     "phoneNumber": {
-      "type": "biginteger"
+      "type": "string"
     }
   }
 }
