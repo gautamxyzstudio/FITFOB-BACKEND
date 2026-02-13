@@ -12,16 +12,16 @@ module.exports = {
         // step 1
         {
             method: "POST",
-            path: "/pending-club-owner/club-details",
-            handler: "pending-club-owner.clubDetails",
+            path: "/pending-club-owner/club-owner-details",
+            handler: "pending-club-owner.clubOwnerDetails",
             config: { auth: {} }
         },
 
         // step 2
         {
             method: "POST",
-            path: "/pending-club-owner/personal-details",
-            handler: "pending-club-owner.personalDetails",
+            path: "/pending-club-owner/location-details",
+            handler: "pending-club-owner.locationDetails",
             config: { auth: {} }
         },
 

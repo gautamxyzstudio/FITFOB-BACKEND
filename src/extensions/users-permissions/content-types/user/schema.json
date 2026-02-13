@@ -71,6 +71,10 @@
     },
     "phoneNumber": {
       "type": "string"
+    },
+    "isVerified": {
+      "type": "boolean",
+      "default": false
     }
   }
 }

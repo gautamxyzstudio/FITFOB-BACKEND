@@ -12,14 +12,9 @@ const isPhone = (value: string) => /^(\+91)?[6-9]\d{9}$/.test(value);
 // always convert to +91XXXXXXXXXX
 const formatPhone = (phone: string) => {
   let p = phone.trim();
-
-  // remove spaces/dashes
   p = p.replace(/[\s-]/g, "");
 
-  // remove +
   if (p.startsWith("+")) p = p.substring(1);
-
-  // remove 91 prefix
   if (p.startsWith("91") && p.length === 12) p = p.substring(2);
 
   return `+91${p}`;
@@ -38,17 +33,13 @@ export default {
       if (!identifier || !otp)
         return ctx.badRequest("Identifier and OTP required");
 
-      // ---------- NORMALIZE IDENTIFIER ----------
+      /* ---------------- NORMALIZE IDENTIFIER ---------------- */
       let twilioIdentifier = identifier;
-
       if (isPhone(identifier)) {
         twilioIdentifier = formatPhone(identifier);
       }
 
-      strapi.log.info(`[OTP] Verifying OTP for ${twilioIdentifier}`);
-      strapi.log.info(`[OTP] Normalized identifier = ${twilioIdentifier}`);
-
-      // ---------- VERIFY OTP ----------
+      /* ---------------- VERIFY OTP ---------------- */
       const result = await client.verify.v2
         .services(process.env.TWILIO_VERIFY_SERVICE_SID as string)
         .verificationChecks.create({
@@ -59,9 +50,7 @@ export default {
       if (result.status !== "approved")
         return ctx.badRequest("OTP expired. Please resend OTP");
 
-      strapi.log.info("[OTP] Verification successful");
-
-      // ---------- FIND PENDING SIGNUP ----------
+      /* ---------------- FIND PENDING SIGNUP ---------------- */
       const record = await strapi.db
         .query("api::pending-signup.pending-signup")
         .findOne({
@@ -80,7 +69,7 @@ export default {
       const email = data.email || null;
       const phoneNumber = data.phone || null;
 
-      // ---------- PREVENT DUPLICATE USER ----------
+      /* ---------------- PREVENT DUPLICATE USER ---------------- */
       const existingUser = await strapi.db
         .query("plugin::users-permissions.user")
         .findOne({
@@ -92,7 +81,7 @@ export default {
 
       const emailForSchema = email || `${phoneNumber}@phone.user`;
 
-      // ---------- USERNAME ----------
+      /* ---------------- USERNAME ---------------- */
       let username = generateUsername(email, phoneNumber);
       let counter = 1;
 
@@ -104,21 +93,18 @@ export default {
         username = `${username}${counter++}`;
       }
 
-      // ---------- ROLE ----------
+      /* ---------------- ROLE ---------------- */
       const roleRecord = data.role
         ? await strapi.db
-          .query("plugin::users-permissions.role")
-          .findOne({ where: { name: data.role } })
+            .query("plugin::users-permissions.role")
+            .findOne({ where: { name: data.role } })
         : await strapi.db
-          .query("plugin::users-permissions.role")
-          .findOne({ where: { type: "authenticated" } });
+            .query("plugin::users-permissions.role")
+            .findOne({ where: { type: "authenticated" } });
 
-      // ---------- CREATE STRAPI USER ----------
-      strapi.log.info("[STRAPI] Creating user in database...");
-
+      /* ---------------- CREATE USER ---------------- */
       const userService = strapi.plugin("users-permissions").service("user");
 
-      // STEP 1 — create base user (only core fields allowed)
       const baseUser = await userService.add({
         username,
         email: emailForSchema,
@@ -128,23 +114,19 @@ export default {
         confirmed: true,
       });
 
-      // STEP 2 — update custom fields
-      const user = await strapi.db
+      /* ⭐ UPDATE CUSTOM FIELDS (IMPORTANT FIX) */
+      await strapi.db
         .query("plugin::users-permissions.user")
         .update({
           where: { id: baseUser.id },
           data: {
             phoneNumber: phoneNumber,
+            isVerified: true,   // <-- THIS IS YOUR REQUIRED FIELD
           },
         });
 
-
-      strapi.log.info(`[STRAPI] User created successfully (ID=${user.id})`);
-
-      // ---------- CREATE COGNITO USER ----------
+      /* ---------------- COGNITO ---------------- */
       try {
-        strapi.log.info("[COGNITO] Creating AWS Cognito user...");
-
         const cognitoIdentifier = phoneNumber
           ? formatPhone(phoneNumber)
           : email;
@@ -159,34 +141,50 @@ export default {
         await strapi.db
           .query("plugin::users-permissions.user")
           .update({
-            where: { id: user.id },
+            where: { id: baseUser.id },
             data: { cognitoSub },
           });
-
-        strapi.log.info("[COGNITO] Cognito user linked with Strapi");
 
       } catch (err: any) {
         strapi.log.error("Cognito provisioning failed");
         strapi.log.error(err);
       }
 
-      // ---------- CLEANUP ----------
+      /* ---------------- CLEANUP ---------------- */
       await strapi.entityService.delete(
         "api::pending-signup.pending-signup",
         record.id
       );
 
-      strapi.log.info("[CLEANUP] Pending signup removed");
-
-
+      /* ---------------- ISSUE JWT ---------------- */
       const jwt = strapi
         .plugin("users-permissions")
         .service("jwt")
-        .issue({ id: user.id });
+        .issue({ id: baseUser.id });
 
-      strapi.log.info("[LOGIN] JWT issued");
+      /* ⭐ FETCH CLEAN USER OBJECT (VERY IMPORTANT) */
+      const fullUser = await strapi.db
+        .query("plugin::users-permissions.user")
+        .findOne({
+          where: { id: baseUser.id },
+          populate: ["role"],
+        });
 
-      ctx.send({ jwt, user });
+      /* ---------------- RESPONSE ---------------- */
+      ctx.send({
+        jwt,
+        user: {
+          id: fullUser.id,
+          username: fullUser.username,
+          email: fullUser.email,
+          phoneNumber: fullUser.phoneNumber,
+          isVerified: fullUser.isVerified,   // ⭐ NOW ALWAYS RETURNED
+          cognitoSub: fullUser.cognitoSub,
+          confirmed: fullUser.confirmed,
+          blocked: fullUser.blocked,
+          role: fullUser.role,
+        },
+      });
 
     } catch (err) {
       strapi.log.error("VERIFY OTP ERROR");

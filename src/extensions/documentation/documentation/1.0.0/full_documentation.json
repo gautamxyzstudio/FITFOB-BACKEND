@@ -14,7 +14,7 @@
       "name": "Apache 2.0",
       "url": "https://www.apache.org/licenses/LICENSE-2.0.html"
     },
-    "x-generation-date": "2026-02-12T12:36:12.496Z"
+    "x-generation-date": "2026-02-13T04:39:32.456Z"
   },
   "x-strapi-config": {
     "plugins": [
@@ -615,7 +615,7 @@
         "operationId": "get/pending-club-owner/me"
       }
     },
-    "/pending-club-owner/club-details": {
+    "/pending-club-owner/club-owner-details": {
       "post": {
         "responses": {
           "200": {
@@ -683,7 +683,7 @@
           "Pending-club-owner"
         ],
         "parameters": [],
-        "operationId": "post/pending-club-owner/club-details",
+        "operationId": "post/pending-club-owner/club-owner-details",
         "requestBody": {
           "required": true,
           "content": {
@@ -696,7 +696,7 @@
         }
       }
     },
-    "/pending-club-owner/personal-details": {
+    "/pending-club-owner/location-details": {
       "post": {
         "responses": {
           "200": {
@@ -764,7 +764,7 @@
           "Pending-club-owner"
         ],
         "parameters": [],
-        "operationId": "post/pending-club-owner/personal-details",
+        "operationId": "post/pending-club-owner/location-details",
         "requestBody": {
           "required": true,
           "content": {
@@ -4881,6 +4881,9 @@
               "phoneNumber": {
                 "type": "string"
               },
+              "isVerified": {
+                "type": "boolean"
+              },
               "createdAt": {
                 "type": "string",
                 "format": "date-time"
@@ -6287,6 +6290,9 @@
               },
               "phoneNumber": {
                 "type": "string"
+              },
+              "isVerified": {
+                "type": "boolean"
               },
               "createdAt": {
                 "type": "string",

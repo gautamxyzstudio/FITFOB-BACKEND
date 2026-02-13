@@ -1,7 +1,6 @@
 export default {
 
   async login(ctx: any) {
-
     try {
 
       const { identifier, password } = ctx.request.body;
@@ -14,18 +13,18 @@ export default {
 
       let user: any;
 
-      // ---------- EMAIL LOGIN ----------
+      /* ---------- EMAIL LOGIN ---------- */
       if (identifier.includes("@")) {
         user = await userQuery.findOne({
           where: { email: identifier.toLowerCase() },
-          populate: { role: true },
+          populate: ["role"],
         });
       }
-      // ---------- PHONE LOGIN ----------
+      /* ---------- PHONE LOGIN ---------- */
       else {
         user = await userQuery.findOne({
           where: { phoneNumber: identifier },
-          populate: { role: true },
+          populate: ["role"],
         });
       }
 
@@ -33,7 +32,7 @@ export default {
         return ctx.badRequest("User not found");
       }
 
-      // ---------- PASSWORD CHECK ----------
+      /* ---------- PASSWORD CHECK ---------- */
       const validPassword = await strapi
         .plugin("users-permissions")
         .service("user")
@@ -47,20 +46,34 @@ export default {
         return ctx.badRequest("User is blocked");
       }
 
-      // ---------- JWT ----------
+      /* ---------- ISSUE JWT ---------- */
       const jwt = strapi
         .plugin("users-permissions")
         .service("jwt")
         .issue({ id: user.id });
 
-      // ---------- CLEAN RESPONSE ----------
-      delete user.password;
-      delete user.resetPasswordToken;
-      delete user.confirmationToken;
+      /* ---------- FETCH CLEAN USER (IMPORTANT) ---------- */
+      const fullUser = await strapi.db
+        .query("plugin::users-permissions.user")
+        .findOne({
+          where: { id: user.id },
+          populate: ["role"],
+        });
 
+      /* ---------- SEND SAFE RESPONSE ---------- */
       ctx.send({
         jwt,
-        user,
+        user: {
+          id: fullUser.id,
+          username: fullUser.username,
+          email: fullUser.email,
+          phoneNumber: fullUser.phoneNumber,
+          isVerified: fullUser.isVerified,   // ⭐ NOW INCLUDED
+          cognitoSub: fullUser.cognitoSub,
+          confirmed: fullUser.confirmed,
+          blocked: fullUser.blocked,
+          role: fullUser.role,
+        },
       });
 
     } catch (err) {
