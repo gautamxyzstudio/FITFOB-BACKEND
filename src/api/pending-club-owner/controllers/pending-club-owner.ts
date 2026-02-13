@@ -2,22 +2,21 @@ import { Context } from "koa";
 
 const PENDING_UID = "api::pending-club-owner.pending-club-owner";
 const CLUB_UID = "api::club-owner.club-owner";
+const UPLOAD_FOLDER_ID = 1; // API Uploads folder id
 
-/* -------- helper: safely read body (handles form-data + json) -------- */
+/* -------- safely read body (form-data or json) -------- */
 function getBody(ctx: Context) {
   let body: any = ctx.request.body || {};
 
-  // when multipart form-data is sent
   if (body.data && typeof body.data === "string") {
     try {
       body = JSON.parse(body.data);
-    } catch (err) {}
+    } catch {}
   }
-
   return body;
 }
 
-/* helper: get draft */
+/* -------- get user draft -------- */
 async function getDraft(userId: number) {
   return await strapi.db.query(PENDING_UID).findOne({
     where: { user: userId },
@@ -32,7 +31,7 @@ export default {
     const user = ctx.state.user;
     if (!user) return ctx.unauthorized();
 
-    // user already has a club
+    // prevent multiple clubs
     const existingClub = await strapi.db.query(CLUB_UID).findOne({
       where: { user: user.id },
     });
@@ -58,7 +57,7 @@ export default {
     });
   },
 
-  /* ================= SCREEN 1 : CLUB + OWNER + LOGO ================= */
+  /* ================= STEP 1 : CLUB + OWNER + LOGO ================= */
   async clubOwnerDetails(ctx: Context) {
     const user = ctx.state.user;
     if (!user) return ctx.unauthorized();
@@ -72,26 +71,27 @@ export default {
 
     let logoId: number | null = null;
 
-    // upload logo
+    /* ---------- upload logo into folder ---------- */
     if (files && files.logo) {
       const uploaded = await strapi
         .plugin("upload")
         .service("upload")
         .upload({
-          data: {},
+          data: { folder: UPLOAD_FOLDER_ID },
           files: Array.isArray(files.logo) ? files.logo : [files.logo],
         });
 
       logoId = uploaded[0].id;
     }
 
+    /* ---------- save step 1 ---------- */
     await strapi.entityService.update(PENDING_UID, draft.id, {
       data: {
         clubName: body.clubName,
         ownerName: body.ownerName,
         phoneNumber: body.phoneNumber,
         email: body.email,
-        logo: logoId,
+        logo: logoId, // attach media
         currentStep: 2,
       },
     });
@@ -99,8 +99,8 @@ export default {
     ctx.send({ nextStep: 2 });
   },
 
-  /* ================= SCREEN 2 : LOCATION ================= */
-  async locationDetails(ctx: Context) {
+  /* ================= STEP 2 : MAP LOCATION ================= */
+  async mapLocation(ctx: Context) {
     const user = ctx.state.user;
     const body = getBody(ctx);
 
@@ -112,10 +112,6 @@ export default {
       data: {
         latitude: body.latitude,
         longitude: body.longitude,
-        clubAddress: body.clubAddress,
-        city: body.city,
-        state: body.state,
-        pincode: body.pincode,
         currentStep: 3,
       },
     });
@@ -123,13 +119,35 @@ export default {
     ctx.send({ nextStep: 3 });
   },
 
-  /* ================= SCREEN 3 : CONFIGURE CLUB ================= */
-  async configureClub(ctx: Context) {
+  /* ================= STEP 3 : ADDRESS DETAILS ================= */
+  async addressDetails(ctx: Context) {
     const user = ctx.state.user;
     const body = getBody(ctx);
 
     const draft: any = await getDraft(user.id);
     if (!draft || draft.currentStep !== 3)
+      return ctx.badRequest("Invalid step order");
+
+    await strapi.entityService.update(PENDING_UID, draft.id, {
+      data: {
+        clubAddress: body.clubAddress,
+        city: body.city,
+        state: body.state,
+        pincode: body.pincode,
+        currentStep: 4,
+      },
+    });
+
+    ctx.send({ nextStep: 4 });
+  },
+
+  /* ================= STEP 4 : CONFIGURE CLUB ================= */
+  async configureClub(ctx: Context) {
+    const user = ctx.state.user;
+    const body = getBody(ctx);
+
+    const draft: any = await getDraft(user.id);
+    if (!draft || draft.currentStep !== 4)
       return ctx.badRequest("Invalid step order");
 
     await strapi.entityService.update(PENDING_UID, draft.id, {
@@ -140,31 +158,31 @@ export default {
         closingTime: body.closingTime,
         weekday: body.weekday,
         weekend: body.weekend,
-        currentStep: 4,
+        currentStep: 5,
       },
     });
 
-    ctx.send({ nextStep: 4 });
+    ctx.send({ nextStep: 5 });
   },
 
-  /* ================= SCREEN 4 : PHOTOS + CREATE CLUB ================= */
+  /* ================= STEP 5 : PHOTOS + CREATE CLUB ================= */
   async uploadClubPhotos(ctx: Context) {
     const user = ctx.state.user;
     const files: any = ctx.request.files;
 
     const draft: any = await getDraft(user.id);
-    if (!draft || draft.currentStep !== 4)
+    if (!draft || draft.currentStep !== 5)
       return ctx.badRequest("Complete previous steps first");
 
     if (!files || !files.clubPhotos)
       return ctx.badRequest("Please upload club photos");
 
-    // upload gallery
+    /* ---------- upload gallery into folder ---------- */
     const uploadedPhotos = await strapi
       .plugin("upload")
       .service("upload")
       .upload({
-        data: {},
+        data: { folder: UPLOAD_FOLDER_ID },
         files: Array.isArray(files.clubPhotos)
           ? files.clubPhotos
           : [files.clubPhotos],
@@ -180,7 +198,7 @@ export default {
 
     const logoId = updatedDraft.logo?.id ?? null;
 
-    /* CREATE FINAL CLUB OWNER */
+    /* ---------- CREATE FINAL CLUB OWNER ---------- */
     const clubOwner = await strapi.entityService.create(CLUB_UID, {
       data: {
         user: user.id,
@@ -205,7 +223,7 @@ export default {
       },
     });
 
-    // delete draft
+    /* delete draft */
     await strapi.entityService.delete(PENDING_UID, draft.id);
 
     ctx.send({
