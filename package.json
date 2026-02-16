@@ -27,12 +27,16 @@
     "jsonwebtoken": "^9.0.3",
     "jwks-rsa": "^3.2.2",
     "pg": "^8.18.0",
+    "postcss": "^8.5.6",
     "react": "^18.0.0",
     "react-dom": "^18.0.0",
+    "react-router": "^7.13.0",
     "react-router-dom": "^6.0.0",
+    "sanitize-html": "^2.17.0",
     "strapi-location-picker": "^0.0.2",
     "styled-components": "^6.0.0",
-    "twilio": "^5.12.1"
+    "twilio": "^5.12.1",
+    "vite": "^5.4.21"
   },
   "devDependencies": {
     "@types/jsonwebtoken": "^9.0.10",
