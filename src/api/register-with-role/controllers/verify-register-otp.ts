@@ -121,7 +121,7 @@ export default {
           where: { id: baseUser.id },
           data: {
             phoneNumber: phoneNumber,
-            isVerified: true,   // <-- THIS IS YOUR REQUIRED FIELD
+            isVerified: false,   // <-- THIS IS YOUR REQUIRED FIELD
           },
         });
 

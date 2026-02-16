@@ -2,9 +2,9 @@ import { Context } from "koa";
 
 const PENDING_UID = "api::pending-club-owner.pending-club-owner";
 const CLUB_UID = "api::club-owner.club-owner";
-const UPLOAD_FOLDER_ID = 1; // API Uploads folder id
+const UPLOAD_FOLDER_ID = 1; // your "API Uploads" folder
 
-/* -------- safely read body (form-data or json) -------- */
+/* ---------- safely read body (form-data or json) ---------- */
 function getBody(ctx: Context) {
   let body: any = ctx.request.body || {};
 
@@ -16,11 +16,32 @@ function getBody(ctx: Context) {
   return body;
 }
 
-/* -------- get user draft -------- */
+/* ---------- get user draft ---------- */
 async function getDraft(userId: number) {
   return await strapi.db.query(PENDING_UID).findOne({
     where: { user: userId },
     populate: ["logo", "clubPhotos"],
+  });
+}
+
+/* ⭐⭐⭐ STRAPI v5 REAL FIX — attach file to folder properly ⭐⭐⭐ */
+async function attachToFolder(fileId: number) {
+  const folder = await strapi.db.query("plugin::upload.folder").findOne({
+    where: { id: UPLOAD_FOLDER_ID },
+  });
+
+  if (!folder) {
+    strapi.log.error("Upload folder not found");
+    return;
+  }
+
+  await strapi.db.query("plugin::upload.file").update({
+    where: { id: fileId },
+    data: {
+      folder: folder.id,
+      folderPath: folder.path,
+      pathId: folder.pathId,
+    },
   });
 }
 
@@ -31,7 +52,6 @@ export default {
     const user = ctx.state.user;
     if (!user) return ctx.unauthorized();
 
-    // prevent multiple clubs
     const existingClub = await strapi.db.query(CLUB_UID).findOne({
       where: { user: user.id },
     });
@@ -71,27 +91,28 @@ export default {
 
     let logoId: number | null = null;
 
-    /* ---------- upload logo into folder ---------- */
     if (files && files.logo) {
       const uploaded = await strapi
         .plugin("upload")
         .service("upload")
         .upload({
-          data: { folder: UPLOAD_FOLDER_ID },
+          data: {},
           files: Array.isArray(files.logo) ? files.logo : [files.logo],
         });
 
       logoId = uploaded[0].id;
+
+      // attach logo into folder
+      await attachToFolder(logoId);
     }
 
-    /* ---------- save step 1 ---------- */
     await strapi.entityService.update(PENDING_UID, draft.id, {
       data: {
         clubName: body.clubName,
         ownerName: body.ownerName,
         phoneNumber: body.phoneNumber,
         email: body.email,
-        logo: logoId, // attach media
+        logo: logoId,
         currentStep: 2,
       },
     });
@@ -177,18 +198,22 @@ export default {
     if (!files || !files.clubPhotos)
       return ctx.badRequest("Please upload club photos");
 
-    /* ---------- upload gallery into folder ---------- */
     const uploadedPhotos = await strapi
       .plugin("upload")
       .service("upload")
       .upload({
-        data: { folder: UPLOAD_FOLDER_ID },
+        data: {},
         files: Array.isArray(files.clubPhotos)
           ? files.clubPhotos
           : [files.clubPhotos],
       });
 
-    const photoIds = uploadedPhotos.map((f: any) => f.id);
+    const photoIds: number[] = [];
+
+    for (const file of uploadedPhotos) {
+      await attachToFolder(file.id); // ⭐ move to folder properly
+      photoIds.push(file.id);
+    }
 
     const updatedDraft: any = await strapi.entityService.findOne(
       PENDING_UID,
@@ -198,7 +223,6 @@ export default {
 
     const logoId = updatedDraft.logo?.id ?? null;
 
-    /* ---------- CREATE FINAL CLUB OWNER ---------- */
     const clubOwner = await strapi.entityService.create(CLUB_UID, {
       data: {
         user: user.id,
@@ -223,7 +247,6 @@ export default {
       },
     });
 
-    /* delete draft */
     await strapi.entityService.delete(PENDING_UID, draft.id);
 
     ctx.send({
