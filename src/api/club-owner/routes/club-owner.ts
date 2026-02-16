@@ -1,7 +1,0 @@
-/**
- * club-owner router
- */
-
-import { factories } from '@strapi/strapi';
-
-export default factories.createCoreRouter('api::club-owner.club-owner');
