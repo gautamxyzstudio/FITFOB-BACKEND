@@ -21,6 +21,7 @@ const formatPhone = (phone: string) => {
 };
 
 function generateUsername(email?: string, phone?: string) {
+function generateUsername(email?: string, phone?: string) {
   if (email) return email.split("@")[0];
   return String(phone);
 }
@@ -112,6 +113,7 @@ export default {
         role: roleRecord.id,
         provider: "local",
         confirmed: true,
+        blocked: false,
       });
 
       /* ⭐ UPDATE CUSTOM FIELDS (IMPORTANT FIX) */
