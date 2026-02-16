@@ -1,8 +1,7 @@
 import path from "path";
 
 export default {
-
-  app: {
+app: {
     keys: ["fitfobKey1", "fitfobKey2", "fitfobKey3", "fitfobKey4"],
   },
 
