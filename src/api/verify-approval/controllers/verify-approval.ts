@@ -5,10 +5,9 @@ export default {
   async verifyApproval(ctx: Context) {
     try {
       const { id } = ctx.params;
-      const { approved } = ctx.request.body;
 
-      if (approved === undefined) {
-        return ctx.badRequest("approved (true/false) is required");
+      if (!id) {
+        return ctx.badRequest("User id required");
       }
 
       // find user
@@ -21,21 +20,23 @@ export default {
         return ctx.notFound("User not found");
       }
 
-      // update verification status
+      if (user.isVerified === true) {
+        return ctx.badRequest("User already verified");
+      }
+
+      // UPDATE USER
       const updatedUser = await strapi.entityService.update(
         "plugin::users-permissions.user",
         id,
         {
           data: {
-            isVerified: approved,
+            isVerified: true,
           },
         }
       );
 
       ctx.send({
-        message: approved
-          ? "User approved successfully"
-          : "User approval revoked",
+        message: "User approved successfully",
         user: {
           id: updatedUser.id,
           username: updatedUser.username,
@@ -45,7 +46,7 @@ export default {
       });
     } catch (err) {
       strapi.log.error(err);
-      ctx.internalServerError("Verification update failed");
+      ctx.internalServerError("Approval failed");
     }
   },
 
