@@ -14,7 +14,7 @@
       "name": "Apache 2.0",
       "url": "https://www.apache.org/licenses/LICENSE-2.0.html"
     },
-    "x-generation-date": "2026-02-16T07:26:14.721Z"
+    "x-generation-date": "2026-02-16T09:19:30.141Z"
   },
   "x-strapi-config": {
     "plugins": [
@@ -696,7 +696,7 @@
         }
       }
     },
-    "/pending-club-owner/map-location": {
+    "/pending-club-owner/location-details": {
       "post": {
         "responses": {
           "200": {
@@ -764,88 +764,7 @@
           "Pending-club-owner"
         ],
         "parameters": [],
-        "operationId": "post/pending-club-owner/map-location",
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/PendingClubOwnerRequest"
-              }
-            }
-          }
-        }
-      }
-    },
-    "/pending-club-owner/address-details": {
-      "post": {
-        "responses": {
-          "200": {
-            "description": "OK",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/PendingClubOwnerResponse"
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "Bad Request",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "Unauthorized",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          },
-          "403": {
-            "description": "Forbidden",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "Not Found",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          },
-          "500": {
-            "description": "Internal Server Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          }
-        },
-        "tags": [
-          "Pending-club-owner"
-        ],
-        "parameters": [],
-        "operationId": "post/pending-club-owner/address-details",
+        "operationId": "post/pending-club-owner/location-details",
         "requestBody": {
           "required": true,
           "content": {
