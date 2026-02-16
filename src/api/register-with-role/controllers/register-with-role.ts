@@ -11,7 +11,7 @@ const isEmail = (value: string) =>
 
 // detect indian phone
 const isPhone = (value: string) =>
-  /^[6-9]\d{9}$/.test(value);
+  /^[6-9]\d{9}$/.test(value); 
 
 // normalize for Twilio
 const formatPhone = (phone: string) =>

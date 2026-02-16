@@ -13,6 +13,7 @@ export default {
       path: "/verify-register-otp",
       handler: "verify-register-otp.verify",
       config: { auth: false },
-    },
+    }, 
+    
   ],
 };

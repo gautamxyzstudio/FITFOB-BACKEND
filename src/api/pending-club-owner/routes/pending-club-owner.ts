@@ -8,7 +8,6 @@ export default {
       handler: "pending-club-owner.me",
       config: { auth: {} },
     },
-
     /* STEP 1 — CLUB + OWNER + LOGO */
     {
       method: "POST",
@@ -16,7 +15,6 @@ export default {
       handler: "pending-club-owner.clubOwnerDetails",
       config: { auth: {} },
     },
-
     /* STEP 2 — MAP LOCATION (LATITUDE / LONGITUDE) */
     {
       method: "POST",

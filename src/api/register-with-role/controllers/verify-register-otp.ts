@@ -210,5 +210,5 @@ export default {
       strapi.log.error(err);
       ctx.internalServerError("OTP verification failed");
     }
-  },
+  }, 
 };
