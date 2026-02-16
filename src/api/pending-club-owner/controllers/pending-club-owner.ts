@@ -2,7 +2,7 @@ import { Context } from "koa";
 
 const PENDING_UID = "api::pending-club-owner.pending-club-owner";
 const CLUB_UID = "api::club-owner.club-owner";
-const UPLOAD_FOLDER_ID = 1; // API Uploads folder id
+const UPLOAD_FOLDER_ID = 1;
 
 /* -------- safely read body (form-data or json) -------- */
 function getBody(ctx: Context) {
