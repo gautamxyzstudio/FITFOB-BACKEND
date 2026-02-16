@@ -11,7 +11,7 @@ function getBody(ctx: Context) {
   if (body.data && typeof body.data === "string") {
     try {
       body = JSON.parse(body.data);
-    } catch {}
+    } catch { }
   }
   return body;
 }
