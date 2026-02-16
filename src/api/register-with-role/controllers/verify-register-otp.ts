@@ -20,8 +20,7 @@ const formatPhone = (phone: string) => {
   return `+91${p}`;
 };
 
-function generateUsername(email?: string, phone?: string) {
-function generateUsername(email?: string, phone?: string) {
+function generateUsername(email?: string | null, phone?: string | null) {
   if (email) return email.split("@")[0];
   return String(phone);
 }
@@ -58,29 +57,40 @@ export default {
           where: {
             $or: [
               { identifier },
-              { identifier: identifier.replace("+91", "") }
-            ]
-          }
+              { identifier: identifier.replace("+91", "") },
+            ],
+          },
         });
 
       if (!record)
         return ctx.badRequest("Signup expired. Please register again.");
 
       const data = record.signupData;
-      const email = data.email || null;
-      const phoneNumber = data.phone || null;
+
+      const email: string | null = data.email ?? null;
+      const phoneNumber: string | null = data.phone
+        ? formatPhone(data.phone)
+        : null;
+
+      /* -------- STRAPI REQUIRES EMAIL -------- */
+      const emailForSchema: string = email
+        ? email
+        : `${phoneNumber!}@phone.user`;
 
       /* ---------------- PREVENT DUPLICATE USER ---------------- */
       const existingUser = await strapi.db
         .query("plugin::users-permissions.user")
         .findOne({
-          where: email ? { email } : { phoneNumber },
+          where: {
+            $or: [
+              email ? { email } : null,
+              phoneNumber ? { phoneNumber } : null,
+            ].filter(Boolean),
+          },
         });
 
       if (existingUser)
         return ctx.badRequest("User already verified. Please login.");
-
-      const emailForSchema = email || `${phoneNumber}@phone.user`;
 
       /* ---------------- USERNAME ---------------- */
       let username = generateUsername(email, phoneNumber);
@@ -94,47 +104,56 @@ export default {
         username = `${username}${counter++}`;
       }
 
-      /* ---------------- ROLE ---------------- */
-      const roleRecord = data.role
-        ? await strapi.db
-            .query("plugin::users-permissions.role")
-            .findOne({ where: { name: data.role } })
-        : await strapi.db
-            .query("plugin::users-permissions.role")
-            .findOne({ where: { type: "authenticated" } });
+      /* ---------------- ROLE (DEFAULT CLIENT) ---------------- */
+      let roleName = data.role?.trim();
+      if (!roleName) roleName = "Client";
+
+      let roleRecord = await strapi.db
+        .query("plugin::users-permissions.role")
+        .findOne({
+          where: { name: roleName },
+        });
+
+      if (!roleRecord) {
+        strapi.log.warn(`Role "${roleName}" not found. Using authenticated role.`);
+        roleRecord = await strapi.db
+          .query("plugin::users-permissions.role")
+          .findOne({ where: { type: "authenticated" } });
+      }
 
       /* ---------------- CREATE USER ---------------- */
+      /* ---------------- CREATE USER (STRAPI SAFE) ---------------- */
       const userService = strapi.plugin("users-permissions").service("user");
 
+      // create user using strapi register logic (it hashes password internally)
       const baseUser = await userService.add({
         username,
         email: emailForSchema,
         password: data.password,
-        role: roleRecord.id,
         provider: "local",
         confirmed: true,
         blocked: false,
       });
 
-      /* ⭐ UPDATE CUSTOM FIELDS (IMPORTANT FIX) */
-      await strapi.db
-        .query("plugin::users-permissions.user")
-        .update({
-          where: { id: baseUser.id },
-          data: {
-            phoneNumber: phoneNumber,
-            isVerified: true,   // <-- THIS IS YOUR REQUIRED FIELD
-          },
-        });
+      /* ---- FORCE ROLE + CUSTOM FIELDS ---- */
+      await strapi.db.query("plugin::users-permissions.user").update({
+        where: { id: baseUser.id },
+        data: {
+          role: roleRecord.id,
+          phoneNumber: phoneNumber,
+          isVerified: false,
+        },
+      });
+
 
       /* ---------------- COGNITO ---------------- */
       try {
         const cognitoIdentifier = phoneNumber
-          ? formatPhone(phoneNumber)
-          : email;
+          ? phoneNumber
+          : email!;
 
         const cognitoSub = await createCognitoUser(
-          cognitoIdentifier!,
+          cognitoIdentifier,
           data.password,
           username,
           !!phoneNumber
@@ -146,7 +165,6 @@ export default {
             where: { id: baseUser.id },
             data: { cognitoSub },
           });
-
       } catch (err: any) {
         strapi.log.error("Cognito provisioning failed");
         strapi.log.error(err);
@@ -164,7 +182,7 @@ export default {
         .service("jwt")
         .issue({ id: baseUser.id });
 
-      /* ⭐ FETCH CLEAN USER OBJECT (VERY IMPORTANT) */
+      /* ---------------- FETCH USER ---------------- */
       const fullUser = await strapi.db
         .query("plugin::users-permissions.user")
         .findOne({
@@ -180,14 +198,13 @@ export default {
           username: fullUser.username,
           email: fullUser.email,
           phoneNumber: fullUser.phoneNumber,
-          isVerified: fullUser.isVerified,   // ⭐ NOW ALWAYS RETURNED
+          isVerified: fullUser.isVerified,
           cognitoSub: fullUser.cognitoSub,
           confirmed: fullUser.confirmed,
           blocked: fullUser.blocked,
           role: fullUser.role,
         },
       });
-
     } catch (err) {
       strapi.log.error("VERIFY OTP ERROR");
       strapi.log.error(err);
