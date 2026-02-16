@@ -111,7 +111,7 @@ export default {
         password: data.password,
         role: roleRecord.id,
         provider: "local",
-        confirmed: true,
+        confirmed: false,
       });
 
       /* ⭐ UPDATE CUSTOM FIELDS (IMPORTANT FIX) */
