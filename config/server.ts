@@ -1,9 +1,6 @@
 import path from "path";
 
 export default {
-  host: "0.0.0.0",
-  port: 1337,
-
   app: {
     keys: ["fitfobKey1", "fitfobKey2", "fitfobKey3", "fitfobKey4"],
   },
