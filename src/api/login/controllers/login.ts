@@ -1,3 +1,30 @@
+/* ================= PHONE + EMAIL HELPERS (SAFE) ================= */
+
+// email detector (same behaviour as your includes("@"))
+const isEmail = (value: string) =>
+  /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
+
+// ⭐ THIS is the missing function causing red line
+const formatPhone = (value: string): string => {
+  if (!value) return value;
+
+  // remove spaces, dash, brackets etc
+  const digits = value.replace(/\D/g, "");
+
+  // 8687422222  -> +918687422222
+  if (digits.length === 10) return `+91${digits}`;
+
+  // 918687422222 -> +918687422222
+  if (digits.length === 12 && digits.startsWith("91"))
+    return `+${digits}`;
+
+  // already +91XXXXXXXXXX
+  if (value.startsWith("+91")) return value;
+
+  return value;
+};
+
+
 export default {
 
   async login(ctx: any) {
@@ -14,7 +41,7 @@ export default {
       let user: any;
 
       /* ---------- EMAIL LOGIN ---------- */
-      if (identifier.includes("@")) {
+      if (isEmail(identifier)) {
         user = await userQuery.findOne({
           where: { email: identifier.toLowerCase() },
           populate: ["role"],
@@ -22,8 +49,15 @@ export default {
       }
       /* ---------- PHONE LOGIN ---------- */
       else {
+
+        // add +91 automatically
+        const phoneWithPrefix = formatPhone(identifier);
+
+        strapi.log.info(`[LOGIN] Input: ${identifier}`);
+        strapi.log.info(`[LOGIN] Searching: ${phoneWithPrefix}`);
+
         user = await userQuery.findOne({
-          where: { phoneNumber: identifier },
+          where: { phoneNumber: phoneWithPrefix },
           populate: ["role"],
         });
       }
