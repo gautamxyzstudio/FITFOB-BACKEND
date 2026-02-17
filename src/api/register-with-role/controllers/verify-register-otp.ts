@@ -1,5 +1,7 @@
 import Twilio from "twilio";
 import { createCognitoUser } from "../../../services/cognito-provision";
+import { cognitoLogin } from "../../../services/cognito-auth";
+
 
 const client = Twilio(
   process.env.TWILIO_ACCOUNT_SID as string,
@@ -74,7 +76,7 @@ export default {
 
       /* -------- STRAPI REQUIRES EMAIL -------- */
       const emailForSchema: string = email
-        ? email
+        ? email.toLowerCase()
         : `${phoneNumber!}@phone.user`;
 
       /* ---------------- PREVENT DUPLICATE USER ---------------- */
@@ -121,11 +123,10 @@ export default {
           .findOne({ where: { type: "authenticated" } });
       }
 
-      /* ---------------- CREATE USER ---------------- */
       /* ---------------- CREATE USER (STRAPI SAFE) ---------------- */
+
       const userService = strapi.plugin("users-permissions").service("user");
 
-      // create user using strapi register logic (it hashes password internally)
       const baseUser = await userService.add({
         username,
         email: emailForSchema,
@@ -136,6 +137,7 @@ export default {
       });
 
       /* ---- FORCE ROLE + CUSTOM FIELDS ---- */
+
       await strapi.db.query("plugin::users-permissions.user").update({
         where: { id: baseUser.id },
         data: {
@@ -145,42 +147,65 @@ export default {
         },
       });
 
-
       /* ---------------- COGNITO ---------------- */
+
+      let cognitoSub: string | null = null;
+
       try {
         const cognitoIdentifier = phoneNumber
           ? phoneNumber
-          : email!;
+          : email!.toLowerCase();
 
-        const cognitoSub = await createCognitoUser(
+        cognitoSub = await createCognitoUser(
           cognitoIdentifier,
           data.password,
           username,
           !!phoneNumber
         );
 
-        await strapi.db
-          .query("plugin::users-permissions.user")
-          .update({
-            where: { id: baseUser.id },
-            data: { cognitoSub },
-          });
       } catch (err: any) {
         strapi.log.error("Cognito provisioning failed");
         strapi.log.error(err);
+
+        // ❗ rollback Strapi user
+        await strapi.db.query("plugin::users-permissions.user").delete({
+          where: { id: baseUser.id },
+        });
+
+        return ctx.internalServerError(
+          "Account creation failed. Please try again."
+        );
       }
+
+      /* ---- SAVE SUB ONLY AFTER SUCCESS ---- */
+      await strapi.db
+        .query("plugin::users-permissions.user")
+        .update({
+          where: { id: baseUser.id },
+          data: { cognitoSub },
+        });
+
+
+      /* ---------------- AUTO LOGIN WITH COGNITO ---------------- */
+
+      let loginIdentifier: string;
+
+      if (phoneNumber) {
+        // already formatted +91XXXXXXXXXX
+        loginIdentifier = phoneNumber;
+      } else {
+        // Cognito email usernames must be lowercase
+        loginIdentifier = email!.toLowerCase();
+      }
+
+      const tokens = await cognitoLogin(loginIdentifier, data.password);
+
 
       /* ---------------- CLEANUP ---------------- */
       await strapi.entityService.delete(
         "api::pending-signup.pending-signup",
         record.id
       );
-
-      /* ---------------- ISSUE JWT ---------------- */
-      const jwt = strapi
-        .plugin("users-permissions")
-        .service("jwt")
-        .issue({ id: baseUser.id });
 
       /* ---------------- FETCH USER ---------------- */
       const fullUser = await strapi.db
@@ -192,7 +217,10 @@ export default {
 
       /* ---------------- RESPONSE ---------------- */
       ctx.send({
-        jwt,
+        accessToken: tokens?.AccessToken,
+        idToken: tokens?.IdToken,
+        refreshToken: tokens?.RefreshToken,
+        expiresIn: tokens?.ExpiresIn,
         user: {
           id: fullUser.id,
           username: fullUser.username,
@@ -210,5 +238,5 @@ export default {
       strapi.log.error(err);
       ctx.internalServerError("OTP verification failed");
     }
-  }, 
+  },
 };

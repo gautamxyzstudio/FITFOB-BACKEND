@@ -1,20 +1,21 @@
 /* ================= PHONE + EMAIL HELPERS (SAFE) ================= */
 
-// email detector (same behaviour as your includes("@"))
+import { cognitoLogin } from "../../../services/cognito-auth";
+
+// email detector
 const isEmail = (value: string) =>
   /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
 
-// ⭐ THIS is the missing function causing red line
+// phone formatter (always produce +91XXXXXXXXXX)
 const formatPhone = (value: string): string => {
   if (!value) return value;
 
-  // remove spaces, dash, brackets etc
   const digits = value.replace(/\D/g, "");
 
-  // 8687422222  -> +918687422222
+  // 8687422222
   if (digits.length === 10) return `+91${digits}`;
 
-  // 918687422222 -> +918687422222
+  // 918687422222
   if (digits.length === 12 && digits.startsWith("91"))
     return `+${digits}`;
 
@@ -24,89 +25,95 @@ const formatPhone = (value: string): string => {
   return value;
 };
 
-
 export default {
-
   async login(ctx: any) {
     try {
-
-      const { identifier, password } = ctx.request.body;
+      let { identifier, password } = ctx.request.body;
 
       if (!identifier || !password) {
         return ctx.badRequest("Identifier and password required");
       }
 
-      const userQuery = strapi.db.query("plugin::users-permissions.user");
+      /* ======================================================
+         1️⃣ NORMALIZE IDENTIFIER (MOST IMPORTANT FIX)
+         Cognito usernames are CASE SENSITIVE
+      ====================================================== */
+
+      identifier = identifier.trim();
+
+      if (isEmail(identifier)) {
+        identifier = identifier.toLowerCase();
+      } else {
+        identifier = formatPhone(identifier);
+      }
+
+      /* ======================================================
+         2️⃣ FIND USER FIRST (STRAPI DB)
+         This preserves your old login behaviour
+      ====================================================== */
 
       let user: any;
 
-      /* ---------- EMAIL LOGIN ---------- */
       if (isEmail(identifier)) {
-        user = await userQuery.findOne({
-          where: { email: identifier.toLowerCase() },
-          populate: ["role"],
-        });
-      }
-      /* ---------- PHONE LOGIN ---------- */
-      else {
+        user = await strapi.db
+          .query("plugin::users-permissions.user")
+          .findOne({
+            where: { email: identifier },
+            populate: ["role"],
+          });
+      } else {
+        strapi.log.info(`[LOGIN] Searching phone: ${identifier}`);
 
-        // add +91 automatically
-        const phoneWithPrefix = formatPhone(identifier);
-
-        strapi.log.info(`[LOGIN] Input: ${identifier}`);
-        strapi.log.info(`[LOGIN] Searching: ${phoneWithPrefix}`);
-
-        user = await userQuery.findOne({
-          where: { phoneNumber: phoneWithPrefix },
-          populate: ["role"],
-        });
+        user = await strapi.db
+          .query("plugin::users-permissions.user")
+          .findOne({
+            where: { phoneNumber: identifier },
+            populate: ["role"],
+          });
       }
 
       if (!user) {
         return ctx.badRequest("User not found");
       }
 
-      /* ---------- PASSWORD CHECK ---------- */
-      const validPassword = await strapi
-        .plugin("users-permissions")
-        .service("user")
-        .validatePassword(password, user.password);
-
-      if (!validPassword) {
-        return ctx.badRequest("Invalid password");
-      }
-
       if (user.blocked) {
         return ctx.badRequest("User is blocked");
       }
 
-      /* ---------- ISSUE JWT ---------- */
-      const jwt = strapi
-        .plugin("users-permissions")
-        .service("jwt")
-        .issue({ id: user.id });
+      /* ======================================================
+         3️⃣ AUTHENTICATE USING COGNITO
+         (USE THE SAME IDENTIFIER USED DURING SIGNUP)
+      ====================================================== */
 
-      /* ---------- FETCH CLEAN USER (IMPORTANT) ---------- */
-      const fullUser = await strapi.db
-        .query("plugin::users-permissions.user")
-        .findOne({
-          where: { id: user.id },
-          populate: ["role"],
-        });
+      let tokens;
+      try {
+        // ⭐ CRITICAL: use normalized identifier
+        tokens = await cognitoLogin(identifier, password);
+      } catch (err) {
+        strapi.log.error("COGNITO LOGIN FAILED");
+        strapi.log.error(err);
+        return ctx.unauthorized("Invalid credentials");
+      }
 
-      /* ---------- SEND SAFE RESPONSE ---------- */
+      /* ======================================================
+         4️⃣ RETURN TOKENS + USER
+      ====================================================== */
+
       ctx.send({
-        jwt,
+        accessToken: tokens!.AccessToken,
+        idToken: tokens!.IdToken,
+        refreshToken: tokens!.RefreshToken,
+        expiresIn: tokens!.ExpiresIn,
         user: {
-          id: fullUser.id,
-          username: fullUser.username,
-          email: fullUser.email,
-          phoneNumber: fullUser.phoneNumber,
-          isVerified: fullUser.isVerified,   // ⭐ NOW INCLUDED
-          cognitoSub: fullUser.cognitoSub,
-          confirmed: fullUser.confirmed,
-          blocked: fullUser.blocked,
-          role: fullUser.role,
+          id: user.id,
+          username: user.username,
+          email: user.email,
+          phoneNumber: user.phoneNumber,
+          isVerified: user.isVerified,
+          cognitoSub: user.cognitoSub,
+          confirmed: user.confirmed,
+          blocked: user.blocked,
+          role: user.role,
         },
       });
 
