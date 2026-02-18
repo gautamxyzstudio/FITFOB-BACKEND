@@ -86,6 +86,7 @@ export default {
       ====================================================== */
 
       let tokens;
+      let strapiJwt = "";
       try {
         // ⭐ CRITICAL: use normalized identifier
         tokens = await cognitoLogin(identifier, password);
@@ -95,15 +96,24 @@ export default {
         return ctx.unauthorized("Invalid credentials");
       }
 
+      // 🔴 Create Strapi session (THIS is the missing login)
+      const jwtService = strapi.plugin("users-permissions").service("jwt");
+      strapiJwt = jwtService.issue({ id: user.id }) as string;
+
       /* ======================================================
          4️⃣ RETURN TOKENS + USER
       ====================================================== */
 
-      ctx.send({
-        accessToken: tokens!.AccessToken,
-        idToken: tokens!.IdToken,
-        refreshToken: tokens!.RefreshToken,
-        expiresIn: tokens!.ExpiresIn,
+      ctx.body = {
+        jwt: strapiJwt,              // ← STRAPI TOKEN
+
+        cognito: {
+          accessToken: tokens!.AccessToken,
+          idToken: tokens!.IdToken,
+          refreshToken: tokens!.RefreshToken,
+          expiresIn: tokens!.ExpiresIn,
+        },
+
         user: {
           id: user.id,
           username: user.username,
@@ -115,7 +125,7 @@ export default {
           blocked: user.blocked,
           role: user.role,
         },
-      });
+      };
 
     } catch (err) {
       strapi.log.error("CUSTOM LOGIN ERROR");

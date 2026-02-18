@@ -215,24 +215,34 @@ export default {
           populate: ["role"],
         });
 
+
+        // 🔴 Auto-login into Strapi
+const jwtService = strapi.plugin("users-permissions").service("jwt");
+const strapiJwt = jwtService.issue({ id: fullUser.id }) as string;
+
       /* ---------------- RESPONSE ---------------- */
-      ctx.send({
-        accessToken: tokens?.AccessToken,
-        idToken: tokens?.IdToken,
-        refreshToken: tokens?.RefreshToken,
-        expiresIn: tokens?.ExpiresIn,
-        user: {
-          id: fullUser.id,
-          username: fullUser.username,
-          email: fullUser.email,
-          phoneNumber: fullUser.phoneNumber,
-          isVerified: fullUser.isVerified,
-          cognitoSub: fullUser.cognitoSub,
-          confirmed: fullUser.confirmed,
-          blocked: fullUser.blocked,
-          role: fullUser.role,
-        },
-      });
+     ctx.body = {
+  jwt: strapiJwt,      // ← Strapi login session
+
+  cognito: {
+    accessToken: tokens?.AccessToken,
+    idToken: tokens?.IdToken,
+    refreshToken: tokens?.RefreshToken,
+    expiresIn: tokens?.ExpiresIn,
+  },
+
+  user: {
+    id: fullUser.id,
+    username: fullUser.username,
+    email: fullUser.email,
+    phoneNumber: fullUser.phoneNumber,
+    isVerified: fullUser.isVerified,
+    cognitoSub: fullUser.cognitoSub,
+    confirmed: fullUser.confirmed,
+    blocked: fullUser.blocked,
+    role: fullUser.role,
+  },
+};
     } catch (err) {
       strapi.log.error("VERIFY OTP ERROR");
       strapi.log.error(err);
