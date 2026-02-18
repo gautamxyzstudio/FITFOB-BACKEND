@@ -11,13 +11,33 @@ const isEmail = (value: string) =>
 
 // detect indian phone
 const isPhone = (value: string) =>
-  /^[6-9]\d{9}$/.test(value); 
+  /^[6-9]\d{9}$/.test(value);
 
 // normalize for Twilio
 const formatPhone = (phone: string) =>
   phone.startsWith("+") ? phone : `+91${phone}`;
 
+// normalize phone to +91XXXXXXXXXX for DB matching
+const normalizePhone = (phone: string | null) => {
+  if (!phone) return null;
+
+  let p = phone.trim().replace(/[\s-]/g, "");
+
+  if (p.startsWith("+")) p = p.substring(1);
+  if (p.startsWith("91") && p.length === 12) p = p.substring(2);
+
+  return `+91${p}`;
+};
+
+// also return local format (9876543210) for old DB records
+const localPhone = (phone: string | null) => {
+  if (!phone) return null;
+  return phone.replace("+91", "");
+};
+
+
 export default {
+
   async register(ctx: any) {
     try {
       const { identifier, password, confirmPassword, role } = ctx.request.body;
@@ -32,28 +52,50 @@ export default {
       let phone: string | null = null;
 
       if (isEmail(identifier)) email = identifier.toLowerCase();
-      else if (isPhone(identifier)) phone = identifier;
+      else if (isPhone(identifier)) phone = normalizePhone(identifier);
       else return ctx.badRequest("Invalid email or phone format");
 
       strapi.log.info(`[REGISTER] Type detected: ${email ? "EMAIL" : "PHONE"}`);
 
-      // ---------- DUPLICATE CHECK ----------
-      let existingUser = null;
+      /* =====================================================
+    CHECK BOTH TABLES: users + client_details
+    Block if email or phone already registered anywhere
+    ===================================================== */
 
-      if (email) {
-        existingUser = await strapi.db
-          .query("plugin::users-permissions.user")
-          .findOne({ where: { email } });
+      // check in users table
+     const existingUser = await strapi.db
+  .query("plugin::users-permissions.user")
+  .findOne({
+    where: {
+      $or: [
+        email ? { email } : null,
+        phone ? { phoneNumber: phone } : null,
+        phone ? { phoneNumber: localPhone(phone) } : null,
+      ].filter(Boolean),
+    },
+  });
+
+
+      // check in client_details table
+     const existingClient = await strapi.db
+  .query("api::client-detail.client-detail")
+  .findOne({
+    where: {
+      $or: [
+        email ? { email } : null,
+        phone ? { phoneNumber: phone } : null,
+        phone ? { phoneNumber: localPhone(phone) } : null,
+      ].filter(Boolean),
+    },
+  });
+
+
+      // if found anywhere → block signup
+      if (existingUser || existingClient) {
+        return ctx.badRequest(
+          "Email or phone already registered. Please login instead."
+        );
       }
-
-      if (!existingUser && phone) {
-        existingUser = await strapi.db
-          .query("plugin::users-permissions.user")
-          .findOne({ where: { phoneNumber: phone } });
-      }
-
-      if (existingUser)
-        return ctx.badRequest("User already exists");
 
       // ---------- DELETE OLD PENDING ----------
       await strapi.db

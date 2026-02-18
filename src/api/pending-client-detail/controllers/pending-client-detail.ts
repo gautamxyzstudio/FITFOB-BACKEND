@@ -2,17 +2,24 @@ import { Context } from "koa";
 
 const PENDING_UID = "api::pending-client-detail.pending-client-detail";
 const CLIENT_UID = "api::client-detail.client-detail";
+
+/* 🔴 IMPORTANT: this is the numeric folder id visible in Media Library URL */
 const UPLOAD_FOLDER_ID = 1;
 
-/* ---------- SAFE BODY PARSER (handles form-data + json) ---------- */
+/* ---------- SAFE BODY PARSER ---------- */
 function getBody(ctx: Context) {
 let body: any = ctx.request.body || {};
 if (body.data && typeof body.data === "string") {
-try {
-body = JSON.parse(body.data);
-} catch {}
+try { body = JSON.parse(body.data); } catch {}
 }
 return body;
+}
+
+/* ---------- GET FULL USER ---------- */
+async function getFullUser(userId: number) {
+return await strapi.db
+.query("plugin::users-permissions.user")
+.findOne({ where: { id: userId } });
 }
 
 /* ---------- GET USER DRAFT ---------- */
@@ -25,30 +32,27 @@ populate: ["selfieUpload", "governmentId"],
 
 export default {
 
-/* ================= START / RESUME ONBOARDING ================= */
+/* ================= START / RESUME ================= */
 async me(ctx: Context) {
-const user = ctx.state.user;
-if (!user) return ctx.unauthorized("Login required");
+const sessionUser = ctx.state.user;
+if (!sessionUser) return ctx.unauthorized("Login required");
 
-// If client already created → onboarding finished
+const user = await getFullUser(sessionUser.id);
+
 const existing = await strapi.db.query(CLIENT_UID).findOne({
   where: { user: user.id },
 });
 
-if (existing) {
-  return ctx.send({ status: "completed" });
-}
+if (existing) return ctx.send({ status: "completed" });
 
-// find draft
 let draft: any = await getDraft(user.id);
 
-// create draft automatically first time
 if (!draft) {
   draft = await strapi.entityService.create(PENDING_UID, {
     data: {
       user: user.id,
       email: user.email,
-      phoneNumber: user.phone,
+      phoneNumber: user.phoneNumber || null,
       currentStep: 1,
       status: "draft",
     },
@@ -64,10 +68,10 @@ ctx.send({
 
 /* ================= STEP 1 BASIC INFO ================= */
 async basicInfo(ctx: Context) {
-const user = ctx.state.user;
-if (!user) return ctx.unauthorized();
+const sessionUser = ctx.state.user;
+if (!sessionUser) return ctx.unauthorized();
 
-
+const user = await getFullUser(sessionUser.id);
 const body = getBody(ctx);
 const draft: any = await getDraft(user.id);
 
@@ -78,22 +82,22 @@ await strapi.entityService.update(PENDING_UID, draft.id, {
   data: {
     name: body.name,
     gender: body.gender,
-    email: user.email,
-    phoneNumber: user.phone,
+    email: body.email || user.email,
+    phoneNumber: body.phoneNumber || user.phoneNumber,
     currentStep: 2,
   },
 });
 
 ctx.send({ nextStep: 2 });
 
-
 },
 
 /* ================= STEP 2 BODY INFO ================= */
 async bodyInfo(ctx: Context) {
-const user = ctx.state.user;
-if (!user) return ctx.unauthorized();
+const sessionUser = ctx.state.user;
+if (!sessionUser) return ctx.unauthorized();
 
+const user = await getFullUser(sessionUser.id);
 const body = getBody(ctx);
 const draft: any = await getDraft(user.id);
 
@@ -111,14 +115,14 @@ await strapi.entityService.update(PENDING_UID, draft.id, {
 
 ctx.send({ nextStep: 3 });
 
-
 },
 
 /* ================= STEP 3 LOCATION ================= */
 async location(ctx: Context) {
-const user = ctx.state.user;
-if (!user) return ctx.unauthorized();
+const sessionUser = ctx.state.user;
+if (!sessionUser) return ctx.unauthorized();
 
+const user = await getFullUser(sessionUser.id);
 const body = getBody(ctx);
 const draft: any = await getDraft(user.id);
 
@@ -137,11 +141,12 @@ ctx.send({ nextStep: 4 });
 
 },
 
-/* ================= STEP 4 SELFIE UPLOAD ================= */
+/* ================= STEP 4 SELFIE ================= */
 async selfie(ctx: Context) {
-const user = ctx.state.user;
-if (!user) return ctx.unauthorized();
+const sessionUser = ctx.state.user;
+if (!sessionUser) return ctx.unauthorized();
 
+const user = await getFullUser(sessionUser.id);
 const files: any = ctx.request.files;
 const draft: any = await getDraft(user.id);
 
@@ -151,32 +156,43 @@ if (!draft || draft.currentStep !== 4)
 if (!files || !files.selfieUpload)
   return ctx.badRequest("Please upload selfie");
 
-const uploaded = await strapi
-  .plugin("upload")
-  .service("upload")
-  .upload({
-    data: { folder: UPLOAD_FOLDER_ID },
-    files: Array.isArray(files.selfieUpload)
-      ? files.selfieUpload
-      : [files.selfieUpload],
-  });
+const uploadService = strapi.plugin("upload").service("upload");
+
+const rawFile = Array.isArray(files.selfieUpload)
+  ? files.selfieUpload[0]
+  : files.selfieUpload;
+
+const uploaded = await uploadService.upload({
+  data: {
+    fileInfo: {
+      folder: UPLOAD_FOLDER_ID, // 🔴 THIS is the real v5 fix
+    },
+  },
+  files: rawFile,
+});
+
+const file = uploaded[0];
 
 await strapi.entityService.update(PENDING_UID, draft.id, {
   data: {
-    selfieUpload: uploaded[0].id,
+    selfieUpload: file.id,
     currentStep: 5,
   },
 });
 
-ctx.send({ nextStep: 5 });
+ctx.send({
+  nextStep: 5,
+  fileUrl: file.url,
+});
 
 },
 
-/* ================= STEP 5 GOVERNMENT ID (FINAL STEP) ================= */
+/* ================= STEP 5 GOVERNMENT ID ================= */
 async governmentId(ctx: Context) {
-const user = ctx.state.user;
-if (!user) return ctx.unauthorized();
+const sessionUser = ctx.state.user;
+if (!sessionUser) return ctx.unauthorized();
 
+const user = await getFullUser(sessionUser.id);
 const files: any = ctx.request.files;
 const draft: any = await getDraft(user.id);
 
@@ -186,25 +202,29 @@ if (!draft || draft.currentStep !== 5)
 if (!files || !files.governmentId)
   return ctx.badRequest("Please upload government ID");
 
-/* upload ID */
-const uploaded = await strapi
-  .plugin("upload")
-  .service("upload")
-  .upload({
-    data: { folder: UPLOAD_FOLDER_ID },
-    files: Array.isArray(files.governmentId)
-      ? files.governmentId
-      : [files.governmentId],
-  });
+const uploadService = strapi.plugin("upload").service("upload");
 
-/* get full draft */
+const rawFile = Array.isArray(files.governmentId)
+  ? files.governmentId[0]
+  : files.governmentId;
+
+const uploaded = await uploadService.upload({
+  data: {
+    fileInfo: {
+      folder: UPLOAD_FOLDER_ID,
+    },
+  },
+  files: rawFile,
+});
+
+const idFile = uploaded[0];
+
 const finalDraft: any = await strapi.entityService.findOne(
   PENDING_UID,
   draft.id,
   { populate: ["selfieUpload"] }
 );
 
-/* CREATE REAL CLIENT DETAIL */
 const client = await strapi.entityService.create(CLIENT_UID, {
   data: {
     user: user.id,
@@ -218,12 +238,11 @@ const client = await strapi.entityService.create(CLIENT_UID, {
     latitude: finalDraft.latitude,
     longitude: finalDraft.longitude,
     selfieUpload: finalDraft.selfieUpload?.id ?? null,
-    governmentId: uploaded[0].id,
+    governmentId: idFile.id,
     approvedAt: new Date(),
   },
 });
 
-/* DELETE PENDING RECORD */
 await strapi.entityService.delete(PENDING_UID, draft.id);
 
 ctx.send({
