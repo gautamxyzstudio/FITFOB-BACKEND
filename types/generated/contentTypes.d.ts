@@ -430,6 +430,54 @@ export interface AdminUser extends Struct.CollectionTypeSchema {
   };
 }
 
+export interface ApiClientDetailClientDetail
+  extends Struct.CollectionTypeSchema {
+  collectionName: 'client_details';
+  info: {
+    displayName: 'Client-Detail';
+    pluralName: 'client-details';
+    singularName: 'client-detail';
+  };
+  options: {
+    draftAndPublish: false;
+  };
+  attributes: {
+    age: Schema.Attribute.String;
+    approvedAt: Schema.Attribute.DateTime;
+    createdAt: Schema.Attribute.DateTime;
+    createdBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
+      Schema.Attribute.Private;
+    email: Schema.Attribute.Email;
+    gender: Schema.Attribute.String;
+    governmentId: Schema.Attribute.Media<
+      'images' | 'files' | 'videos' | 'audios'
+    >;
+    height: Schema.Attribute.String;
+    latitude: Schema.Attribute.String;
+    locale: Schema.Attribute.String & Schema.Attribute.Private;
+    localizations: Schema.Attribute.Relation<
+      'oneToMany',
+      'api::client-detail.client-detail'
+    > &
+      Schema.Attribute.Private;
+    longitude: Schema.Attribute.String;
+    name: Schema.Attribute.String;
+    phoneNumber: Schema.Attribute.String;
+    publishedAt: Schema.Attribute.DateTime;
+    selfieUpload: Schema.Attribute.Media<
+      'images' | 'files' | 'videos' | 'audios'
+    >;
+    updatedAt: Schema.Attribute.DateTime;
+    updatedBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
+      Schema.Attribute.Private;
+    user: Schema.Attribute.Relation<
+      'oneToOne',
+      'plugin::users-permissions.user'
+    >;
+    weight: Schema.Attribute.String;
+  };
+}
+
 export interface ApiClubOwnerClubOwner extends Struct.CollectionTypeSchema {
   collectionName: 'club_owners';
   info: {
@@ -479,6 +527,55 @@ export interface ApiClubOwnerClubOwner extends Struct.CollectionTypeSchema {
     >;
     weekday: Schema.Attribute.String;
     weekend: Schema.Attribute.String;
+  };
+}
+
+export interface ApiPendingClientDetailPendingClientDetail
+  extends Struct.CollectionTypeSchema {
+  collectionName: 'pending_client_details';
+  info: {
+    displayName: 'Pending-Client-Detail';
+    pluralName: 'pending-client-details';
+    singularName: 'pending-client-detail';
+  };
+  options: {
+    draftAndPublish: false;
+  };
+  attributes: {
+    age: Schema.Attribute.String;
+    createdAt: Schema.Attribute.DateTime;
+    createdBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
+      Schema.Attribute.Private;
+    currentStep: Schema.Attribute.Integer & Schema.Attribute.DefaultTo<1>;
+    email: Schema.Attribute.Email;
+    gender: Schema.Attribute.String;
+    governmentId: Schema.Attribute.Media<
+      'images' | 'files' | 'videos' | 'audios'
+    >;
+    height: Schema.Attribute.String;
+    latitude: Schema.Attribute.String;
+    locale: Schema.Attribute.String & Schema.Attribute.Private;
+    localizations: Schema.Attribute.Relation<
+      'oneToMany',
+      'api::pending-client-detail.pending-client-detail'
+    > &
+      Schema.Attribute.Private;
+    longitude: Schema.Attribute.String;
+    name: Schema.Attribute.String;
+    phoneNumber: Schema.Attribute.String;
+    publishedAt: Schema.Attribute.DateTime;
+    selfieUpload: Schema.Attribute.Media<
+      'images' | 'files' | 'videos' | 'audios'
+    >;
+    status: Schema.Attribute.Enumeration<['draft', 'submitted']>;
+    updatedAt: Schema.Attribute.DateTime;
+    updatedBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
+      Schema.Attribute.Private;
+    user: Schema.Attribute.Relation<
+      'oneToOne',
+      'plugin::users-permissions.user'
+    >;
+    weight: Schema.Attribute.String;
   };
 }
 
@@ -1108,7 +1205,9 @@ declare module '@strapi/strapi' {
       'admin::transfer-token': AdminTransferToken;
       'admin::transfer-token-permission': AdminTransferTokenPermission;
       'admin::user': AdminUser;
+      'api::client-detail.client-detail': ApiClientDetailClientDetail;
       'api::club-owner.club-owner': ApiClubOwnerClubOwner;
+      'api::pending-client-detail.pending-client-detail': ApiPendingClientDetailPendingClientDetail;
       'api::pending-club-owner.pending-club-owner': ApiPendingClubOwnerPendingClubOwner;
       'api::pending-signup.pending-signup': ApiPendingSignupPendingSignup;
       'api::reset-password-session.reset-password-session': ApiResetPasswordSessionResetPasswordSession;

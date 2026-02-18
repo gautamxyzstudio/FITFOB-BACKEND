@@ -1,0 +1,70 @@
+{
+  "kind": "collectionType",
+  "collectionName": "client_details",
+  "info": {
+    "singularName": "client-detail",
+    "pluralName": "client-details",
+    "displayName": "Client-Detail"
+  },
+  "options": {
+    "draftAndPublish": false
+  },
+  "pluginOptions": {},
+  "attributes": {
+    "name": {
+      "type": "string"
+    },
+    "gender": {
+      "type": "string"
+    },
+    "email": {
+      "type": "email"
+    },
+    "phoneNumber": {
+      "type": "string"
+    },
+    "age": {
+      "type": "string"
+    },
+    "weight": {
+      "type": "string"
+    },
+    "height": {
+      "type": "string"
+    },
+    "longitude": {
+      "type": "string"
+    },
+    "latitude": {
+      "type": "string"
+    },
+    "selfieUpload": {
+      "type": "media",
+      "multiple": false,
+      "allowedTypes": [
+        "images",
+        "files",
+        "videos",
+        "audios"
+      ]
+    },
+    "governmentId": {
+      "type": "media",
+      "multiple": false,
+      "allowedTypes": [
+        "images",
+        "files",
+        "videos",
+        "audios"
+      ]
+    },
+    "user": {
+  "type": "relation",
+  "relation": "oneToOne",
+  "target": "plugin::users-permissions.user"
+},
+"approvedAt": {
+  "type": "datetime"
+}
+  }
+}
