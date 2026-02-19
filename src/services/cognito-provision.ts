@@ -13,6 +13,10 @@ const client = new CognitoIdentityProviderClient({
   },
 });
 
+  console.log("AWS_ACCESS_KEY_ID:", process.env.AWS_ACCESS_KEY_ID);
+  console.log("AWS_SECRET_ACCESS_KEY:", process.env.AWS_SECRET_ACCESS_KEY);
+  console.log("AWS_REGION:", process.env.AWS_REGION);
+
 const formatPhone = (phone: string) =>
   phone.startsWith("+") ? phone : `+91${phone}`;
 
@@ -20,9 +24,12 @@ export const createCognitoUser = async (
   identifier: string,
   password: string,
   username: string,
-  isPhone: boolean
+  isPhone: boolean,
 ) => {
   console.log("\n===== COGNITO PROVISION START =====");
+  console.log("AWS_ACCESS_KEY_ID:", process.env.AWS_ACCESS_KEY_ID);
+  console.log("AWS_SECRET_ACCESS_KEY:", process.env.AWS_SECRET_ACCESS_KEY);
+  console.log("AWS_REGION:", process.env.AWS_REGION);
 
   let attributes: any[];
 
@@ -52,7 +59,7 @@ export const createCognitoUser = async (
       Username: identifier,
       MessageAction: "SUPPRESS",
       UserAttributes: attributes,
-    })
+    }),
   );
 
   console.log("Cognito user created");
@@ -64,7 +71,7 @@ export const createCognitoUser = async (
       Username: identifier,
       Password: password,
       Permanent: true,
-    })
+    }),
   );
 
   console.log("Password synced with Cognito");
@@ -74,10 +81,10 @@ export const createCognitoUser = async (
     new AdminGetUserCommand({
       UserPoolId: process.env.COGNITO_USER_POOL_ID!,
       Username: identifier,
-    })
+    }),
   );
 
-  const subAttr = userData.UserAttributes?.find(a => a.Name === "sub");
+  const subAttr = userData.UserAttributes?.find((a) => a.Name === "sub");
   const cognitoSub = subAttr?.Value;
 
   console.log("Cognito SUB:", cognitoSub);
