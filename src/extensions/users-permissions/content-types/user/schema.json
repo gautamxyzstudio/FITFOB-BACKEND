@@ -75,6 +75,18 @@
     "isVerified": {
       "type": "boolean",
       "default": false
+    },
+    "mfa_secret": {
+      "type": "string"
+    },
+    "mfa_temp_secret": {
+      "type": "string"
+    },
+    "mfa_temp_token": {
+      "type": "string"
+    },
+    "mfa_identifier": {
+      "type": "string"
     }
   }
 }

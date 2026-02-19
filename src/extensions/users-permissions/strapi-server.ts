@@ -40,6 +40,14 @@ export default (plugin: any) => {
 
     if (user.blocked) return ctx.badRequest("User is blocked");
 
+    /* ================= MFA FOR ADMIN ROLE ================= */
+
+    /* ===== BLOCK ADMIN FROM USING DEFAULT STRAPI LOGIN ===== */
+
+    if (user.role?.name === "Admin") {
+      return ctx.forbidden("Admins must login using secure login.");
+    }
+
     // issue jwt
     const jwt = strapi
       .plugin("users-permissions")

@@ -1169,6 +1169,10 @@ export interface PluginUsersPermissionsUser
       'plugin::users-permissions.user'
     > &
       Schema.Attribute.Private;
+    mfa_identifier: Schema.Attribute.String;
+    mfa_secret: Schema.Attribute.String;
+    mfa_temp_secret: Schema.Attribute.String;
+    mfa_temp_token: Schema.Attribute.String;
     password: Schema.Attribute.Password &
       Schema.Attribute.Private &
       Schema.Attribute.SetMinMaxLength<{

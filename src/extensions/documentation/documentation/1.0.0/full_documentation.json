@@ -14,7 +14,7 @@
       "name": "Apache 2.0",
       "url": "https://www.apache.org/licenses/LICENSE-2.0.html"
     },
-    "x-generation-date": "2026-02-19T07:16:18.386Z"
+    "x-generation-date": "2026-02-19T12:17:35.668Z"
   },
   "x-strapi-config": {
     "plugins": [
@@ -5427,6 +5427,18 @@
               "isVerified": {
                 "type": "boolean"
               },
+              "mfa_secret": {
+                "type": "string"
+              },
+              "mfa_temp_secret": {
+                "type": "string"
+              },
+              "mfa_temp_token": {
+                "type": "string"
+              },
+              "mfa_identifier": {
+                "type": "string"
+              },
               "createdAt": {
                 "type": "string",
                 "format": "date-time"
@@ -7537,6 +7549,18 @@
               "isVerified": {
                 "type": "boolean"
               },
+              "mfa_secret": {
+                "type": "string"
+              },
+              "mfa_temp_secret": {
+                "type": "string"
+              },
+              "mfa_temp_token": {
+                "type": "string"
+              },
+              "mfa_identifier": {
+                "type": "string"
+              },
               "createdAt": {
                 "type": "string",
                 "format": "date-time"
@@ -9590,6 +9614,18 @@
               "isVerified": {
                 "type": "boolean"
               },
+              "mfa_secret": {
+                "type": "string"
+              },
+              "mfa_temp_secret": {
+                "type": "string"
+              },
+              "mfa_temp_token": {
+                "type": "string"
+              },
+              "mfa_identifier": {
+                "type": "string"
+              },
               "createdAt": {
                 "type": "string",
                 "format": "date-time"
@@ -10995,6 +11031,18 @@
               },
               "isVerified": {
                 "type": "boolean"
+              },
+              "mfa_secret": {
+                "type": "string"
+              },
+              "mfa_temp_secret": {
+                "type": "string"
+              },
+              "mfa_temp_token": {
+                "type": "string"
+              },
+              "mfa_identifier": {
+                "type": "string"
               },
               "createdAt": {
                 "type": "string",
