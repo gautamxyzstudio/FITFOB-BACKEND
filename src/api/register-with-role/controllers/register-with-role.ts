@@ -39,6 +39,7 @@ const localPhone = (phone: string | null) => {
 export default {
 
   async register(ctx: any) {
+
     try {
       const { identifier, password, confirmPassword, role } = ctx.request.body;
 
@@ -63,31 +64,31 @@ export default {
     ===================================================== */
 
       // check in users table
-     const existingUser = await strapi.db
-  .query("plugin::users-permissions.user")
-  .findOne({
-    where: {
-      $or: [
-        email ? { email } : null,
-        phone ? { phoneNumber: phone } : null,
-        phone ? { phoneNumber: localPhone(phone) } : null,
-      ].filter(Boolean),
-    },
-  });
+      const existingUser = await strapi.db
+        .query("plugin::users-permissions.user")
+        .findOne({
+          where: {
+            $or: [
+              email ? { email } : null,
+              phone ? { phoneNumber: phone } : null,
+              phone ? { phoneNumber: localPhone(phone) } : null,
+            ].filter(Boolean),
+          },
+        });
 
 
       // check in client_details table
-     const existingClient = await strapi.db
-  .query("api::client-detail.client-detail")
-  .findOne({
-    where: {
-      $or: [
-        email ? { email } : null,
-        phone ? { phoneNumber: phone } : null,
-        phone ? { phoneNumber: localPhone(phone) } : null,
-      ].filter(Boolean),
-    },
-  });
+      const existingClient = await strapi.db
+        .query("api::client-detail.client-detail")
+        .findOne({
+          where: {
+            $or: [
+              email ? { email } : null,
+              phone ? { phoneNumber: phone } : null,
+              phone ? { phoneNumber: localPhone(phone) } : null,
+            ].filter(Boolean),
+          },
+        });
 
 
       // if found anywhere → block signup
@@ -127,16 +128,37 @@ export default {
 
       strapi.log.info(`[OTP] Starting new verification session for ${to}`);
 
-      await client.verify.v2
-        .services(process.env.TWILIO_VERIFY_SERVICE_SID as string)
-        .verifications.create({
-          to,
-          channel,
-        });
+      try {
+        const verification = await client.verify.v2
+          .services(process.env.TWILIO_VERIFY_SERVICE_SID as string)
+          .verifications.create({
+            to,
+            channel,
+          });
 
-      strapi.log.info(`[OTP] Fresh OTP sent to ${to}`);
+        strapi.log.info(`[OTP] Fresh OTP sent to ${to} SID: ${verification.sid}`);
 
-      ctx.send({ message: "OTP sent successfully" });
+        ctx.send({ message: "OTP sent successfully" });
+
+      } catch (twilioErr: any) {
+
+        // Twilio rate limit (THE ERROR YOU ARE GETTING)
+        if (twilioErr?.status === 429) {
+          strapi.log.warn(`[OTP BLOCKED] Too many requests for ${to}`);
+          return ctx.badRequest(
+            "Too many OTP requests. Please wait 2 minutes and try again."
+          );
+        }
+
+        // invalid destination
+        if (twilioErr?.code === 60203) {
+          return ctx.badRequest("Invalid phone number or email.");
+        }
+
+        strapi.log.error("TWILIO ERROR:", twilioErr);
+        return ctx.internalServerError("OTP service temporarily unavailable.");
+      }
+
 
     } catch (err) {
       strapi.log.error("REGISTER ERROR");
