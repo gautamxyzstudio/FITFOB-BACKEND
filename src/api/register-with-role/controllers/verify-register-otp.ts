@@ -1,15 +1,12 @@
 import Twilio from "twilio";
 import { createCognitoUser } from "../../../services/cognito-provision";
 import { cognitoLogin } from "../../../services/cognito-auth";
-
+import { normalizeIdentifier } from "../../../utils/normalize-identifier";
 
 const client = Twilio(
   process.env.TWILIO_ACCOUNT_SID as string,
   process.env.TWILIO_AUTH_TOKEN as string
 );
-
-// supports 10 digit OR +91 format
-const isPhone = (value: string) => /^(\+91)?[6-9]\d{9}$/.test(value);
 
 // always convert to +91XXXXXXXXXX
 const formatPhone = (phone: string) => {
@@ -30,18 +27,32 @@ function generateUsername(email?: string | null, phone?: string | null) {
 export default {
   async verify(ctx: any) {
     try {
-      const { identifier, otp } = ctx.request.body;
+
+      /* ---------------- CLEANUP EXPIRED PENDING ---------------- */
+      await strapi.db.query("api::pending-signup.pending-signup").deleteMany({
+        where: { expiresAt: { $lt: new Date() } },
+      });
+
+      let { identifier, otp } = ctx.request.body;
 
       if (!identifier || !otp)
         return ctx.badRequest("Identifier and OTP required");
 
-      /* ---------------- NORMALIZE IDENTIFIER ---------------- */
+      // MUST match register normalization
+      identifier = normalizeIdentifier(identifier);
+
+      /* =====================================================
+         1️⃣ VERIFY OTP FIRST (CRITICAL FIX)
+         Twilio must receive EXACT SAME phone/email as register
+      ===================================================== */
+
       let twilioIdentifier = identifier;
-      if (isPhone(identifier)) {
+
+      // if phone → always +91 format
+      if (!identifier.includes("@")) {
         twilioIdentifier = formatPhone(identifier);
       }
 
-      /* ---------------- VERIFY OTP ---------------- */
       const result = await client.verify.v2
         .services(process.env.TWILIO_VERIFY_SERVICE_SID as string)
         .verificationChecks.create({
@@ -50,22 +61,38 @@ export default {
         });
 
       if (result.status !== "approved")
-        return ctx.badRequest("OTP expired. Please resend OTP");
+        return ctx.badRequest("Invalid or expired OTP");
 
-      /* ---------------- FIND PENDING SIGNUP ---------------- */
+      /* =====================================================
+         2️⃣ FIND PENDING SIGNUP
+      ===================================================== */
+
+      const localIdentifier = identifier.startsWith("+91")
+        ? identifier.substring(3)
+        : identifier;
+
       const record = await strapi.db
         .query("api::pending-signup.pending-signup")
         .findOne({
           where: {
             $or: [
               { identifier },
-              { identifier: identifier.replace("+91", "") },
+              { identifier: localIdentifier },
             ],
           },
         });
 
       if (!record)
         return ctx.badRequest("Signup expired. Please register again.");
+
+      // expiry check
+      if (record.expiresAt && new Date(record.expiresAt) < new Date()) {
+        await strapi.entityService.delete(
+          "api::pending-signup.pending-signup",
+          record.id
+        );
+        return ctx.badRequest("OTP expired. Please request a new OTP.");
+      }
 
       const data = record.signupData;
 
@@ -79,7 +106,10 @@ export default {
         ? email.toLowerCase()
         : `${phoneNumber!}@phone.user`;
 
-      /* ---------------- PREVENT DUPLICATE USER ---------------- */
+      /* =====================================================
+         FINAL DUPLICATE SAFETY
+      ===================================================== */
+
       const existingUser = await strapi.db
         .query("plugin::users-permissions.user")
         .findOne({
@@ -95,6 +125,7 @@ export default {
         return ctx.badRequest("User already verified. Please login.");
 
       /* ---------------- USERNAME ---------------- */
+
       let username = generateUsername(email, phoneNumber);
       let counter = 1;
 
@@ -106,24 +137,24 @@ export default {
         username = `${username}${counter++}`;
       }
 
-      /* ---------------- ROLE (DEFAULT CLIENT) ---------------- */
+      /* ---------------- ROLE ---------------- */
+
       let roleName = data.role?.trim();
       if (!roleName) roleName = "Client";
 
       let roleRecord = await strapi.db
         .query("plugin::users-permissions.role")
-        .findOne({
-          where: { name: roleName },
-        });
+        .findOne({ where: { name: roleName } });
 
       if (!roleRecord) {
-        strapi.log.warn(`Role "${roleName}" not found. Using authenticated role.`);
         roleRecord = await strapi.db
           .query("plugin::users-permissions.role")
           .findOne({ where: { type: "authenticated" } });
       }
 
-      /* ---------------- CREATE USER (STRAPI SAFE) ---------------- */
+      /* =====================================================
+         CREATE STRAPI USER
+      ===================================================== */
 
       const userService = strapi.plugin("users-permissions").service("user");
 
@@ -136,8 +167,6 @@ export default {
         blocked: false,
       });
 
-      /* ---- FORCE ROLE + CUSTOM FIELDS ---- */
-
       await strapi.db.query("plugin::users-permissions.user").update({
         where: { id: baseUser.id },
         data: {
@@ -147,13 +176,15 @@ export default {
         },
       });
 
-      /* ---------------- COGNITO ---------------- */
+      /* =====================================================
+         COGNITO USER CREATION
+      ===================================================== */
 
       let cognitoSub: string | null = null;
 
       try {
         const cognitoIdentifier = phoneNumber
-          ? phoneNumber
+          ? formatPhone(phoneNumber)
           : email!.toLowerCase();
 
         cognitoSub = await createCognitoUser(
@@ -164,50 +195,43 @@ export default {
         );
 
       } catch (err: any) {
-        strapi.log.error("Cognito provisioning failed");
-        strapi.log.error(err);
 
-        // ❗ rollback Strapi user
+        // rollback Strapi user if Cognito fails
         await strapi.db.query("plugin::users-permissions.user").delete({
           where: { id: baseUser.id },
         });
+
+        if (err.name === "UsernameExistsException")
+          return ctx.badRequest("Account already exists. Please login instead.");
 
         return ctx.internalServerError(
           "Account creation failed. Please try again."
         );
       }
 
-      /* ---- SAVE SUB ONLY AFTER SUCCESS ---- */
-      await strapi.db
-        .query("plugin::users-permissions.user")
-        .update({
-          where: { id: baseUser.id },
-          data: { cognitoSub },
-        });
+      /* SAVE SUB */
+      await strapi.db.query("plugin::users-permissions.user").update({
+        where: { id: baseUser.id },
+        data: { cognitoSub },
+      });
 
+      /* =====================================================
+         AUTO LOGIN
+      ===================================================== */
 
-      /* ---------------- AUTO LOGIN WITH COGNITO ---------------- */
-
-      let loginIdentifier: string;
-
-      if (phoneNumber) {
-        // already formatted +91XXXXXXXXXX
-        loginIdentifier = phoneNumber;
-      } else {
-        // Cognito email usernames must be lowercase
-        loginIdentifier = email!.toLowerCase();
-      }
+      const loginIdentifier = phoneNumber
+        ? formatPhone(phoneNumber)
+        : email!.toLowerCase();
 
       const tokens = await cognitoLogin(loginIdentifier, data.password);
 
-
-      /* ---------------- CLEANUP ---------------- */
+      /* DELETE PENDING (YOUR OLD LOGIC PRESERVED) */
       await strapi.entityService.delete(
         "api::pending-signup.pending-signup",
         record.id
       );
 
-      /* ---------------- FETCH USER ---------------- */
+      /* FETCH USER */
       const fullUser = await strapi.db
         .query("plugin::users-permissions.user")
         .findOne({
@@ -215,34 +239,31 @@ export default {
           populate: ["role"],
         });
 
+      const jwtService = strapi.plugin("users-permissions").service("jwt");
+      const strapiJwt = jwtService.issue({ id: fullUser.id }) as string;
 
-        // 🔴 Auto-login into Strapi
-const jwtService = strapi.plugin("users-permissions").service("jwt");
-const strapiJwt = jwtService.issue({ id: fullUser.id }) as string;
+      /* RESPONSE (UNCHANGED) */
+      ctx.body = {
+        jwt: strapiJwt,
+        cognito: {
+          accessToken: tokens?.AccessToken,
+          idToken: tokens?.IdToken,
+          refreshToken: tokens?.RefreshToken,
+          expiresIn: tokens?.ExpiresIn,
+        },
+        user: {
+          id: fullUser.id,
+          username: fullUser.username,
+          email: fullUser.email,
+          phoneNumber: fullUser.phoneNumber,
+          isVerified: fullUser.isVerified,
+          cognitoSub: fullUser.cognitoSub,
+          confirmed: fullUser.confirmed,
+          blocked: fullUser.blocked,
+          role: fullUser.role,
+        },
+      };
 
-      /* ---------------- RESPONSE ---------------- */
-     ctx.body = {
-  jwt: strapiJwt,      // ← Strapi login session
-
-  cognito: {
-    accessToken: tokens?.AccessToken,
-    idToken: tokens?.IdToken,
-    refreshToken: tokens?.RefreshToken,
-    expiresIn: tokens?.ExpiresIn,
-  },
-
-  user: {
-    id: fullUser.id,
-    username: fullUser.username,
-    email: fullUser.email,
-    phoneNumber: fullUser.phoneNumber,
-    isVerified: fullUser.isVerified,
-    cognitoSub: fullUser.cognitoSub,
-    confirmed: fullUser.confirmed,
-    blocked: fullUser.blocked,
-    role: fullUser.role,
-  },
-};
     } catch (err) {
       strapi.log.error("VERIFY OTP ERROR");
       strapi.log.error(err);

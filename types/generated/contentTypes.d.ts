@@ -1169,6 +1169,8 @@ export interface PluginUsersPermissionsUser
       'plugin::users-permissions.user'
     > &
       Schema.Attribute.Private;
+    mfa_failed_attempts: Schema.Attribute.Integer &
+      Schema.Attribute.DefaultTo<0>;
     mfa_identifier: Schema.Attribute.String;
     mfa_secret: Schema.Attribute.String;
     mfa_temp_secret: Schema.Attribute.String;

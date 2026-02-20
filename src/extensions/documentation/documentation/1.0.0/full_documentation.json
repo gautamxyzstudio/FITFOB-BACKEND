@@ -14,7 +14,7 @@
       "name": "Apache 2.0",
       "url": "https://www.apache.org/licenses/LICENSE-2.0.html"
     },
-    "x-generation-date": "2026-02-19T12:17:35.668Z"
+    "x-generation-date": "2026-02-20T07:01:12.437Z"
   },
   "x-strapi-config": {
     "plugins": [
@@ -5439,6 +5439,9 @@
               "mfa_identifier": {
                 "type": "string"
               },
+              "mfa_failed_attempts": {
+                "type": "integer"
+              },
               "createdAt": {
                 "type": "string",
                 "format": "date-time"
@@ -7561,6 +7564,9 @@
               "mfa_identifier": {
                 "type": "string"
               },
+              "mfa_failed_attempts": {
+                "type": "integer"
+              },
               "createdAt": {
                 "type": "string",
                 "format": "date-time"
@@ -9626,6 +9632,9 @@
               "mfa_identifier": {
                 "type": "string"
               },
+              "mfa_failed_attempts": {
+                "type": "integer"
+              },
               "createdAt": {
                 "type": "string",
                 "format": "date-time"
@@ -11043,6 +11052,9 @@
               },
               "mfa_identifier": {
                 "type": "string"
+              },
+              "mfa_failed_attempts": {
+                "type": "integer"
               },
               "createdAt": {
                 "type": "string",

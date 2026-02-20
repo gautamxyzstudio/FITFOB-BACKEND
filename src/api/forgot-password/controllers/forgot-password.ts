@@ -45,21 +45,16 @@ export default {
 
       identifier = normalizeIdentifier(identifier);
 
-      /* ---------- FIND USER ---------- */
       const user = await strapi.db
         .query("plugin::users-permissions.user")
         .findOne({
           where: {
-            $or: [
-              { email: identifier },
-              { phoneNumber: identifier },
-            ],
+            $or: [{ email: identifier }, { phoneNumber: identifier }],
           },
         });
 
       if (!user) return ctx.badRequest("User not found");
 
-      /* ---------- DECIDE CHANNEL ---------- */
       let channel: "sms" | "email";
       let to: string;
 
@@ -77,7 +72,6 @@ export default {
       });
 
       strapi.log.info(`[RESET OTP SENT] ${to}`);
-
       return ctx.send({ message: "OTP sent successfully" });
 
     } catch (err) {
@@ -108,18 +102,16 @@ export default {
       if (verification.status !== "approved")
         return ctx.badRequest("Incorrect OTP");
 
-      /* ---------- STORE TEMP SESSION ---------- */
+      // store temp session
       await strapi.db
         .query("api::reset-password-session.reset-password-session")
-        .deleteMany({
-          where: { identifier: identifier },
-        });
+        .deleteMany({ where: { identifier } });
 
       await strapi.db
         .query("api::reset-password-session.reset-password-session")
         .create({
           data: {
-            identifier: identifier,
+            identifier,
             expiresAt: new Date(Date.now() + 10 * 60 * 1000),
           },
         });
@@ -153,9 +145,7 @@ export default {
       /* ---------- CHECK VERIFIED SESSION ---------- */
       const session = await strapi.db
         .query("api::reset-password-session.reset-password-session")
-        .findOne({
-          where: { identifier: identifier },
-        });
+        .findOne({ where: { identifier } });
 
       if (!session)
         return ctx.badRequest("OTP verification required");
@@ -168,26 +158,23 @@ export default {
         .query("plugin::users-permissions.user")
         .findOne({
           where: {
-            $or: [
-              { email: identifier },
-              { phoneNumber: identifier },
-            ],
+            $or: [{ email: identifier }, { phoneNumber: identifier }],
           },
         });
 
       if (!user) return ctx.badRequest("User not found");
 
       /* ======================================================
-         🔴 CHANGE PASSWORD IN COGNITO FIRST
+         🔴 CHANGE PASSWORD IN COGNITO FIRST (FIXED)
       ====================================================== */
 
-      // VERY IMPORTANT FIX
-      const cognitoUsername =
-        user.phoneNumber && !user.email.includes("@phone.user")
-          ? user.phoneNumber
-          : user.email;
+      // IMPORTANT: Cognito admin reset requires SUB (internal username)
+      if (!user.cognitoSub) {
+        strapi.log.error("RESET PASSWORD ERROR: Missing cognitoSub for user:", user.id);
+        return ctx.internalServerError("Account is not properly linked with authentication provider");
+      }
 
-      await cognitoForceChangePassword(cognitoUsername, password);
+      await cognitoForceChangePassword(user.cognitoSub, password);
 
       /* ======================================================
          🔴 UPDATE STRAPI PASSWORD
@@ -203,13 +190,9 @@ export default {
       /* ---------- DELETE SESSION ---------- */
       await strapi.db
         .query("api::reset-password-session.reset-password-session")
-        .deleteMany({
-          where: { identifier: identifier },
-        });
+        .deleteMany({ where: { identifier } });
 
-      return ctx.send({
-        message: "Password reset successful",
-      });
+      return ctx.send({ message: "Password reset successful" });
 
     } catch (err) {
       strapi.log.error("RESET PASSWORD ERROR", err);
