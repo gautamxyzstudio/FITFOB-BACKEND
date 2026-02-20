@@ -87,10 +87,6 @@
     },
     "mfa_identifier": {
       "type": "string"
-    },
-    "mfa_failed_attempts": {
-      "type": "integer",
-      "default": 0
     }
   }
 }
