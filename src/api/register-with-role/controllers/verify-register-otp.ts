@@ -1,7 +1,8 @@
 import Twilio from "twilio";
 import { createCognitoUser } from "../../../services/cognito-provision";
 import { cognitoLogin } from "../../../services/cognito-auth";
-
+import { normalizeIdentifier } from "../../../utils/normalize-identifier";
+import { addUserToCognitoGroup } from "../../../services/cognito-groups";
 
 const client = Twilio(
   process.env.TWILIO_ACCOUNT_SID as string,
@@ -162,6 +163,10 @@ export default {
           username,
           !!phoneNumber
         );
+        // 🔥 NEW (group mapping)
+        await addUserToCognitoGroup(cognitoSub!, roleName);
+
+        await new Promise(resolve => setTimeout(resolve, 4000));
 
       } catch (err: any) {
         strapi.log.error("Cognito provisioning failed");
