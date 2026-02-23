@@ -1,13 +1,32 @@
 export default [
   'strapi::errors',
-  'strapi::security',
+
   {
-    name: 'strapi::cors',
+    name: 'strapi::security',
     config: {
-      origin: ['http://localhost:1337'],
-      credentials: true,
+      contentSecurityPolicy: {
+        useDefaults: true,
+        directives: {
+          'img-src': [
+            "'self'",
+            'data:',
+            'blob:',
+            'https://storage.googleapis.com',
+            'https://fitfobs3.s3.ap-south-1.amazonaws.com',
+          ],
+          'media-src': [
+            "'self'",
+            'data:',
+            'blob:',
+            'https://storage.googleapis.com',
+            'https://fitfobs3.s3.ap-south-1.amazonaws.com',
+          ],
+        },
+      },
     },
   },
+
+  'strapi::cors',
   'strapi::poweredBy',
   'strapi::logger',
   'strapi::query',

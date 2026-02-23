@@ -2,14 +2,19 @@ import {
   CognitoIdentityProviderClient,
   InitiateAuthCommand,
 } from "@aws-sdk/client-cognito-identity-provider";
+
 import crypto from "crypto";
+
+/* =====================================================
+   CLIENT
+===================================================== */
 
 const client = new CognitoIdentityProviderClient({
   region: process.env.AWS_REGION!,
 });
 
 /* =====================================================
-   GENERATE SECRET HASH (REQUIRED FOR CLIENT SECRET)
+   GENERATE SECRET HASH (ONLY IF CLIENT SECRET EXISTS)
 ===================================================== */
 
 const generateSecretHash = (username: string) => {
@@ -19,7 +24,7 @@ const generateSecretHash = (username: string) => {
 
   return crypto
     .createHmac("sha256", process.env.COGNITO_CLIENT_SECRET)
-    .update(username + process.env.COGNITO_CLIENT_ID)
+    .update(username + process.env.COGNITO_CLIENT_ID!) // 🔥 added !
     .digest("base64");
 };
 
@@ -27,19 +32,25 @@ const generateSecretHash = (username: string) => {
    LOGIN
 ===================================================== */
 
-export const cognitoLogin = async (identifier: string, password: string) => {
+export const cognitoLogin = async (
+  identifier: string,
+  password: string
+) => {
   try {
+    const authParams: any = {
+      USERNAME: identifier,
+      PASSWORD: password,
+    };
 
-    const secretHash = generateSecretHash(identifier);
+    // Only attach secret hash if client secret exists
+    if (process.env.COGNITO_CLIENT_SECRET) {
+      authParams.SECRET_HASH = generateSecretHash(identifier);
+    }
 
     const command = new InitiateAuthCommand({
       AuthFlow: "USER_PASSWORD_AUTH",
       ClientId: process.env.COGNITO_CLIENT_ID!,
-      AuthParameters: {
-        USERNAME: identifier,
-        PASSWORD: password,
-        SECRET_HASH: secretHash, // ⭐ THIS WAS MISSING
-      },
+      AuthParameters: authParams,
     });
 
     const response = await client.send(command);
@@ -51,12 +62,13 @@ export const cognitoLogin = async (identifier: string, password: string) => {
     return response.AuthenticationResult;
 
   } catch (err: any) {
-    console.error("COGNITO LOGIN FAILED", {
-      identifier,
-      clientId: process.env.COGNITO_CLIENT_ID,
-      region: process.env.AWS_REGION,
-      message: err?.message,
-    });
+    console.error("COGNITO LOGIN FAILED");
+    console.error("Identifier:", identifier);
+    console.error("ClientId:", process.env.COGNITO_CLIENT_ID);
+    console.error("Region:", process.env.AWS_REGION);
+    console.error("Error Name:", err?.name);
+    console.error("Error Message:", err?.message);
+    console.error("Full Error:", err);
 
     throw err;
   }
