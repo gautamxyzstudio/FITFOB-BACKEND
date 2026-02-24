@@ -1,16 +1,23 @@
-import Twilio from "twilio";
+import axios from "axios";
+import bcrypt from "bcryptjs";
 import { normalizeIdentifier } from "../../../utils/normalize-identifier";
 import { checkCognitoUser } from "../../../services/cognito-user-check";
+import { sendTwilioOtp } from "../../../services/twilio-sms";
 
-const client = Twilio(
-  process.env.TWILIO_ACCOUNT_SID as string,
-  process.env.TWILIO_AUTH_TOKEN as string
-);
+/* OTP */
+const generateOtp = () =>
+  Math.floor(100000 + Math.random() * 900000).toString();
 
-// also return local format (9876543210) for old DB records
-const localPhone = (phone: string | null) => {
-  if (!phone) return null;
-  return phone.replace("+91", "");
+/* normalize phone */
+const normalizePhone = (identifier: string) => {
+  if (identifier.includes("@")) return identifier.trim().toLowerCase();
+
+  let num = identifier.replace(/\D/g, "");
+
+  if (num.length === 10) return `+91${num}`;
+  if (num.length === 12 && num.startsWith("91")) return `+${num}`;
+
+  return identifier;
 };
 
 export default {
@@ -19,6 +26,7 @@ export default {
       let { identifier, password, confirmPassword, role } = ctx.request.body;
 
       identifier = normalizeIdentifier(identifier);
+      identifier = normalizePhone(identifier);
 
       if (!identifier || !password || !confirmPassword)
         return ctx.badRequest("identifier, password, confirmPassword required");
@@ -26,154 +34,93 @@ export default {
       if (password !== confirmPassword)
         return ctx.badRequest("Passwords do not match");
 
-      let email: string | null = null;
-      let phone: string | null = null;
+      const email = identifier.includes("@") ? identifier : null;
+      const phone = email ? null : identifier;
 
-      if (identifier.includes("@")) email = identifier;
-      else phone = identifier;
-
-      strapi.log.info(`[REGISTER] Type detected: ${email ? "EMAIL" : "PHONE"}`);
-
-      /* =====================================================
-         1️⃣ CHECK USERS TABLE (LOGIN ACCOUNT)
-      ===================================================== */
-
+      /* EXISTING USER CHECK */
       const existingUser = await strapi.db
         .query("plugin::users-permissions.user")
         .findOne({
-          where: {
-            $or: [
-              email ? { email } : null,
-              phone ? { phoneNumber: phone } : null,
-              phone ? { phoneNumber: localPhone(phone) } : null,
-            ].filter(Boolean),
-          },
+          where: email ? { email } : { phoneNumber: phone },
         });
 
-      if (existingUser) {
-        return ctx.badRequest(
-          "User already registered (account exists). Please login."
-        );
-      }
+      if (existingUser)
+        return ctx.badRequest("User already exists. Please login.");
 
-      /* =====================================================
-         2️⃣ CHECK CLIENT DETAIL (PROFILE / KYC)
-         IMPORTANT: check ONLY the field used in signup
-      ===================================================== */
+      const existsInCognito = await checkCognitoUser(identifier);
+      if (existsInCognito)
+        return ctx.badRequest("User already exists. Please login.");
 
-      let existingClient = null;
+      /* ---------- OTP GENERATE ---------- */
+      const otp = generateOtp();
+      const otpHash = await bcrypt.hash(otp, 10);
 
-      if (email) {
-        existingClient = await strapi.db
-          .query("api::client-detail.client-detail")
-          .findOne({ where: { email } });
-      } else if (phone) {
-        existingClient = await strapi.db
-          .query("api::client-detail.client-detail")
-          .findOne({
-            where: {
-              $or: [
-                { phoneNumber: phone },
-                { phoneNumber: localPhone(phone) },
-              ],
+      /* ---------- SEND OTP FIRST ---------- */
+      try {
+        if (email) {
+          await axios.post(
+            "https://api.brevo.com/v3/smtp/email",
+            {
+              sender: { name: "FitFob", email: "amit@thexyzstudio.com" },
+              to: [{ email }],
+              subject: "Your FitFob OTP",
+              htmlContent: `<h2>Your OTP is <b>${otp}</b><br/>Valid for 2 minutes</h2>`,
             },
-          });
+            { headers: { "api-key": process.env.BREVO_API_KEY } }
+          );
+
+        } else {
+          await sendTwilioOtp(phone!, otp);
+
+        }
+      } catch (err) {
+        return ctx.badRequest("Unable to send OTP. Check email/phone.");
       }
 
-      if (existingClient) {
-        return ctx.badRequest(
-          "client profile with this identifier already exists. Please login."
-        );
-      }
+      /* ---------- STORE SESSION ---------- */
+      await strapi.db.query("api::pending-signup.pending-signup").deleteMany({
+        where: { identifier },
+      });
 
-      /* =====================================================
-         3️⃣ CHECK COGNITO (AUTH SERVER)
-      ===================================================== */
-
-      let cognitoIdentifier = identifier;
-
-      if (!identifier.includes("@")) {
-        cognitoIdentifier = identifier.startsWith("+91")
-          ? identifier
-          : `+91${identifier}`;
-      }
-
-      const existsInCognito = await checkCognitoUser(cognitoIdentifier);
-
-      if (existsInCognito) {
-        return ctx.badRequest(
-          "User already registered in cognito server. Please login."
-        );
-      }
-
-      /* =====================================================
-         NEW USER → ALLOW OTP
-      ===================================================== */
-
-      // delete old pending
-      await strapi.db
-        .query("api::pending-signup.pending-signup")
-        .deleteMany({ where: { identifier } });
-
-      // store pending
       await strapi.entityService.create("api::pending-signup.pending-signup", {
         data: {
           identifier,
-          signupData: {
-            email,
-            phone,
-            password,
-            role: role || null,
-          },
-          expiresAt: new Date(Date.now() + 10 * 60 * 1000),
+          signupData: { email, phone, password, role: role || "Client" },
+          expiresAt: Date.now() + 10 * 60 * 1000,
         },
       });
 
-      /* =====================================================
-         SEND OTP (Twilio only reaches here if USER IS NEW)
-      ===================================================== */
+      /* ---------- STORE OTP ---------- */
+      await strapi.db.query("api::otp-request.otp-request").deleteMany({
+        where: { identifier, purpose: "register" },
+      });
 
-      let to = identifier;
-      let channel = "email";
+      await strapi.entityService.create("api::otp-request.otp-request", {
+        data: {
+          identifier,
+          otp_hash: otpHash,
+          expires_at: new Date(Date.now() + 2 * 60 * 1000),
+          attempts: 0,
+          verified: false,
+          purpose: "register",
+          last_sent_at: new Date(),
+        },
+      });
 
-      if (phone) {
-        to = phone; // already +91XXXXXXXXXX
-        channel = "sms";
-      }
+      ctx.send({ message: "OTP sent successfully" });
 
-      strapi.log.info(`[OTP] Starting new verification session for ${to}`);
+      setTimeout(() => {
+        if (email)
+          strapi.log.info(`[EMAIL OTP SENT] ${identifier}`);
+        else
+          strapi.log.info(`[SMS OTP SENT] ${phone}`);
 
-      try {
-        const verification = await client.verify.v2
-          .services(process.env.TWILIO_VERIFY_SERVICE_SID as string)
-          .verifications.create({
-            to,
-            channel,
-          });
-
-        strapi.log.info(`[OTP] Fresh OTP sent to ${to} SID: ${verification.sid}`);
-
-        ctx.send({ message: "OTP sent successfully" });
-
-      } catch (twilioErr: any) {
-
-        if (twilioErr?.status === 429) {
-          return ctx.badRequest(
-            "Too many OTP requests. Please wait 2 minutes and try again."
-          );
-        }
-
-        if (twilioErr?.code === 60203) {
-          return ctx.badRequest("Invalid phone number or email.");
-        }
-
-        strapi.log.error("TWILIO ERROR:", twilioErr);
-        return ctx.internalServerError("OTP service temporarily unavailable.");
-      }
+        strapi.log.info(`[REGISTER] ${identifier}`);
+        strapi.log.info(`[OTP STORED IN DB] ${identifier}`);
+      }, 0);
 
     } catch (err) {
-      strapi.log.error("REGISTER ERROR");
-      strapi.log.error(err);
+      strapi.log.error("REGISTER ERROR", err);
       ctx.internalServerError("Registration failed");
     }
   },

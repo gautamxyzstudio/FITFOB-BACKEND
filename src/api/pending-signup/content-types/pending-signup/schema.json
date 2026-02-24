@@ -7,7 +7,7 @@
     "displayName": "Pending-Signup"
   },
   "options": {
-    "draftAndPublish": true
+    "draftAndPublish":false
   },
   "pluginOptions": {},
   "attributes": {
@@ -18,7 +18,7 @@
       "type": "json"
     },
     "expiresAt": {
-      "type": "datetime"
+      "type": "biginteger"
     }
   }
 }

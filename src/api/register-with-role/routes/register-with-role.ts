@@ -14,6 +14,14 @@ export default {
       handler: "verify-register-otp.verify",
       config: { auth: false },
     }, 
+    {
+      method: "POST",
+      path: "/resend-register-otp",
+      handler: "resend-register-otp.resend",
+      config: {
+        auth: false,
+      },
+    },
     
   ],
 };

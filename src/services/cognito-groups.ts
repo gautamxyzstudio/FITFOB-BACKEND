@@ -3,6 +3,10 @@ import {
   AdminAddUserToGroupCommand,
 } from "@aws-sdk/client-cognito-identity-provider";
 
+type CognitoGroupResult = {
+  logs: string[];
+};
+
 const client = new CognitoIdentityProviderClient({
   region: process.env.COGNITO_REGION,
 });
@@ -13,14 +17,18 @@ const client = new CognitoIdentityProviderClient({
 export const addUserToCognitoGroup = async (
   username: string,
   role: string
-) => {
+): Promise<CognitoGroupResult> => {
+
+  const logs: string[] = [];
+  const log = (msg: string) => logs.push(msg);
+
+  let groupName = "Member_users";
+
+  if (role === "Admin") groupName = "Admin_users";
+  else if (role === "ClubOwner") groupName = "ClubOwner_users";
+  else if (role === "Client") groupName = "Member_users";
+
   try {
-    let groupName = "Member_users"; // default
-
-    if (role === "Admin") groupName = "Admin_users";
-    else if (role === "ClubOwner") groupName = "ClubOwner_users";
-    else if (role === "Client") groupName = "Member_users";
-
     const command = new AdminAddUserToGroupCommand({
       UserPoolId: process.env.COGNITO_USER_POOL_ID!,
       Username: username,
@@ -29,9 +37,12 @@ export const addUserToCognitoGroup = async (
 
     await client.send(command);
 
-    strapi.log.info(`User ${username} added to Cognito group ${groupName}`);
+    log(`User ${username} added to Cognito group ${groupName}`);
+
   } catch (error) {
-    strapi.log.error("COGNITO GROUP ASSIGN ERROR");
-    strapi.log.error(error);
+    log("COGNITO GROUP ASSIGN ERROR");
+    log(String(error));
   }
+
+  return { logs };
 };

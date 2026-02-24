@@ -1,0 +1,41 @@
+{
+  "kind": "collectionType",
+  "collectionName": "otp_requests",
+  "info": {
+    "singularName": "otp-request",
+    "pluralName": "otp-requests",
+    "displayName": "otp-request"
+  },
+  "options": {
+    "draftAndPublish": false
+  },
+  "pluginOptions": {},
+  "attributes": {
+    "identifier": {
+      "type": "string"
+    },
+    "otp_hash": {
+      "type": "string"
+    },
+    "expires_at": {
+      "type": "datetime"
+    },
+    "attempts": {
+      "type": "integer"
+    },
+    "verified": {
+      "type": "boolean",
+      "default": false
+    },
+    "purpose": {
+      "type": "enumeration",
+      "enum": [
+        "register",
+        "reset_password"
+      ]
+    },
+    "last_sent_at": {
+      "type": "datetime"
+    }
+  }
+}

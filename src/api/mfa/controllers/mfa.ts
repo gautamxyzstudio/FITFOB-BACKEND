@@ -124,7 +124,7 @@ export default {
           data: {
             mfa_temp_token: null,
             mfa_identifier: null,
-            mfa_failed_attempts: 0
+            mfa_failed_attempts: 0,
           }
         });
 

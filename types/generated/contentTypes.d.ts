@@ -530,6 +530,40 @@ export interface ApiClubOwnerClubOwner extends Struct.CollectionTypeSchema {
   };
 }
 
+export interface ApiOtpRequestOtpRequest extends Struct.CollectionTypeSchema {
+  collectionName: 'otp_requests';
+  info: {
+    displayName: 'otp-request';
+    pluralName: 'otp-requests';
+    singularName: 'otp-request';
+  };
+  options: {
+    draftAndPublish: false;
+  };
+  attributes: {
+    attempts: Schema.Attribute.Integer;
+    createdAt: Schema.Attribute.DateTime;
+    createdBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
+      Schema.Attribute.Private;
+    expires_at: Schema.Attribute.DateTime;
+    identifier: Schema.Attribute.String;
+    last_sent_at: Schema.Attribute.DateTime;
+    locale: Schema.Attribute.String & Schema.Attribute.Private;
+    localizations: Schema.Attribute.Relation<
+      'oneToMany',
+      'api::otp-request.otp-request'
+    > &
+      Schema.Attribute.Private;
+    otp_hash: Schema.Attribute.String;
+    publishedAt: Schema.Attribute.DateTime;
+    purpose: Schema.Attribute.Enumeration<['register', 'reset_password']>;
+    updatedAt: Schema.Attribute.DateTime;
+    updatedBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
+      Schema.Attribute.Private;
+    verified: Schema.Attribute.Boolean & Schema.Attribute.DefaultTo<false>;
+  };
+}
+
 export interface ApiPendingClientDetailPendingClientDetail
   extends Struct.CollectionTypeSchema {
   collectionName: 'pending_client_details';
@@ -641,13 +675,13 @@ export interface ApiPendingSignupPendingSignup
     singularName: 'pending-signup';
   };
   options: {
-    draftAndPublish: true;
+    draftAndPublish: false;
   };
   attributes: {
     createdAt: Schema.Attribute.DateTime;
     createdBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
       Schema.Attribute.Private;
-    expiresAt: Schema.Attribute.DateTime;
+    expiresAt: Schema.Attribute.BigInteger;
     identifier: Schema.Attribute.String;
     locale: Schema.Attribute.String & Schema.Attribute.Private;
     localizations: Schema.Attribute.Relation<
@@ -1213,6 +1247,7 @@ declare module '@strapi/strapi' {
       'admin::user': AdminUser;
       'api::client-detail.client-detail': ApiClientDetailClientDetail;
       'api::club-owner.club-owner': ApiClubOwnerClubOwner;
+      'api::otp-request.otp-request': ApiOtpRequestOtpRequest;
       'api::pending-client-detail.pending-client-detail': ApiPendingClientDetailPendingClientDetail;
       'api::pending-club-owner.pending-club-owner': ApiPendingClubOwnerPendingClubOwner;
       'api::pending-signup.pending-signup': ApiPendingSignupPendingSignup;
