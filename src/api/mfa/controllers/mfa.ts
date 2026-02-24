@@ -4,18 +4,14 @@ import { normalizeIdentifier } from "../../../utils/normalize-identifier";
 
 const USER_MODEL = "plugin::users-permissions.user";
 
-
 /* small helper (OTP autofill sometimes adds spaces) */
-const cleanOtp = (otp: string) =>
-  String(otp).replace(/\s+/g, "").trim();
+const cleanOtp = (otp: string) => String(otp).replace(/\s+/g, "").trim();
 
 export default {
-
   /* =====================================================
   ACTIVATE MFA (AFTER QR SCAN)
   ===================================================== */
   async activate(ctx) {
-
     const { identifier, otp } = ctx.request.body;
 
     if (!identifier || !otp)
@@ -23,17 +19,14 @@ export default {
 
     const normalizedIdentifier = normalizeIdentifier(identifier);
 
-    const user = await strapi.db
-      .query(USER_MODEL)
-      .findOne({
-        where: normalizedIdentifier.includes("@")
-          ? { email: normalizedIdentifier }
-          : { phoneNumber: normalizedIdentifier },
-        populate: ["role"],
-      });
+    const user = await strapi.db.query(USER_MODEL).findOne({
+      where: normalizedIdentifier.includes("@")
+        ? { email: normalizedIdentifier }
+        : { phoneNumber: normalizedIdentifier },
+      populate: ["role"],
+    });
 
-    if (!user)
-      return ctx.badRequest("User not found");
+    if (!user) return ctx.badRequest("User not found");
 
     if (user.role?.name !== "Admin")
       return ctx.unauthorized("Only Admin can enable MFA");
@@ -50,8 +43,7 @@ export default {
       step: 30,
     });
 
-    if (!verified)
-      return ctx.badRequest("Invalid authenticator code");
+    if (!verified) return ctx.badRequest("Invalid authenticator code");
 
     await strapi.entityService.update(USER_MODEL, user.id, {
       data: {
@@ -62,40 +54,33 @@ export default {
     });
 
     ctx.send({
-      message: "MFA successfully enabled"
+      message: "MFA successfully enabled",
     });
-
   },
 
   /* =====================================================
   VERIFY OTP DURING LOGIN
   ===================================================== */
   async verify(ctx) {
-
     const { tempToken, otp, password } = ctx.request.body;
 
     if (!tempToken || !otp || !password)
       return ctx.badRequest("OTP and password required");
 
-    const user = await strapi.db
-      .query(USER_MODEL)
-      .findOne({
-        where: { mfa_temp_token: tempToken },
-        populate: ["role"],
-      });
+    const user = await strapi.db.query(USER_MODEL).findOne({
+      where: { mfa_temp_token: tempToken },
+      populate: ["role"],
+    });
 
-    if (!user)
-      return ctx.badRequest("Session expired");
+    if (!user) return ctx.badRequest("Session expired");
 
     if (user.role?.name !== "Admin")
       return ctx.unauthorized("MFA allowed only for Admin");
 
-    if (!user.mfa_secret)
-      return ctx.badRequest("MFA not activated");
+    if (!user.mfa_secret) return ctx.badRequest("MFA not activated");
 
     /* FIX 2: always trust identifier saved during login */
-    if (!user.mfa_identifier)
-      return ctx.badRequest("Login session expired");
+    if (!user.mfa_identifier) return ctx.badRequest("Login session expired");
 
     const identifier = user.mfa_identifier;
 
@@ -110,28 +95,27 @@ export default {
 
     /* ===== OTP FAILURE HANDLER ===== */
     if (!verified) {
-
       const attempts = (user.mfa_failed_attempts || 0) + 1;
 
       await strapi.entityService.update(USER_MODEL, user.id, {
-        data: { mfa_failed_attempts: attempts }
+        data: { mfa_failed_attempts: attempts },
       });
 
       /* After 5 failures → assume authenticator removed */
       if (attempts >= 5) {
-
         await strapi.entityService.update(USER_MODEL, user.id, {
           data: {
             mfa_temp_token: null,
             mfa_identifier: null,
-            mfa_failed_attempts: 0
-          }
+            mfa_failed_attempts: 0,
+            mfa_secret: null,
+          },
         });
 
         return ctx.send({
           mfaResetRequired: true,
           message:
-            "Authenticator seems removed. Please login again and scan QR."
+            "Authenticator seems removed. Please login again and scan QR.",
         });
       }
 
@@ -140,7 +124,7 @@ export default {
 
     /* OTP SUCCESS → reset counter */
     await strapi.entityService.update(USER_MODEL, user.id, {
-      data: { mfa_failed_attempts: 0 }
+      data: { mfa_failed_attempts: 0 },
     });
 
     /* ===== REAL LOGIN ===== */
@@ -161,8 +145,8 @@ export default {
     await strapi.entityService.update(USER_MODEL, user.id, {
       data: {
         mfa_temp_token: null,
-        mfa_identifier: null
-      }
+        mfa_identifier: null,
+      },
     });
 
     ctx.send({
@@ -185,6 +169,5 @@ export default {
         role: user.role,
       },
     });
-
   },
 };
