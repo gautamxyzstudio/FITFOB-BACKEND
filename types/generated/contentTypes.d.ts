@@ -721,9 +721,11 @@ export interface ApiResetPasswordSessionResetPasswordSession
     > &
       Schema.Attribute.Private;
     publishedAt: Schema.Attribute.DateTime;
+    token: Schema.Attribute.String & Schema.Attribute.Required;
     updatedAt: Schema.Attribute.DateTime;
     updatedBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
       Schema.Attribute.Private;
+    used: Schema.Attribute.Boolean & Schema.Attribute.DefaultTo<false>;
   };
 }
 

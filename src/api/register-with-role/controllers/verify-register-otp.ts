@@ -141,6 +141,26 @@ export default {
 
       /* ---------- STRAPI USER ---------- */
 
+      // normalize role (safety)
+      const roleType =
+        role === "Admin"
+          ? "admin"
+          : role === "ClubOwner"
+            ? "clubowner"
+            : "client";
+
+      // fetch role from Strapi
+      const strapiRole = await strapi.db
+        .query("plugin::users-permissions.role")
+        .findOne({
+          where: { type: roleType },
+        });
+
+      if (!strapiRole) {
+        strapi.log.error("ROLE NOT FOUND IN STRAPI:", roleType);
+        return ctx.internalServerError("Server role configuration error.");
+      }
+
       const userService = strapi.plugin("users-permissions").service("user");
 
       const user = await userService.add({
@@ -149,6 +169,7 @@ export default {
         password,
         confirmed: true,
         provider: "local",
+        role: strapiRole.id,
       });
 
       await strapi.db.query("plugin::users-permissions.user").update({
