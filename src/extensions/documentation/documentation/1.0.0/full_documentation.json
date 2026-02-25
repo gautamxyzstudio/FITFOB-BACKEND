@@ -14,7 +14,7 @@
       "name": "Apache 2.0",
       "url": "https://www.apache.org/licenses/LICENSE-2.0.html"
     },
-    "x-generation-date": "2026-02-25T05:41:46.933Z"
+    "x-generation-date": "2026-02-25T06:21:35.407Z"
   },
   "x-strapi-config": {
     "plugins": [
@@ -4518,9 +4518,6 @@
               "phoneNumber": {
                 "type": "string"
               },
-              "age": {
-                "type": "string"
-              },
               "weight": {
                 "type": "string"
               },
@@ -4569,6 +4566,10 @@
               "approvedAt": {
                 "type": "string",
                 "format": "date-time"
+              },
+              "date_of_birth": {
+                "type": "string",
+                "format": "date"
               },
               "locale": {
                 "type": "string"
@@ -4653,9 +4654,6 @@
             "format": "email"
           },
           "phoneNumber": {
-            "type": "string"
-          },
-          "age": {
             "type": "string"
           },
           "weight": {
@@ -6026,6 +6024,10 @@
             "type": "string",
             "format": "date-time"
           },
+          "date_of_birth": {
+            "type": "string",
+            "format": "date"
+          },
           "createdAt": {
             "type": "string",
             "format": "date-time"
@@ -6106,9 +6108,6 @@
                   "format": "email"
                 },
                 "phoneNumber": {
-                  "type": "string"
-                },
-                "age": {
                   "type": "string"
                 },
                 "weight": {
@@ -6488,6 +6487,10 @@
                 "approvedAt": {
                   "type": "string",
                   "format": "date-time"
+                },
+                "date_of_birth": {
+                  "type": "string",
+                  "format": "date"
                 },
                 "createdAt": {
                   "type": "string",
@@ -9402,9 +9405,6 @@
               "phoneNumber": {
                 "type": "string"
               },
-              "age": {
-                "type": "string"
-              },
               "weight": {
                 "type": "string"
               },
@@ -9460,6 +9460,10 @@
                   "submitted"
                 ]
               },
+              "date_of_birth": {
+                "type": "string",
+                "format": "date"
+              },
               "locale": {
                 "type": "string"
               },
@@ -9508,9 +9512,6 @@
             "format": "email"
           },
           "phoneNumber": {
-            "type": "string"
-          },
-          "age": {
             "type": "string"
           },
           "weight": {
@@ -10887,6 +10888,10 @@
               "submitted"
             ]
           },
+          "date_of_birth": {
+            "type": "string",
+            "format": "date"
+          },
           "createdAt": {
             "type": "string",
             "format": "date-time"
@@ -10967,9 +10972,6 @@
                   "format": "email"
                 },
                 "phoneNumber": {
-                  "type": "string"
-                },
-                "age": {
                   "type": "string"
                 },
                 "weight": {
@@ -11355,6 +11357,10 @@
                     "draft",
                     "submitted"
                   ]
+                },
+                "date_of_birth": {
+                  "type": "string",
+                  "format": "date"
                 },
                 "createdAt": {
                   "type": "string",

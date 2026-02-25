@@ -23,9 +23,6 @@
     "phoneNumber": {
       "type": "string"
     },
-    "age": {
-      "type": "string"
-    },
     "weight": {
       "type": "string"
     },
@@ -59,12 +56,15 @@
       ]
     },
     "user": {
-  "type": "relation",
-  "relation": "oneToOne",
-  "target": "plugin::users-permissions.user"
-},
-"approvedAt": {
-  "type": "datetime"
-}
+      "type": "relation",
+      "relation": "oneToOne",
+      "target": "plugin::users-permissions.user"
+    },
+    "approvedAt": {
+      "type": "datetime"
+    },
+    "date_of_birth": {
+      "type": "date"
+    }
   }
 }
