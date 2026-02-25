@@ -17,13 +17,10 @@
     "gender": {
       "type": "string"
     },
-     "email": {
+    "email": {
       "type": "email"
     },
     "phoneNumber": {
-      "type": "string"
-    },
-    "age": {
       "type": "string"
     },
     "weight": {
@@ -58,20 +55,24 @@
         "audios"
       ]
     },
-      "user": {
-    "type": "relation",
-    "relation": "oneToOne",
-    "target": "plugin::users-permissions.user"
-  },
-
-  "currentStep": {
-    "type": "integer",
-    "default": 1
-  },
-
-  "status": {
-    "type": "enumeration",
-    "enum": ["draft", "submitted"]
-  }
+    "user": {
+      "type": "relation",
+      "relation": "oneToOne",
+      "target": "plugin::users-permissions.user"
+    },
+    "currentStep": {
+      "type": "integer",
+      "default": 1
+    },
+    "status": {
+      "type": "enumeration",
+      "enum": [
+        "draft",
+        "submitted"
+      ]
+    },
+    "date_of_birth": {
+      "type": "date"
+    }
   }
 }

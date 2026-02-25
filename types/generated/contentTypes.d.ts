@@ -442,11 +442,11 @@ export interface ApiClientDetailClientDetail
     draftAndPublish: false;
   };
   attributes: {
-    age: Schema.Attribute.String;
     approvedAt: Schema.Attribute.DateTime;
     createdAt: Schema.Attribute.DateTime;
     createdBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
       Schema.Attribute.Private;
+    date_of_birth: Schema.Attribute.Date;
     email: Schema.Attribute.Email;
     gender: Schema.Attribute.String;
     governmentId: Schema.Attribute.Media<
@@ -576,11 +576,11 @@ export interface ApiPendingClientDetailPendingClientDetail
     draftAndPublish: false;
   };
   attributes: {
-    age: Schema.Attribute.String;
     createdAt: Schema.Attribute.DateTime;
     createdBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
       Schema.Attribute.Private;
     currentStep: Schema.Attribute.Integer & Schema.Attribute.DefaultTo<1>;
+    date_of_birth: Schema.Attribute.Date;
     email: Schema.Attribute.Email;
     gender: Schema.Attribute.String;
     governmentId: Schema.Attribute.Media<

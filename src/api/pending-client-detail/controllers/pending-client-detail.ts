@@ -4,7 +4,7 @@ const PENDING_UID = "api::pending-client-detail.pending-client-detail";
 const CLIENT_UID = "api::client-detail.client-detail";
 
 /* 🔴 IMPORTANT: this is the numeric folder id visible in Media Library URL */
-const UPLOAD_FOLDER_ID = 1;
+const UPLOAD_FOLDER_ID = 2;
 
 /* ---------- SAFE BODY PARSER ---------- */
 function getBody(ctx: Context) {
@@ -94,27 +94,42 @@ ctx.send({ nextStep: 2 });
 
 /* ================= STEP 2 BODY INFO ================= */
 async bodyInfo(ctx: Context) {
-const sessionUser = ctx.state.user;
-if (!sessionUser) return ctx.unauthorized();
+  const sessionUser = ctx.state.user;
+  if (!sessionUser) return ctx.unauthorized();
 
-const user = await getFullUser(sessionUser.id);
-const body = getBody(ctx);
-const draft: any = await getDraft(user.id);
+  const user = await getFullUser(sessionUser.id);
+  const body = getBody(ctx);
+  const draft: any = await getDraft(user.id);
 
-if (!draft || draft.currentStep !== 2)
-  return ctx.badRequest("Invalid step order");
+  if (!draft || draft.currentStep !== 2)
+    return ctx.badRequest("Invalid step order");
 
-await strapi.entityService.update(PENDING_UID, draft.id, {
-  data: {
-    age: body.age,
-    height: body.height,
-    weight: body.weight,
-    currentStep: 3,
-  },
-});
+  /* ---------- DOB REQUIRED ---------- */
+  if (!body.date_of_birth)
+    return ctx.badRequest("date_of_birth is required");
 
-ctx.send({ nextStep: 3 });
+  const dob = new Date(body.date_of_birth);
+  const today = new Date();
 
+  /* invalid date */
+  if (isNaN(dob.getTime()))
+    return ctx.badRequest("Invalid date_of_birth format. Use YYYY-MM-DD");
+
+  /* future date protection */
+  if (dob > today)
+    return ctx.badRequest("date_of_birth cannot be in the future");
+
+  /* ---------- SAVE ---------- */
+  await strapi.entityService.update(PENDING_UID, draft.id, {
+    data: {
+      date_of_birth: body.date_of_birth,
+      height: body.height,
+      weight: body.weight,
+      currentStep: 3,
+    },
+  });
+
+  ctx.send({ nextStep: 3 });
 },
 
 /* ================= STEP 3 LOCATION ================= */
@@ -232,7 +247,7 @@ const client = await strapi.entityService.create(CLIENT_UID, {
     gender: finalDraft.gender,
     email: finalDraft.email,
     phoneNumber: finalDraft.phoneNumber,
-    age: finalDraft.age,
+    date_of_birth: finalDraft.date_of_birth,
     height: finalDraft.height,
     weight: finalDraft.weight,
     latitude: finalDraft.latitude,
