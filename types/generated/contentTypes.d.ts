@@ -557,6 +557,7 @@ export interface ApiOtpRequestOtpRequest extends Struct.CollectionTypeSchema {
     otp_hash: Schema.Attribute.String;
     publishedAt: Schema.Attribute.DateTime;
     purpose: Schema.Attribute.Enumeration<['register', 'reset_password']>;
+    signupToken: Schema.Attribute.String;
     updatedAt: Schema.Attribute.DateTime;
     updatedBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
       Schema.Attribute.Private;
@@ -691,6 +692,7 @@ export interface ApiPendingSignupPendingSignup
       Schema.Attribute.Private;
     publishedAt: Schema.Attribute.DateTime;
     signupData: Schema.Attribute.JSON;
+    signupToken: Schema.Attribute.String & Schema.Attribute.Unique;
     updatedAt: Schema.Attribute.DateTime;
     updatedBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
       Schema.Attribute.Private;

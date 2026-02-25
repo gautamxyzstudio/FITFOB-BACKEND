@@ -34,10 +34,13 @@ const normalizePhone = (identifier: string) => {
 export default {
   async verify(ctx: any) {
     try {
-      let { identifier, otp } = ctx.request.body;
+      let { identifier, otp, signupToken } = ctx.request.body;
 
       identifier = normalizeIdentifier(identifier);
       identifier = normalizePhone(identifier);
+
+      if (!signupToken)
+        return ctx.badRequest("Verification session expired. Please request OTP again.");
 
       const logs: string[] = [];
       logs.push(`[VERIFY] ${identifier}`);
@@ -46,12 +49,18 @@ export default {
 
       const records = await strapi.entityService.findMany(
         "api::otp-request.otp-request",
-        { filters: { identifier, purpose: "register" } }
+        {
+          filters: {
+            identifier,
+            signupToken,
+            purpose: "register",
+          },
+        }
       );
-
       const record = records[0];
-      if (!record) return ctx.badRequest("OTP not found");
-
+      if (!record)
+        return ctx.badRequest("Invalid or expired verification session. Please register again.");
+      
       /* ---------- OTP EXPIRY (FIXED) ---------- */
 
       const otpExpiresAt = new Date(record.expires_at).getTime();
@@ -78,7 +87,12 @@ export default {
 
       const pendingRecords = await strapi.entityService.findMany(
         "api::pending-signup.pending-signup",
-        { filters: { identifier } }
+        {
+          filters: {
+            identifier,
+            signupToken,
+          },
+        }
       );
 
       const pending = pendingRecords[0];

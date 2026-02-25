@@ -19,15 +19,18 @@ const normalizePhone = (identifier: string) => {
 export default {
   async resend(ctx: any) {
     try {
-      let { identifier } = ctx.request.body;
+      let { identifier, signupToken } = ctx.request.body;
 
       identifier = normalizeIdentifier(identifier);
       identifier = normalizePhone(identifier);
 
+      if (!signupToken)
+        return ctx.badRequest("Verification session expired. Please register again.");
+
       /* FIND SESSION */
       const pending = await strapi.db
         .query("api::pending-signup.pending-signup")
-        .findOne({ where: { identifier } });
+        .findOne({ where: { identifier, signupToken } });
 
       if (!pending)
         return ctx.badRequest("Signup session expired. Please register again.");
@@ -46,12 +49,13 @@ export default {
       const otpHash = await bcrypt.hash(otp, 10);
 
       await strapi.db.query("api::otp-request.otp-request").deleteMany({
-        where: { identifier, purpose: "register" },
+        where: { signupToken, purpose: "register" },
       });
 
       await strapi.entityService.create("api::otp-request.otp-request", {
         data: {
           identifier,
+          signupToken,
           otp_hash: otpHash,
           expires_at: new Date(Date.now() + 2 * 60 * 1000),
           attempts: 0,
@@ -77,7 +81,10 @@ export default {
         await sendTwilioOtp(identifier, otp);
       }
 
-      ctx.send({ message: "OTP resent successfully" });
+      ctx.send({
+        message: "OTP resent successfully",
+        signupToken,
+      });
 
     } catch (err) {
       strapi.log.error("RESEND OTP ERROR", err);

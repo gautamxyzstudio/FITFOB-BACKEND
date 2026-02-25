@@ -14,7 +14,7 @@
       "name": "Apache 2.0",
       "url": "https://www.apache.org/licenses/LICENSE-2.0.html"
     },
-    "x-generation-date": "2026-02-25T06:21:35.407Z"
+    "x-generation-date": "2026-02-25T07:29:28.876Z"
   },
   "x-strapi-config": {
     "plugins": [
@@ -8757,6 +8757,9 @@
                 "type": "string",
                 "format": "date-time"
               },
+              "signupToken": {
+                "type": "string"
+              },
               "locale": {
                 "type": "string"
               },
@@ -8855,6 +8858,9 @@
           "last_sent_at": {
             "type": "string",
             "format": "date-time"
+          },
+          "signupToken": {
+            "type": "string"
           },
           "createdAt": {
             "type": "string",
@@ -9294,6 +9300,9 @@
                 "last_sent_at": {
                   "type": "string",
                   "format": "date-time"
+                },
+                "signupToken": {
+                  "type": "string"
                 },
                 "createdAt": {
                   "type": "string",
@@ -13604,6 +13613,9 @@
                 "pattern": "^\\d*$",
                 "example": "123456789"
               },
+              "signupToken": {
+                "type": "string"
+              },
               "locale": {
                 "type": "string"
               },
@@ -13684,6 +13696,9 @@
             "type": "string",
             "pattern": "^\\d*$",
             "example": "123456789"
+          },
+          "signupToken": {
+            "type": "string"
           },
           "createdAt": {
             "type": "string",
@@ -14105,6 +14120,9 @@
                   "type": "string",
                   "pattern": "^\\d*$",
                   "example": "123456789"
+                },
+                "signupToken": {
+                  "type": "string"
                 },
                 "createdAt": {
                   "type": "string",

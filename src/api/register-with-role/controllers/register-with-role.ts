@@ -1,5 +1,6 @@
 import axios from "axios";
 import bcrypt from "bcryptjs";
+import crypto from "crypto";
 import { normalizeIdentifier } from "../../../utils/normalize-identifier";
 import { checkCognitoUser } from "../../../services/cognito-user-check";
 import { sendTwilioOtp } from "../../../services/twilio-sms";
@@ -19,6 +20,7 @@ const normalizePhone = (identifier: string) => {
 
   return identifier;
 };
+
 
 export default {
   async register(ctx: any) {
@@ -54,6 +56,21 @@ export default {
       /* ---------- OTP GENERATE ---------- */
       const otp = generateOtp();
       const otpHash = await bcrypt.hash(otp, 10);
+      const signupToken = crypto.randomUUID();
+
+      // cleanup expired signup attempts
+      await strapi.db.query("api::pending-signup.pending-signup").deleteMany({
+        where: {
+          expiresAt: { $lt: Date.now() },
+        },
+      });
+
+      // cleanup expired OTPs
+      await strapi.db.query("api::otp-request.otp-request").deleteMany({
+        where: {
+          expires_at: { $lt: new Date() },
+        },
+      });
 
       /* ---------- SEND OTP FIRST ---------- */
       try {
@@ -78,26 +95,22 @@ export default {
       }
 
       /* ---------- STORE SESSION ---------- */
-      await strapi.db.query("api::pending-signup.pending-signup").deleteMany({
-        where: { identifier },
-      });
 
       await strapi.entityService.create("api::pending-signup.pending-signup", {
         data: {
           identifier,
+          signupToken,
           signupData: { email, phone, password, role: role || "Client" },
           expiresAt: Date.now() + 10 * 60 * 1000,
         },
       });
 
       /* ---------- STORE OTP ---------- */
-      await strapi.db.query("api::otp-request.otp-request").deleteMany({
-        where: { identifier, purpose: "register" },
-      });
 
       await strapi.entityService.create("api::otp-request.otp-request", {
         data: {
           identifier,
+          signupToken,
           otp_hash: otpHash,
           expires_at: new Date(Date.now() + 2 * 60 * 1000),
           attempts: 0,
@@ -107,7 +120,10 @@ export default {
         },
       });
 
-      ctx.send({ message: "OTP sent successfully" });
+      ctx.send({
+        message: "OTP sent successfully",
+        signupToken,
+      });
 
       setTimeout(() => {
         if (email)

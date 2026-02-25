@@ -7,7 +7,7 @@
     "displayName": "Pending-Signup"
   },
   "options": {
-    "draftAndPublish":false
+    "draftAndPublish": false
   },
   "pluginOptions": {},
   "attributes": {
@@ -19,6 +19,11 @@
     },
     "expiresAt": {
       "type": "biginteger"
+    },
+    "signupToken": {
+      "type": "string",
+      "required": false,
+      "unique": true
     }
   }
 }

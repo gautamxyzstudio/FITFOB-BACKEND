@@ -36,6 +36,9 @@
     },
     "last_sent_at": {
       "type": "datetime"
+    },
+    "signupToken": {
+      "type": "string"
     }
   }
 }
