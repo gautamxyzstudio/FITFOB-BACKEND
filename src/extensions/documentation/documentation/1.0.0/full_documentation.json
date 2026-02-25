@@ -14,7 +14,7 @@
       "name": "Apache 2.0",
       "url": "https://www.apache.org/licenses/LICENSE-2.0.html"
     },
-    "x-generation-date": "2026-02-24T13:18:49.415Z"
+    "x-generation-date": "2026-02-25T05:41:46.933Z"
   },
   "x-strapi-config": {
     "plugins": [
@@ -14195,6 +14195,9 @@
         ],
         "properties": {
           "data": {
+            "required": [
+              "token"
+            ],
             "type": "object",
             "properties": {
               "identifier": {
@@ -14203,6 +14206,12 @@
               "expiresAt": {
                 "type": "string",
                 "format": "date-time"
+              },
+              "token": {
+                "type": "string"
+              },
+              "used": {
+                "type": "boolean"
               },
               "locale": {
                 "type": "string"
@@ -14262,6 +14271,9 @@
       },
       "ResetPasswordSession": {
         "type": "object",
+        "required": [
+          "token"
+        ],
         "properties": {
           "id": {
             "oneOf": [
@@ -14282,6 +14294,12 @@
           "expiresAt": {
             "type": "string",
             "format": "date-time"
+          },
+          "token": {
+            "type": "string"
+          },
+          "used": {
+            "type": "boolean"
           },
           "createdAt": {
             "type": "string",
@@ -14701,6 +14719,12 @@
                 "expiresAt": {
                   "type": "string",
                   "format": "date-time"
+                },
+                "token": {
+                  "type": "string"
+                },
+                "used": {
+                  "type": "boolean"
                 },
                 "createdAt": {
                   "type": "string",

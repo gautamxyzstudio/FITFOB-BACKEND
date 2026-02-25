@@ -16,6 +16,14 @@
     },
     "expiresAt": {
       "type": "datetime"
+    },
+    "token": {
+      "type": "string",
+      "required": true
+    },
+    "used": {
+      "type": "boolean",
+      "default": false
     }
   }
 }
