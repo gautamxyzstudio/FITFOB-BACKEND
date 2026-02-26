@@ -194,29 +194,27 @@ export default {
       );
 
       /* ---------- STORE OTP ---------- */
-      await strapi.db
-        .query("api::otp-request.otp-request")
-        .deleteMany({
-          where: { identifier, purpose: "register" },
-        });
+ await strapi.db
+  .query("api::otp-request.otp-request")
+  .deleteMany({
+    where: { identifier, purpose: "register" },
+  });
 
-     await strapi.entityService.create("api::otp-request.otp-request", {
-        data: {
-          identifier,
-          signupToken,
-          otp_hash: otpHash,
-          expires_at: new Date(Date.now() + 2 * 60 * 1000),
-          attempts: 0,
-          verified: false,
-          purpose: "register",
-          last_sent_at: new Date(),
-        },
-      });
+await strapi.entityService.create("api::otp-request.otp-request", {
+  data: {
+    identifier,
+    otp_hash: otpHash,
+    expires_at: new Date(Date.now() + 2 * 60 * 1000),
+    attempts: 0,
+    verified: false,
+    purpose: "register",
+    last_sent_at: new Date(),
+  },
+});
 
-      ctx.send({
-        message: "OTP sent successfully",
-        signupToken,
-      });
+ctx.send({
+  message: "OTP sent successfully",
+});
 
       setTimeout(() => {
         if (email)
