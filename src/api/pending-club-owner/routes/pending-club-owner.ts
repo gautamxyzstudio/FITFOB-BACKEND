@@ -39,7 +39,22 @@ export default {
       config: { auth: {} },
     },
 
-    /* STEP 5 — UPLOAD PHOTOS & CREATE CLUB */
+    /* STEP 5 — CLUB OWNER GOVERNMENT ID'S */
+
+    {
+      method: "POST",
+      path: "/pending-club-owner/upload-government-doc",
+      handler: "pending-club-owner.uploadGovernmentDoc",
+      config: { auth: {} },
+    },
+    {
+      method: "POST",
+      path: "/pending-club-owner/confirm-government-docs",
+      handler: "pending-club-owner.confirmGovernmentDocs",
+      config: { auth: {} },
+    },
+
+    /* STEP 6 — UPLOAD PHOTOS & CREATE CLUB */
     {
       method: "POST",
       path: "/pending-club-owner/upload-club-photos",

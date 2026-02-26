@@ -1,0 +1,40 @@
+{
+  "kind": "collectionType",
+  "collectionName": "club_owner_documents",
+  "info": {
+    "singularName": "club-owner-document",
+    "pluralName": "club-owner-documents",
+    "displayName": "Club-Owner-Documents"
+  },
+  "options": {
+    "draftAndPublish": true
+  },
+  "pluginOptions": {},
+  "attributes": {
+    "documentName": {
+      "type": "string"
+    },
+    "File": {
+      "type": "media",
+      "multiple": false,
+      "allowedTypes": [
+        "images",
+        "files",
+        "videos",
+        "audios"
+      ]
+    },
+    "club_owner": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::club-owner.club-owner",
+      "inversedBy": "club_owner_documents"
+    },
+    "pending_club_owner": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::pending-club-owner.pending-club-owner",
+      "inversedBy": "club_owner_documents"
+    }
+  }
+}

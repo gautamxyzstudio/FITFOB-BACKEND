@@ -7,103 +7,94 @@
     "displayName": "Pending-Club-Owner"
   },
   "options": {
-    "draftAndPublish": false 
+    "draftAndPublish": false
   },
   "pluginOptions": {},
-  
- "attributes": {
+  "attributes": {
     "user": {
       "type": "relation",
       "relation": "oneToOne",
       "target": "plugin::users-permissions.user"
     },
-
     "currentStep": {
       "type": "integer",
       "default": 1
     },
-
     "status": {
       "type": "enumeration",
-      "enum": ["draft", "completed"],
-      "default": "draft"
+      "default": "draft",
+      "enum": [
+        "draft",
+        "completed"
+      ]
     },
-
     "clubName": {
       "type": "string"
     },
-
     "logo": {
       "type": "media",
       "multiple": false,
-      "allowedTypes": ["images"]
+      "allowedTypes": [
+        "images"
+      ]
     },
-
     "latitude": {
       "type": "string"
     },
-
     "longitude": {
       "type": "string"
     },
-
     "clubAddress": {
       "type": "string"
     },
-
     "city": {
       "type": "string"
     },
-
     "state": {
       "type": "string"
     },
-
     "pincode": {
       "type": "string"
     },
-
     "ownerName": {
       "type": "string"
     },
-
     "phoneNumber": {
       "type": "string"
     },
-
     "email": {
       "type": "email"
     },
-
     "services": {
       "type": "json"
     },
-
     "facilities": {
       "type": "json"
     },
-
     "openingTime": {
       "type": "time"
     },
-
     "closingTime": {
       "type": "time"
     },
-
     "weekday": {
       "type": "string"
     },
-
     "weekend": {
       "type": "string"
     },
-
     "clubPhotos": {
       "type": "media",
       "multiple": true,
-      "allowedTypes": ["images"]
+      "allowedTypes": [
+        "images"
+      ]
+    },
+    "club_owner_documents": {
+      "type": "relation",
+      "relation": "oneToMany",
+      "target": "api::club-owner-document.club-owner-document",
+      "mappedBy": "pending_club_owner"
     }
   }
 }
-

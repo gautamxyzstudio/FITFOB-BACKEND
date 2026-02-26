@@ -478,6 +478,44 @@ export interface ApiClientDetailClientDetail
   };
 }
 
+export interface ApiClubOwnerDocumentClubOwnerDocument
+  extends Struct.CollectionTypeSchema {
+  collectionName: 'club_owner_documents';
+  info: {
+    displayName: 'Club-Owner-Documents';
+    pluralName: 'club-owner-documents';
+    singularName: 'club-owner-document';
+  };
+  options: {
+    draftAndPublish: true;
+  };
+  attributes: {
+    club_owner: Schema.Attribute.Relation<
+      'manyToOne',
+      'api::club-owner.club-owner'
+    >;
+    createdAt: Schema.Attribute.DateTime;
+    createdBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
+      Schema.Attribute.Private;
+    documentName: Schema.Attribute.String;
+    File: Schema.Attribute.Media<'images' | 'files' | 'videos' | 'audios'>;
+    locale: Schema.Attribute.String & Schema.Attribute.Private;
+    localizations: Schema.Attribute.Relation<
+      'oneToMany',
+      'api::club-owner-document.club-owner-document'
+    > &
+      Schema.Attribute.Private;
+    pending_club_owner: Schema.Attribute.Relation<
+      'manyToOne',
+      'api::pending-club-owner.pending-club-owner'
+    >;
+    publishedAt: Schema.Attribute.DateTime;
+    updatedAt: Schema.Attribute.DateTime;
+    updatedBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
+      Schema.Attribute.Private;
+  };
+}
+
 export interface ApiClubOwnerClubOwner extends Struct.CollectionTypeSchema {
   collectionName: 'club_owners';
   info: {
@@ -491,6 +529,10 @@ export interface ApiClubOwnerClubOwner extends Struct.CollectionTypeSchema {
   attributes: {
     city: Schema.Attribute.String;
     closingTime: Schema.Attribute.Time;
+    club_owner_documents: Schema.Attribute.Relation<
+      'oneToMany',
+      'api::club-owner-document.club-owner-document'
+    >;
     clubAddress: Schema.Attribute.String;
     clubName: Schema.Attribute.String;
     clubPhotos: Schema.Attribute.Media<
@@ -627,6 +669,10 @@ export interface ApiPendingClubOwnerPendingClubOwner
   attributes: {
     city: Schema.Attribute.String;
     closingTime: Schema.Attribute.Time;
+    club_owner_documents: Schema.Attribute.Relation<
+      'oneToMany',
+      'api::club-owner-document.club-owner-document'
+    >;
     clubAddress: Schema.Attribute.String;
     clubName: Schema.Attribute.String;
     clubPhotos: Schema.Attribute.Media<'images', true>;
@@ -1248,6 +1294,7 @@ declare module '@strapi/strapi' {
       'admin::transfer-token-permission': AdminTransferTokenPermission;
       'admin::user': AdminUser;
       'api::client-detail.client-detail': ApiClientDetailClientDetail;
+      'api::club-owner-document.club-owner-document': ApiClubOwnerDocumentClubOwnerDocument;
       'api::club-owner.club-owner': ApiClubOwnerClubOwner;
       'api::otp-request.otp-request': ApiOtpRequestOtpRequest;
       'api::pending-client-detail.pending-client-detail': ApiPendingClientDetailPendingClientDetail;
