@@ -105,9 +105,9 @@ export default {
       const password = signupData.password;
       const role = signupData.role ?? "Client";
 
-      const username = email
-        ? email.split("@")[0]
-        : (phone as string).substring(3);
+   const username = email
+  ? email.toLowerCase()
+  : phone;
 
       /* ---------- COGNITO FIRST ---------- */
 
@@ -139,20 +139,21 @@ export default {
 
         logs.push(`GROUP ASSIGNED ✔ → ${groupName}`);
 
-      } catch (err) {
-        // rollback session if Cognito fails
-        if (pending?.id) {
-          await strapi.entityService.delete(
-            "api::pending-signup.pending-signup",
-            pending.id
-          );
-        }
+      } catch (err: any) {
+  console.error("COGNITO ERROR FULL:", JSON.stringify(err, null, 2));
+  strapi.log.error("COGNITO ERROR:", err);
 
-        return ctx.internalServerError(
-          "Account creation failed. Please register again."
-        );
-      }
+  if (pending?.id) {
+    await strapi.entityService.delete(
+      "api::pending-signup.pending-signup",
+      pending.id
+    );
+  }
 
+  return ctx.internalServerError(
+    err?.name || err?.message || "Account creation failed."
+  );
+}
       /* ---------- STRAPI USER ---------- */
 
       // normalize role (safety)
