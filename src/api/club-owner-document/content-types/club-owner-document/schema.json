@@ -7,7 +7,7 @@
     "displayName": "Club-Owner-Documents"
   },
   "options": {
-    "draftAndPublish": true
+    "draftAndPublish": false
   },
   "pluginOptions": {},
   "attributes": {

@@ -1,5 +1,4 @@
 import { Context } from "koa";
-
 const PENDING_UID = "api::pending-club-owner.pending-club-owner";
 const GOV_DOC_UID = "api::club-owner-document.club-owner-document";
 const CLUB_UID = "api::club-owner.club-owner";
@@ -218,8 +217,14 @@ async uploadClubPhotos(ctx: Context) {
   if (!files?.clubPhotos)
     return ctx.badRequest("Please upload club photos");
 
+  console.log("STEP 6 START -------------------");
+  console.log("USER:", user.id);
+  console.log("DRAFT ID:", draft.id);
+
+  /* upload photos */
   const uploadedPhotos = await uploadToFolder(files.clubPhotos);
   const photoIds = uploadedPhotos.map((f: any) => f.id);
+  console.log("Uploaded photos:", photoIds);
 
   const updatedDraft: any = await strapi.entityService.findOne(
     PENDING_UID,
@@ -229,53 +234,71 @@ async uploadClubPhotos(ctx: Context) {
 
   const logoId = updatedDraft.logo?.id ?? null;
 
-/* -------- CREATE CLUB OWNER -------- */
-const clubOwner = await strapi.entityService.create(CLUB_UID, {
-  data: {
-    user: user.id,
-    ownerName: updatedDraft.ownerName,
-    phoneNumber: updatedDraft.phoneNumber,
-    email: updatedDraft.email,
-    clubName: updatedDraft.clubName,
-    openingTime: updatedDraft.openingTime,
-    closingTime: updatedDraft.closingTime,
-    weekday: updatedDraft.weekday,
-    weekend: updatedDraft.weekend,
-    facilities: updatedDraft.facilities,
-    services: updatedDraft.services,
-    latitude: updatedDraft.latitude,
-    longitude: updatedDraft.longitude,
-    clubAddress: updatedDraft.clubAddress,
-    pincode: updatedDraft.pincode,
-    city: updatedDraft.city,
-    state: updatedDraft.state,
-    logo: logoId,
-    clubPhotos: photoIds,
-  },
-});
-
-/* -------- MOVE DOCUMENTS BEFORE DELETE -------- */
-const docs = await strapi.entityService.findMany(GOV_DOC_UID, {
-  filters: { pending_club_owner: draft.id },
-});
-
-for (const doc of docs) {
-  await strapi.entityService.update(GOV_DOC_UID, doc.id, {
+  /* create club owner */
+  const clubOwner = await strapi.entityService.create(CLUB_UID, {
     data: {
-      club_owner: clubOwner.id,
-      pending_club_owner: null,
+      user: user.id,
+      ownerName: updatedDraft.ownerName,
+      phoneNumber: updatedDraft.phoneNumber,
+      email: updatedDraft.email,
+      clubName: updatedDraft.clubName,
+      openingTime: updatedDraft.openingTime,
+      closingTime: updatedDraft.closingTime,
+      weekday: updatedDraft.weekday,
+      weekend: updatedDraft.weekend,
+      facilities: updatedDraft.facilities,
+      services: updatedDraft.services,
+      latitude: updatedDraft.latitude,
+      longitude: updatedDraft.longitude,
+      clubAddress: updatedDraft.clubAddress,
+      pincode: updatedDraft.pincode,
+      city: updatedDraft.city,
+      state: updatedDraft.state,
+      logo: logoId,
+      clubPhotos: photoIds,
+      publishedAt: new Date(),
     },
   });
-}
 
-/* -------- DELETE DRAFT -------- */
-await strapi.entityService.delete(PENDING_UID, draft.id);
+  console.log("CLUB OWNER CREATED:", clubOwner.id);
 
-ctx.send({
-  success: true,
-  message: "Club profile created successfully",
-  clubOwner,
-});
+  /* 🔴 IMPORTANT: FETCH WITH POPULATE */
+  const docs = await strapi.entityService.findMany(GOV_DOC_UID, {
+    populate: ["pending_club_owner", "club_owner", "File"],
+  });
+
+  console.log("ALL DOCS COUNT:", docs.length);
+
+  /* now manually filter */
+  const myDocs = docs.filter(
+    (d: any) => d.pending_club_owner?.id === draft.id
+  );
+
+  console.log("DOCS BELONGING TO THIS DRAFT:", myDocs.length);
+
+  for (const doc of myDocs) {
+    console.log("TRANSFERRING DOC:", doc.id);
+
+    await strapi.entityService.update(GOV_DOC_UID, doc.id, {
+      data: {
+        club_owner: clubOwner.id,
+        pending_club_owner: null,
+      },
+    });
+
+    console.log("TRANSFER COMPLETE:", doc.id);
+  }
+
+  console.log("DELETING DRAFT:", draft.id);
+  await strapi.entityService.delete(PENDING_UID, draft.id);
+
+  console.log("STEP 6 END -------------------");
+
+  ctx.send({
+    success: true,
+    message: "Club profile created successfully",
+    clubOwner,
+  });
 }
 
 };

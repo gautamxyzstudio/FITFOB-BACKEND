@@ -487,7 +487,7 @@ export interface ApiClubOwnerDocumentClubOwnerDocument
     singularName: 'club-owner-document';
   };
   options: {
-    draftAndPublish: true;
+    draftAndPublish: false;
   };
   attributes: {
     club_owner: Schema.Attribute.Relation<
