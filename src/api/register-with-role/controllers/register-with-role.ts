@@ -1,5 +1,6 @@
 import axios from "axios";
 import bcrypt from "bcryptjs";
+import crypto from "crypto";
 import { normalizeIdentifier } from "../../../utils/normalize-identifier";
 import { checkCognitoUser } from "../../../services/cognito-user-check";
 import { sendTwilioOtp } from "../../../services/twilio-sms";
@@ -23,17 +24,13 @@ const normalizePhone = (identifier: string) => {
 export default {
   async register(ctx: any) {
     try {
-      let { identifier, password, confirmPassword, role } =
-        ctx.request.body;
+      let { identifier, password, confirmPassword, role } = ctx.request.body;
 
       identifier = normalizeIdentifier(identifier);
       identifier = normalizePhone(identifier);
 
-      if (!identifier || !password || !confirmPassword) {
-        return ctx.badRequest(
-          "identifier, password, confirmPassword required"
-        );
-      }
+      if (!identifier || !password || !confirmPassword)
+        return ctx.badRequest("identifier, password, confirmPassword required");
 
       if (password !== confirmPassword) {
         return ctx.badRequest("Passwords do not match");
@@ -49,18 +46,31 @@ export default {
           where: email ? { email } : { phoneNumber: phone },
         });
 
-      if (existingUser) {
+      if (existingUser)
         return ctx.badRequest("User already exists. Please login.");
-      }
 
       const existsInCognito = await checkCognitoUser(identifier);
-      if (existsInCognito) {
+      if (existsInCognito)
         return ctx.badRequest("User already exists. Please login.");
-      }
 
-      /* ---------- OTP GENERATE ---------- */
+    /* ---------- OTP GENERATE ---------- */
       const otp = generateOtp();
       const otpHash = await bcrypt.hash(otp, 10);
+      const signupToken = crypto.randomUUID();
+
+      // cleanup expired signup attempts
+      await strapi.db.query("api::pending-signup.pending-signup").deleteMany({
+        where: {
+          expiresAt: { $lt: Date.now() },
+        },
+      });
+
+      // cleanup expired OTPs
+      await strapi.db.query("api::otp-request.otp-request").deleteMany({
+        where: {
+          expires_at: { $lt: new Date() },
+        },
+      });
 
       /* ---------- SEND OTP FIRST ---------- */
       try {
@@ -68,10 +78,7 @@ export default {
           await axios.post(
             "https://api.brevo.com/v3/smtp/email",
             {
-              sender: {
-                name: "FitFob",
-                email: "amit@thexyzstudio.com",
-              },
+              sender: { name: "FitFob", email: "amit@thexyzstudio.com" },
               to: [{ email }],
               subject: "Your FitFob OTP",
               htmlContent: `
@@ -81,78 +88,58 @@ export default {
                 </h2>
               `,
             },
-            {
-              headers: {
-                "api-key": process.env.BREVO_API_KEY,
-              },
-            }
+            { headers: { "api-key": process.env.BREVO_API_KEY } }
           );
+
         } else {
           await sendTwilioOtp(phone!, otp);
+
         }
       } catch (err) {
-        return ctx.badRequest(
-          "Unable to send OTP. Check email/phone."
-        );
+        return ctx.badRequest("Unable to send OTP. Check email/phone.");
       }
 
       /* ---------- STORE SESSION ---------- */
-      await strapi.db
-        .query("api::pending-signup.pending-signup")
-        .deleteMany({
-          where: { identifier },
-        });
 
-      await strapi.entityService.create(
-        "api::pending-signup.pending-signup",
-        {
-          data: {
-            identifier,
-            signupData: {
-              email,
-              phone,
-              password,
-              role: role || "Client",
-            },
-            expiresAt: Date.now() + 10 * 60 * 1000,
-          },
-        }
-      );
+      await strapi.entityService.create("api::pending-signup.pending-signup", {
+        data: {
+          identifier,
+          signupToken,
+          signupData: { email, phone, password, role: role || "Client" },
+          expiresAt: Date.now() + 10 * 60 * 1000,
+        },
+      });
 
       /* ---------- STORE OTP ---------- */
-      await strapi.db
-        .query("api::otp-request.otp-request")
-        .deleteMany({
-          where: { identifier, purpose: "register" },
-        });
 
-      await strapi.entityService.create(
-        "api::otp-request.otp-request",
-        {
-          data: {
-            identifier,
-            otp_hash: otpHash,
-            expires_at: new Date(Date.now() + 2 * 60 * 1000),
-            attempts: 0,
-            verified: false,
-            purpose: "register",
-            last_sent_at: new Date(),
-          },
-        }
-      );
+      await strapi.entityService.create("api::otp-request.otp-request", {
+        data: {
+          identifier,
+          signupToken,
+          otp_hash: otpHash,
+          expires_at: new Date(Date.now() + 2 * 60 * 1000),
+          attempts: 0,
+          verified: false,
+          purpose: "register",
+          last_sent_at: new Date(),
+        },
+      });
 
-      ctx.send({ message: "OTP sent successfully" });
+      ctx.send({
+        message: "OTP sent successfully",
+        signupToken,
+      });
 
       setTimeout(() => {
-        if (email) {
+        if (email)
           strapi.log.info(`[EMAIL OTP SENT] ${identifier}`);
-        } else {
+        else
           strapi.log.info(`[SMS OTP SENT] ${phone}`);
-        }
 
         strapi.log.info(`[REGISTER] ${identifier}`);
         strapi.log.info(`[OTP STORED IN DB] ${identifier}`);
       }, 0);
+
     } catch (err) {
       strapi.log.error("REGISTER ERROR", err);
       ctx.internalServerError("Registration failed");
