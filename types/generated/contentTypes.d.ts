@@ -534,6 +534,10 @@ export interface ApiClubOwnerClubOwner extends Struct.CollectionTypeSchema {
       'api::club-owner-document.club-owner-document'
     >;
     clubAddress: Schema.Attribute.String;
+    clubCategory: Schema.Attribute.Enumeration<['Basic', 'Premium', 'Luxury']>;
+    clubId: Schema.Attribute.String &
+      Schema.Attribute.Required &
+      Schema.Attribute.Unique;
     clubName: Schema.Attribute.String;
     clubPhotos: Schema.Attribute.Media<
       'images' | 'files' | 'videos' | 'audios',
@@ -675,6 +679,7 @@ export interface ApiPendingClubOwnerPendingClubOwner
       'api::club-owner-document.club-owner-document'
     >;
     clubAddress: Schema.Attribute.String;
+    clubCategory: Schema.Attribute.Enumeration<['Basic', 'Premium', 'Luxury']>;
     clubName: Schema.Attribute.String;
     clubPhotos: Schema.Attribute.Media<'images', true>;
     createdAt: Schema.Attribute.DateTime;

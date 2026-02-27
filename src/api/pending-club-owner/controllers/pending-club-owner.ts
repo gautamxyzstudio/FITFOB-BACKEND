@@ -1,4 +1,5 @@
 import { Context } from "koa";
+import { generateClubId } from "../../../utils/generateClubId";
 
 const PENDING_UID = "api::pending-club-owner.pending-club-owner";
 const GOV_DOC_UID = "api::club-owner-document.club-owner-document";
@@ -156,6 +157,11 @@ export default {
     if (!draft || draft.currentStep !== 4)
       return ctx.badRequest("Invalid step order");
 
+    /* ENUM VALIDATION */
+    const allowedCategories = ["Basic", "Premium", "Luxury"];
+    if (!allowedCategories.includes(body.clubCategory))
+      return ctx.badRequest("Invalid club category");
+
     await strapi.entityService.update(PENDING_UID, draft.id, {
       data: {
         services: body.services,
@@ -164,6 +170,7 @@ export default {
         closingTime: body.closingTime,
         weekday: body.weekday,
         weekend: body.weekend,
+        clubCategory: body.clubCategory,
         currentStep: 5,
       },
     });
@@ -244,9 +251,11 @@ export default {
     const logoId = updatedDraft.logo?.id ?? null;
 
     /* create club owner */
+    const newClubId = await generateClubId();
     const clubOwner = await strapi.entityService.create(CLUB_UID, {
       data: {
         user: user.id,
+        clubId: newClubId,
         ownerName: updatedDraft.ownerName,
         phoneNumber: updatedDraft.phoneNumber,
         email: updatedDraft.email,
@@ -255,6 +264,7 @@ export default {
         closingTime: updatedDraft.closingTime,
         weekday: updatedDraft.weekday,
         weekend: updatedDraft.weekend,
+        clubCategory:updatedDraft.clubCategory,
         facilities: updatedDraft.facilities,
         services: updatedDraft.services,
         latitude: updatedDraft.latitude,
@@ -294,20 +304,20 @@ export default {
     }
 
     // 🔥 CRITICAL: Sync parent side relation (Strapi v5 requirement)
-const docIds = myDocs.map((d: any) => ({ id: d.id }));
+    const docIds = myDocs.map((d: any) => ({ id: d.id }));
 
-await strapi.entityService.update(CLUB_UID, clubOwner.id, {
-  data: {
-    club_owner_documents: {
-      connect: docIds,
-    }as any,
-  },
-});
+    await strapi.entityService.update(CLUB_UID, clubOwner.id, {
+      data: {
+        club_owner_documents: {
+          connect: docIds,
+        } as any,
+      },
+    });
 
     /* FINAL FETCH WITH DOCUMENTS */
     fullOwner = await strapi.entityService.findOne(CLUB_UID, clubOwner.id, {
       populate: {
-        user: true, 
+        user: true,
         logo: true,
         clubPhotos: true,
         club_owner_documents: true
@@ -323,7 +333,7 @@ await strapi.entityService.update(CLUB_UID, clubOwner.id, {
     ctx.send({
       success: true,
       message: "Club Owner profile created successfully",
-     
+
     });
   }
 

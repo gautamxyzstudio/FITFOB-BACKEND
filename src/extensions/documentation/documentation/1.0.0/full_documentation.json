@@ -14,7 +14,7 @@
       "name": "Apache 2.0",
       "url": "https://www.apache.org/licenses/LICENSE-2.0.html"
     },
-    "x-generation-date": "2026-02-27T09:05:37.816Z"
+    "x-generation-date": "2026-02-27T10:42:41.087Z"
   },
   "x-strapi-config": {
     "plugins": [
@@ -7255,6 +7255,9 @@
         ],
         "properties": {
           "data": {
+            "required": [
+              "clubId"
+            ],
             "type": "object",
             "properties": {
               "ownerName": {
@@ -7356,6 +7359,17 @@
                   "example": "string or id"
                 }
               },
+              "clubCategory": {
+                "type": "string",
+                "enum": [
+                  "Basic",
+                  "Premium",
+                  "Luxury"
+                ]
+              },
+              "clubId": {
+                "type": "string"
+              },
               "locale": {
                 "type": "string"
               },
@@ -7414,6 +7428,9 @@
       },
       "ClubOwner": {
         "type": "object",
+        "required": [
+          "clubId"
+        ],
         "properties": {
           "id": {
             "oneOf": [
@@ -9476,6 +9493,17 @@
                         }
                       }
                     },
+                    "clubCategory": {
+                      "type": "string",
+                      "enum": [
+                        "Basic",
+                        "Premium",
+                        "Luxury"
+                      ]
+                    },
+                    "clubId": {
+                      "type": "string"
+                    },
                     "createdAt": {
                       "type": "string",
                       "format": "date-time"
@@ -10011,6 +10039,14 @@
                         }
                       }
                     },
+                    "clubCategory": {
+                      "type": "string",
+                      "enum": [
+                        "Basic",
+                        "Premium",
+                        "Luxury"
+                      ]
+                    },
                     "createdAt": {
                       "type": "string",
                       "format": "date-time"
@@ -10159,6 +10195,17 @@
                 }
               }
             }
+          },
+          "clubCategory": {
+            "type": "string",
+            "enum": [
+              "Basic",
+              "Premium",
+              "Luxury"
+            ]
+          },
+          "clubId": {
+            "type": "string"
           },
           "createdAt": {
             "type": "string",
@@ -12629,6 +12676,14 @@
                             }
                           }
                         },
+                        "clubCategory": {
+                          "type": "string",
+                          "enum": [
+                            "Basic",
+                            "Premium",
+                            "Luxury"
+                          ]
+                        },
                         "createdAt": {
                           "type": "string",
                           "format": "date-time"
@@ -12777,6 +12832,17 @@
                     }
                   }
                 }
+              },
+              "clubCategory": {
+                "type": "string",
+                "enum": [
+                  "Basic",
+                  "Premium",
+                  "Luxury"
+                ]
+              },
+              "clubId": {
+                "type": "string"
               },
               "createdAt": {
                 "type": "string",
@@ -15811,6 +15877,14 @@
                   "example": "string or id"
                 }
               },
+              "clubCategory": {
+                "type": "string",
+                "enum": [
+                  "Basic",
+                  "Premium",
+                  "Luxury"
+                ]
+              },
               "locale": {
                 "type": "string"
               },
@@ -17906,6 +17980,17 @@
                         }
                       }
                     },
+                    "clubCategory": {
+                      "type": "string",
+                      "enum": [
+                        "Basic",
+                        "Premium",
+                        "Luxury"
+                      ]
+                    },
+                    "clubId": {
+                      "type": "string"
+                    },
                     "createdAt": {
                       "type": "string",
                       "format": "date-time"
@@ -18441,6 +18526,14 @@
                         }
                       }
                     },
+                    "clubCategory": {
+                      "type": "string",
+                      "enum": [
+                        "Basic",
+                        "Premium",
+                        "Luxury"
+                      ]
+                    },
                     "createdAt": {
                       "type": "string",
                       "format": "date-time"
@@ -18589,6 +18682,14 @@
                 }
               }
             }
+          },
+          "clubCategory": {
+            "type": "string",
+            "enum": [
+              "Basic",
+              "Premium",
+              "Luxury"
+            ]
           },
           "createdAt": {
             "type": "string",
