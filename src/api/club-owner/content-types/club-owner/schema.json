@@ -89,6 +89,20 @@
       "relation": "oneToMany",
       "target": "api::club-owner-document.club-owner-document",
       "mappedBy": "club_owner"
+    },
+    "clubCategory": {
+      "type": "enumeration",
+      "enum": [
+        "Basic",
+        "Premium",
+        "Luxury"
+      ]
+    },
+    "clubId": {
+      "type": "string",
+      "required": true,
+      "unique": true,
+      "configurable": false
     }
   }
 }

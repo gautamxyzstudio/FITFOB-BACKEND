@@ -95,6 +95,14 @@
       "relation": "oneToMany",
       "target": "api::club-owner-document.club-owner-document",
       "mappedBy": "pending_club_owner"
+    },
+    "clubCategory": {
+      "type": "enumeration",
+      "enum": [
+        "Basic",
+        "Premium",
+        "Luxury"
+      ]
     }
   }
 }
