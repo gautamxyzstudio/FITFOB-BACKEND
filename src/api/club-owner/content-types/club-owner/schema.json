@@ -79,11 +79,16 @@
     "state": {
       "type": "string"
     },
-     "user": {
+    "user": {
       "type": "relation",
       "relation": "oneToOne",
       "target": "plugin::users-permissions.user"
+    },
+    "club_owner_documents": {
+      "type": "relation",
+      "relation": "oneToMany",
+      "target": "api::club-owner-document.club-owner-document",
+      "mappedBy": "club_owner"
     }
-    
   }
 }
