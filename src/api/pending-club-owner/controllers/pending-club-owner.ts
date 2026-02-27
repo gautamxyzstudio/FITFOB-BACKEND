@@ -11,15 +11,76 @@ const UPLOAD_FOLDER_ID = 2;
 function getBody(ctx: Context) {
   let body: any = ctx.request.body || {};
   if (body.data && typeof body.data === "string") {
-    try { body = JSON.parse(body.data); } catch { }
+    try { body = JSON.parse(body.data); } catch {}
   }
   return body;
+}
+
+/* ---------------- GET LATEST DRAFT ---------------- */
+async function getDraft(userId: number) {
+  const drafts = await strapi.entityService.findMany(PENDING_UID, {
+    filters: { user: { id: userId } },
+    sort: { id: "desc" },
+    limit: 1,
+    populate: ["logo"],
+  });
+  return drafts?.[0] || null;
+}
+
+/* ---------------- EDITABLE DRAFT GUARD ---------------- */
+async function getEditableDraft(ctx: Context) {
+  const user = ctx.state.user;
+
+  if (!user) {
+    ctx.unauthorized();
+    return null;
+  }
+
+  let draft: any = await getDraft(user.id);
+
+  if (!draft) {
+    draft = await strapi.entityService.create(PENDING_UID, {
+      data: { user: user.id, status: "draft", currentStep: 1 },
+    });
+    return draft;
+  }
+
+  if (draft.status === "completed") {
+    ctx.badRequest("Your onboarding is already completed.");
+    return null;
+  }
+
+  return draft;
+}
+
+/* ---------------- SUBMISSION VALIDATION ---------------- */
+async function validateBeforeSubmission(draft: any) {
+
+  if (!draft.clubName || !draft.ownerName || !draft.phoneNumber || !draft.email)
+    return "Please complete owner details";
+
+  if (!draft.latitude || !draft.longitude)
+    return "Please set map location";
+
+  if (!draft.clubAddress || !draft.city || !draft.state || !draft.pincode)
+    return "Please complete address details";
+
+  if (!draft.openingTime || !draft.closingTime || !draft.clubCategory)
+    return "Please configure your club";
+
+  const docs = await strapi.entityService.findMany(GOV_DOC_UID, {
+    filters: { pending_club_owner: { id: draft.id } },
+  });
+
+  if (!docs || docs.length === 0)
+    return "Please upload at least one government document";
+
+  return null;
 }
 
 /* ---------------- MULTI FILE UPLOAD ---------------- */
 async function uploadToFolder(file: any) {
   const uploadService = strapi.plugin("upload").service("upload");
-
   const filesArray = Array.isArray(file) ? file : [file];
   const uploadedFiles: any[] = [];
 
@@ -30,22 +91,7 @@ async function uploadToFolder(file: any) {
     });
     uploadedFiles.push(...res);
   }
-
   return uploadedFiles;
-}
-
-/* ---------------- GET LATEST DRAFT (CRITICAL FIX) ---------------- */
-async function getDraft(userId: number) {
-  const drafts = await strapi.entityService.findMany(PENDING_UID, {
-    filters: {
-      user: { id: userId },   // ✔ correct relation filter
-    },
-    sort: { id: "desc" },
-    limit: 1,
-    populate: ["logo"],
-  });
-
-  return drafts?.[0] || null;
 }
 
 export default {
@@ -59,7 +105,9 @@ export default {
       where: { user: user.id },
     });
 
-    if (existingClub) return ctx.send({ status: "completed" });
+    if (existingClub) {
+      return ctx.send({ status: "completed", currentStep: 6 });
+    }
 
     let draft: any = await getDraft(user.id);
 
@@ -78,19 +126,18 @@ export default {
 
   /* ===================================================== */
   async clubOwnerDetails(ctx: Context) {
-    const user = ctx.state.user;
-    if (!user) return ctx.unauthorized();
+    const draft: any = await getEditableDraft(ctx);
+    if (!draft) return;
 
     const body = getBody(ctx);
     const files: any = ctx.request.files;
 
-    const draft: any = await getDraft(user.id);
-    if (!draft || draft.currentStep !== 1)
-      return ctx.badRequest("Invalid step order");
-
-    let logoId: number | null = null;
+    let logoId = draft.logo?.id ?? null;
 
     if (files?.logo) {
+      if (draft.logo?.id) {
+        await strapi.plugin("upload").service("upload").remove(draft.logo);
+      }
       const uploaded = await uploadToFolder(files.logo);
       logoId = uploaded[0].id;
     }
@@ -102,7 +149,7 @@ export default {
         phoneNumber: body.phoneNumber,
         email: body.email,
         logo: logoId,
-        currentStep: 2,
+        currentStep: Math.max(draft.currentStep || 1, 2),
       },
     });
 
@@ -111,17 +158,16 @@ export default {
 
   /* ===================================================== */
   async mapLocation(ctx: Context) {
-    const body = getBody(ctx);
-    const draft: any = await getDraft(ctx.state.user.id);
+    const draft: any = await getEditableDraft(ctx);
+    if (!draft) return;
 
-    if (!draft || draft.currentStep !== 2)
-      return ctx.badRequest("Invalid step order");
+    const body = getBody(ctx);
 
     await strapi.entityService.update(PENDING_UID, draft.id, {
       data: {
         latitude: body.latitude,
         longitude: body.longitude,
-        currentStep: 3,
+        currentStep: Math.max(draft.currentStep || 1, 3),
       },
     });
 
@@ -130,11 +176,10 @@ export default {
 
   /* ===================================================== */
   async addressDetails(ctx: Context) {
-    const body = getBody(ctx);
-    const draft: any = await getDraft(ctx.state.user.id);
+    const draft: any = await getEditableDraft(ctx);
+    if (!draft) return;
 
-    if (!draft || draft.currentStep !== 3)
-      return ctx.badRequest("Invalid step order");
+    const body = getBody(ctx);
 
     await strapi.entityService.update(PENDING_UID, draft.id, {
       data: {
@@ -142,7 +187,7 @@ export default {
         city: body.city,
         state: body.state,
         pincode: body.pincode,
-        currentStep: 4,
+        currentStep: Math.max(draft.currentStep || 1, 4),
       },
     });
 
@@ -151,13 +196,10 @@ export default {
 
   /* ===================================================== */
   async configureClub(ctx: Context) {
+    const draft: any = await getEditableDraft(ctx);
+    if (!draft) return;
+
     const body = getBody(ctx);
-    const draft: any = await getDraft(ctx.state.user.id);
-
-    if (!draft || draft.currentStep !== 4)
-      return ctx.badRequest("Invalid step order");
-
-    /* ENUM VALIDATION */
     const allowedCategories = ["Basic", "Premium", "Luxury"];
     if (!allowedCategories.includes(body.clubCategory))
       return ctx.badRequest("Invalid club category");
@@ -171,7 +213,7 @@ export default {
         weekday: body.weekday,
         weekend: body.weekend,
         clubCategory: body.clubCategory,
-        currentStep: 5,
+        currentStep: Math.max(draft.currentStep || 1, 5),
       },
     });
 
@@ -180,16 +222,14 @@ export default {
 
   /* ===================================================== */
   async uploadGovernmentDoc(ctx: Context) {
-    const user = ctx.state.user;
+    const draft: any = await getEditableDraft(ctx);
+    if (!draft) return;
+
     const body = getBody(ctx);
     const file = (ctx.request.files as any)?.file;
 
     if (!file) return ctx.badRequest("Please upload document");
     if (!body.documentName) return ctx.badRequest("Document name required");
-
-    const draft: any = await getDraft(user.id);
-    if (!draft || draft.currentStep !== 5)
-      return ctx.badRequest("You are not on government document step");
 
     const uploaded = await uploadToFolder(file);
     const fileId = uploaded[0].id;
@@ -207,13 +247,11 @@ export default {
 
   /* ===================================================== */
   async confirmGovernmentDocs(ctx: Context) {
-    const draft: any = await getDraft(ctx.state.user.id);
-
-    if (!draft || draft.currentStep !== 5)
-      return ctx.badRequest("Upload documents first");
+    const draft: any = await getEditableDraft(ctx);
+    if (!draft) return;
 
     await strapi.entityService.update(PENDING_UID, draft.id, {
-      data: { currentStep: 6 },
+      data: { currentStep: Math.max(draft.currentStep || 1, 6) },
     });
 
     ctx.send({ nextStep: 6 });
@@ -221,26 +259,20 @@ export default {
 
   /* ===================================================== */
   async uploadClubPhotos(ctx: Context) {
+    const draft: any = await getEditableDraft(ctx);
+    if (!draft) return;
+
+    const validationError = await validateBeforeSubmission(draft);
+    if (validationError) return ctx.badRequest(validationError);
 
     const user = ctx.state.user;
     const files: any = ctx.request.files;
 
-    const draft: any = await getDraft(user.id);
-    if (!draft || draft.currentStep !== 6)
-      return ctx.badRequest("Complete previous steps first");
-
     if (!files?.clubPhotos)
       return ctx.badRequest("Please upload club photos");
 
-    console.log("STEP 6 START -------------------");
-    let fullOwner: any = null;
-    console.log("USER:", user.id);
-    console.log("DRAFT ID:", draft.id);
-
-    /* upload photos */
     const uploadedPhotos = await uploadToFolder(files.clubPhotos);
     const photoIds = uploadedPhotos.map((f: any) => f.id);
-    console.log("Uploaded photos:", photoIds);
 
     const updatedDraft: any = await strapi.entityService.findOne(
       PENDING_UID,
@@ -250,7 +282,6 @@ export default {
 
     const logoId = updatedDraft.logo?.id ?? null;
 
-    /* create club owner */
     const newClubId = await generateClubId();
     const clubOwner = await strapi.entityService.create(CLUB_UID, {
       data: {
@@ -264,7 +295,7 @@ export default {
         closingTime: updatedDraft.closingTime,
         weekday: updatedDraft.weekday,
         weekend: updatedDraft.weekend,
-        clubCategory:updatedDraft.clubCategory,
+        clubCategory: updatedDraft.clubCategory,
         facilities: updatedDraft.facilities,
         services: updatedDraft.services,
         latitude: updatedDraft.latitude,
@@ -279,62 +310,31 @@ export default {
       },
     });
 
-    console.log("CLUB OWNER CREATED:", clubOwner.id);
-
-    /* ⭐⭐ CORRECT DOCUMENT TRANSFER */
     const myDocs = await strapi.entityService.findMany(GOV_DOC_UID, {
-      filters: {
-        pending_club_owner: { id: draft.id },   // THE REAL FIX
-      },
+      filters: { pending_club_owner: { id: draft.id } },
     });
 
-    console.log("DOCS BELONGING TO THIS DRAFT:", myDocs.length);
-
     for (const doc of myDocs) {
-      console.log("TRANSFERRING DOC:", doc.id);
-
       await strapi.entityService.update(GOV_DOC_UID, doc.id, {
-        data: {
-          club_owner: clubOwner.id,
-          pending_club_owner: null,
-        },
+        data: { club_owner: clubOwner.id, pending_club_owner: null },
       });
-
-      console.log("TRANSFER COMPLETE:", doc.id);
     }
 
-    // 🔥 CRITICAL: Sync parent side relation (Strapi v5 requirement)
     const docIds = myDocs.map((d: any) => ({ id: d.id }));
 
     await strapi.entityService.update(CLUB_UID, clubOwner.id, {
-      data: {
-        club_owner_documents: {
-          connect: docIds,
-        } as any,
-      },
+      data: { club_owner_documents: { connect: docIds } as any },
     });
 
-    /* FINAL FETCH WITH DOCUMENTS */
-    fullOwner = await strapi.entityService.findOne(CLUB_UID, clubOwner.id, {
-      populate: {
-        user: true,
-        logo: true,
-        clubPhotos: true,
-        club_owner_documents: true
-      },
+    await strapi.entityService.update(PENDING_UID, draft.id, {
+      data: { status: "completed", currentStep: 6 },
     });
-
-    /* delete draft */
-    console.log("DELETING DRAFT:", draft.id);
-    await strapi.entityService.delete(PENDING_UID, draft.id);
-
-    console.log("STEP 6 END -------------------");
 
     ctx.send({
       success: true,
       message: "Club Owner profile created successfully",
-
     });
   }
 
 };
+
