@@ -59,7 +59,13 @@ export default {
       method: "POST",
       path: "/pending-club-owner/upload-club-photos",
       handler: "pending-club-owner.uploadClubPhotos",
-      config: { auth: {} },
+      config: {
+        auth: {},
+        body: {
+          multipart: true,
+        },
+      },
+
     },
 
   ],
