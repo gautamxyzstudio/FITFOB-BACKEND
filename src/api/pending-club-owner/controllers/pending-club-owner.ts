@@ -11,7 +11,7 @@ const UPLOAD_FOLDER_ID = 2;
 function getBody(ctx: Context) {
   let body: any = ctx.request.body || {};
   if (body.data && typeof body.data === "string") {
-    try { body = JSON.parse(body.data); } catch {}
+    try { body = JSON.parse(body.data); } catch { }
   }
   return body;
 }
@@ -231,18 +231,50 @@ export default {
     if (!file) return ctx.badRequest("Please upload document");
     if (!body.documentName) return ctx.badRequest("Document name required");
 
+    /* ---------- CHECK IF SAME DOCUMENT ALREADY EXISTS ---------- */
+    const existingDoc: any = await strapi.entityService.findMany(GOV_DOC_UID, {
+      filters: {
+        pending_club_owner: { id: draft.id },
+        documentName: body.documentName,
+      },
+      populate: ["File"],
+      limit: 1,
+    });
+
+    /* ---------- UPLOAD NEW FILE ---------- */
     const uploaded = await uploadToFolder(file);
     const fileId = uploaded[0].id;
 
-    await strapi.entityService.create(GOV_DOC_UID, {
-      data: {
-        documentName: body.documentName,
-        File: fileId,
-        pending_club_owner: draft.id,
-      },
-    });
+    /* ---------- REPLACE OR CREATE ---------- */
+    if (existingDoc.length > 0) {
 
-    ctx.send({ message: "Document uploaded" });
+      // remove old file from server
+      if (existingDoc[0].File) {
+        await strapi.plugin("upload").service("upload").remove(existingDoc[0].File);
+      }
+
+      // update existing DB record
+      await strapi.entityService.update(GOV_DOC_UID, existingDoc[0].id, {
+        data: {
+          File: fileId,
+        },
+      });
+
+      ctx.send({ message: "Document replaced" });
+
+    } else {
+
+      // create first time
+      await strapi.entityService.create(GOV_DOC_UID, {
+        data: {
+          documentName: body.documentName,
+          File: fileId,
+          pending_club_owner: draft.id,
+        },
+      });
+
+      ctx.send({ message: "Document uploaded" });
+    }
   },
 
   /* ===================================================== */
