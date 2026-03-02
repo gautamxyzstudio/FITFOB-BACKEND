@@ -47,6 +47,14 @@ export default {
       handler: "pending-club-owner.uploadGovernmentDoc",
       config: { auth: {} },
     },
+    
+    /* GET MY DOCUMENTS*/
+    {
+      method: "GET",
+      path: "/pending-club-owner/documents",
+      handler: "pending-club-owner.getMyDocuments",
+      config: { auth: {} },
+    },
     {
       method: "POST",
       path: "/pending-club-owner/confirm-government-docs",
