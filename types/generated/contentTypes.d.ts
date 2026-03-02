@@ -648,7 +648,9 @@ export interface ApiPendingClientDetailPendingClientDetail
     selfieUpload: Schema.Attribute.Media<
       'images' | 'files' | 'videos' | 'audios'
     >;
-    status: Schema.Attribute.Enumeration<['draft', 'submitted']>;
+    status: Schema.Attribute.Enumeration<['draft', 'completed']> &
+      Schema.Attribute.Required &
+      Schema.Attribute.DefaultTo<'draft'>;
     updatedAt: Schema.Attribute.DateTime;
     updatedBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
       Schema.Attribute.Private;

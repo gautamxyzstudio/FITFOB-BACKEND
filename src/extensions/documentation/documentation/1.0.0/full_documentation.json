@@ -14,7 +14,7 @@
       "name": "Apache 2.0",
       "url": "https://www.apache.org/licenses/LICENSE-2.0.html"
     },
-    "x-generation-date": "2026-02-27T11:44:28.604Z"
+    "x-generation-date": "2026-03-02T06:04:02.954Z"
   },
   "x-strapi-config": {
     "plugins": [
@@ -13699,6 +13699,9 @@
         ],
         "properties": {
           "data": {
+            "required": [
+              "status"
+            ],
             "type": "object",
             "properties": {
               "name": {
@@ -13766,7 +13769,7 @@
                 "type": "string",
                 "enum": [
                   "draft",
-                  "submitted"
+                  "completed"
                 ]
               },
               "date_of_birth": {
@@ -13796,6 +13799,9 @@
       },
       "PendingClientDetail": {
         "type": "object",
+        "required": [
+          "status"
+        ],
         "properties": {
           "id": {
             "oneOf": [
@@ -15194,7 +15200,7 @@
             "type": "string",
             "enum": [
               "draft",
-              "submitted"
+              "completed"
             ]
           },
           "date_of_birth": {
@@ -15664,7 +15670,7 @@
                   "type": "string",
                   "enum": [
                     "draft",
-                    "submitted"
+                    "completed"
                   ]
                 },
                 "date_of_birth": {

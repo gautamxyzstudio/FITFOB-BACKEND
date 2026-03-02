@@ -68,8 +68,10 @@
       "type": "enumeration",
       "enum": [
         "draft",
-        "submitted"
-      ]
+        "completed"
+      ],
+      "default": "draft",
+      "required": true
     },
     "date_of_birth": {
       "type": "date"
