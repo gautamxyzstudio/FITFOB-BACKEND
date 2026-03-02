@@ -430,6 +430,39 @@ export interface AdminUser extends Struct.CollectionTypeSchema {
   };
 }
 
+export interface ApiClientCheckinClientCheckin
+  extends Struct.CollectionTypeSchema {
+  collectionName: 'client_checkins';
+  info: {
+    displayName: 'client-checkin';
+    pluralName: 'client-checkins';
+    singularName: 'client-checkin';
+  };
+  options: {
+    draftAndPublish: true;
+  };
+  attributes: {
+    client_detail: Schema.Attribute.Relation<
+      'manyToOne',
+      'api::client-detail.client-detail'
+    >;
+    createdAt: Schema.Attribute.DateTime;
+    createdBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
+      Schema.Attribute.Private;
+    in: Schema.Attribute.DateTime;
+    locale: Schema.Attribute.String & Schema.Attribute.Private;
+    localizations: Schema.Attribute.Relation<
+      'oneToMany',
+      'api::client-checkin.client-checkin'
+    > &
+      Schema.Attribute.Private;
+    publishedAt: Schema.Attribute.DateTime;
+    updatedAt: Schema.Attribute.DateTime;
+    updatedBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
+      Schema.Attribute.Private;
+  };
+}
+
 export interface ApiClientDetailClientDetail
   extends Struct.CollectionTypeSchema {
   collectionName: 'client_details';
@@ -443,6 +476,11 @@ export interface ApiClientDetailClientDetail
   };
   attributes: {
     approvedAt: Schema.Attribute.DateTime;
+    client_checkins: Schema.Attribute.Relation<
+      'oneToMany',
+      'api::client-checkin.client-checkin'
+    >;
+    clientId: Schema.Attribute.String & Schema.Attribute.Unique;
     createdAt: Schema.Attribute.DateTime;
     createdBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
       Schema.Attribute.Private;
@@ -464,6 +502,7 @@ export interface ApiClientDetailClientDetail
     name: Schema.Attribute.String;
     phoneNumber: Schema.Attribute.String;
     publishedAt: Schema.Attribute.DateTime;
+    qrCode: Schema.Attribute.Text;
     selfieUpload: Schema.Attribute.Media<
       'images' | 'files' | 'videos' | 'audios'
     >;
@@ -473,6 +512,10 @@ export interface ApiClientDetailClientDetail
     user: Schema.Attribute.Relation<
       'oneToOne',
       'plugin::users-permissions.user'
+    >;
+    user_subscription: Schema.Attribute.Relation<
+      'oneToOne',
+      'api::user-subscription.user-subscription'
     >;
     weight: Schema.Attribute.String;
   };
@@ -573,6 +616,43 @@ export interface ApiClubOwnerClubOwner extends Struct.CollectionTypeSchema {
     >;
     weekday: Schema.Attribute.String;
     weekend: Schema.Attribute.String;
+  };
+}
+
+export interface ApiMembershipPlanMembershipPlan
+  extends Struct.CollectionTypeSchema {
+  collectionName: 'membership_plans';
+  info: {
+    displayName: 'membershipPlans';
+    pluralName: 'membership-plans';
+    singularName: 'membership-plan';
+  };
+  options: {
+    draftAndPublish: true;
+  };
+  attributes: {
+    createdAt: Schema.Attribute.DateTime;
+    createdBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
+      Schema.Attribute.Private;
+    description: Schema.Attribute.Text;
+    isActive: Schema.Attribute.Boolean;
+    locale: Schema.Attribute.String & Schema.Attribute.Private;
+    localizations: Schema.Attribute.Relation<
+      'oneToMany',
+      'api::membership-plan.membership-plan'
+    > &
+      Schema.Attribute.Private;
+    name: Schema.Attribute.String;
+    price: Schema.Attribute.Decimal;
+    publishedAt: Schema.Attribute.DateTime;
+    updatedAt: Schema.Attribute.DateTime;
+    updatedBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
+      Schema.Attribute.Private;
+    user_subscription: Schema.Attribute.Relation<
+      'oneToOne',
+      'api::user-subscription.user-subscription'
+    >;
+    visit_limit: Schema.Attribute.Integer;
   };
 }
 
@@ -781,6 +861,50 @@ export interface ApiResetPasswordSessionResetPasswordSession
     updatedBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
       Schema.Attribute.Private;
     used: Schema.Attribute.Boolean & Schema.Attribute.DefaultTo<false>;
+  };
+}
+
+export interface ApiUserSubscriptionUserSubscription
+  extends Struct.CollectionTypeSchema {
+  collectionName: 'user_subscriptions';
+  info: {
+    displayName: 'user-subscription';
+    pluralName: 'user-subscriptions';
+    singularName: 'user-subscription';
+  };
+  options: {
+    draftAndPublish: true;
+  };
+  attributes: {
+    client_detail: Schema.Attribute.Relation<
+      'oneToOne',
+      'api::client-detail.client-detail'
+    >;
+    createdAt: Schema.Attribute.DateTime;
+    createdBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
+      Schema.Attribute.Private;
+    end_date: Schema.Attribute.Date;
+    locale: Schema.Attribute.String & Schema.Attribute.Private;
+    localizations: Schema.Attribute.Relation<
+      'oneToMany',
+      'api::user-subscription.user-subscription'
+    > &
+      Schema.Attribute.Private;
+    membership_plan: Schema.Attribute.Relation<
+      'oneToOne',
+      'api::membership-plan.membership-plan'
+    >;
+    publishedAt: Schema.Attribute.DateTime;
+    remaining_visits: Schema.Attribute.Integer;
+    start_date: Schema.Attribute.Date;
+    subscription_status: Schema.Attribute.Enumeration<
+      ['active', 'completed', 'expired']
+    >;
+    total_visits: Schema.Attribute.Integer;
+    updatedAt: Schema.Attribute.DateTime;
+    updatedBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
+      Schema.Attribute.Private;
+    used_visits: Schema.Attribute.Integer;
   };
 }
 
@@ -1302,14 +1426,17 @@ declare module '@strapi/strapi' {
       'admin::transfer-token': AdminTransferToken;
       'admin::transfer-token-permission': AdminTransferTokenPermission;
       'admin::user': AdminUser;
+      'api::client-checkin.client-checkin': ApiClientCheckinClientCheckin;
       'api::client-detail.client-detail': ApiClientDetailClientDetail;
       'api::club-owner-document.club-owner-document': ApiClubOwnerDocumentClubOwnerDocument;
       'api::club-owner.club-owner': ApiClubOwnerClubOwner;
+      'api::membership-plan.membership-plan': ApiMembershipPlanMembershipPlan;
       'api::otp-request.otp-request': ApiOtpRequestOtpRequest;
       'api::pending-client-detail.pending-client-detail': ApiPendingClientDetailPendingClientDetail;
       'api::pending-club-owner.pending-club-owner': ApiPendingClubOwnerPendingClubOwner;
       'api::pending-signup.pending-signup': ApiPendingSignupPendingSignup;
       'api::reset-password-session.reset-password-session': ApiResetPasswordSessionResetPasswordSession;
+      'api::user-subscription.user-subscription': ApiUserSubscriptionUserSubscription;
       'plugin::content-releases.release': PluginContentReleasesRelease;
       'plugin::content-releases.release-action': PluginContentReleasesReleaseAction;
       'plugin::i18n.locale': PluginI18NLocale;

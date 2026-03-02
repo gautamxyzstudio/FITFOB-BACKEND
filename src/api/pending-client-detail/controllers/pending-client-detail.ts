@@ -1,4 +1,5 @@
 import { Context } from "koa";
+import { generateClientAssets } from "../../../utils/generateClientIdAndQrCode";
 
 const PENDING_UID = "api::pending-client-detail.pending-client-detail";
 const CLIENT_UID = "api::client-detail.client-detail";
@@ -257,6 +258,9 @@ export default {
       { populate: ["selfieUpload"] }
     );
 
+    /* ---------- GENERATE CLIENT ID + QR FIRST ---------- */
+    const { clientId, qrCode } = await generateClientAssets();
+
     // CLIENT CREATION LOGIC 
     const client = await strapi.entityService.create(CLIENT_UID, {
       data: {
@@ -273,6 +277,8 @@ export default {
         selfieUpload: finalDraft.selfieUpload?.id ?? null,
         governmentId: idFile.id,
         approvedAt: new Date(),
+        clientId: clientId,
+        qrCode: qrCode,
       },
     });
 
@@ -299,7 +305,7 @@ export default {
     );
 
     /* 🧹 DELETE THE PENDING DRAFT AFTER SUCCESSFUL CREATION */
-await strapi.entityService.delete(PENDING_UID, draft.id);
+    await strapi.entityService.delete(PENDING_UID, draft.id);
 
     ctx.send({
       success: true,

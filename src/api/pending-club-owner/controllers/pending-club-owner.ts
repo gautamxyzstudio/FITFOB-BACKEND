@@ -277,6 +277,39 @@ export default {
     }
   },
 
+ /* ===================================================== */
+async getMyDocuments(ctx: Context) {
+
+  const user = ctx.state.user;
+  if (!user) {
+    console.log("❌ No user found in ctx.state");
+    return ctx.unauthorized();
+  }
+
+  // get draft
+  const draft: any = await getDraft(user.id);
+  if (!draft) {
+    console.log("No draft found");
+    return ctx.send({ data: [] });
+  }
+
+  // fetch documents
+  const docs: any = await strapi.entityService.findMany(GOV_DOC_UID, {
+    filters: { pending_club_owner: { id: draft.id } },
+    populate: ["File"],
+    sort: { createdAt: "desc" },
+  });
+
+  const response = docs.map((d: any) => ({
+    documentId: d.documentId,
+    name: d.documentName,
+    uploadedAt: d.createdAt,
+    fileUrl: d.File ? `${strapi.config.server.url}${d.File.url}` : null,
+  }));
+
+  ctx.send({ data: response });
+},
+
   /* ===================================================== */
   async confirmGovernmentDocs(ctx: Context) {
     const draft: any = await getEditableDraft(ctx);

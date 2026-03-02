@@ -1,0 +1,50 @@
+{
+  "kind": "collectionType",
+  "collectionName": "user_subscriptions",
+  "info": {
+    "singularName": "user-subscription",
+    "pluralName": "user-subscriptions",
+    "displayName": "user-subscription"
+  },
+  "options": {
+    "draftAndPublish": true
+  },
+  "pluginOptions": {},
+  "attributes": {
+    "client_detail": {
+      "type": "relation",
+      "relation": "oneToOne",
+      "target": "api::client-detail.client-detail",
+      "inversedBy": "user_subscription"
+    },
+    "membership_plan": {
+      "type": "relation",
+      "relation": "oneToOne",
+      "target": "api::membership-plan.membership-plan",
+      "inversedBy": "user_subscription"
+    },
+    "total_visits": {
+      "type": "integer"
+    },
+    "used_visits": {
+      "type": "integer"
+    },
+    "remaining_visits": {
+      "type": "integer"
+    },
+    "subscription_status": {
+      "type": "enumeration",
+      "enum": [
+        "active",
+        "completed",
+        "expired"
+      ]
+    },
+    "start_date": {
+      "type": "date"
+    },
+    "end_date": {
+      "type": "date"
+    }
+  }
+}

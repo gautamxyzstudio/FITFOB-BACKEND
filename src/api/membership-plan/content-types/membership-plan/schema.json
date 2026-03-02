@@ -1,0 +1,36 @@
+{
+  "kind": "collectionType",
+  "collectionName": "membership_plans",
+  "info": {
+    "singularName": "membership-plan",
+    "pluralName": "membership-plans",
+    "displayName": "membershipPlans"
+  },
+  "options": {
+    "draftAndPublish": true
+  },
+  "pluginOptions": {},
+  "attributes": {
+    "name": {
+      "type": "string"
+    },
+    "visit_limit": {
+      "type": "integer"
+    },
+    "price": {
+      "type": "decimal"
+    },
+    "description": {
+      "type": "text"
+    },
+    "isActive": {
+      "type": "boolean"
+    },
+    "user_subscription": {
+      "type": "relation",
+      "relation": "oneToOne",
+      "target": "api::user-subscription.user-subscription",
+      "mappedBy": "membership_plan"
+    }
+  }
+}
