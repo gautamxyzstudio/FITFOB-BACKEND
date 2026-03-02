@@ -3,129 +3,166 @@ import { Context } from "koa";
 const PENDING_UID = "api::pending-client-detail.pending-client-detail";
 const CLIENT_UID = "api::client-detail.client-detail";
 
-/* 🔴 IMPORTANT: this is the numeric folder id visible in Media Library URL */
 const UPLOAD_FOLDER_ID = 2;
 
 /* ---------- SAFE BODY PARSER ---------- */
 function getBody(ctx: Context) {
-let body: any = ctx.request.body || {};
-if (body.data && typeof body.data === "string") {
-try { body = JSON.parse(body.data); } catch {}
-}
-return body;
+  let body: any = ctx.request.body || {};
+  if (body.data && typeof body.data === "string") {
+    try { body = JSON.parse(body.data); } catch {}
+  }
+  return body;
 }
 
 /* ---------- GET FULL USER ---------- */
 async function getFullUser(userId: number) {
-return await strapi.db
-.query("plugin::users-permissions.user")
-.findOne({ where: { id: userId } });
+  return await strapi.db
+    .query("plugin::users-permissions.user")
+    .findOne({ where: { id: userId } });
 }
 
 /* ---------- GET USER DRAFT ---------- */
 async function getDraft(userId: number) {
-return await strapi.db.query(PENDING_UID).findOne({
-where: { user: userId },
-populate: ["selfieUpload", "governmentId"],
-});
+  return await strapi.db.query(PENDING_UID).findOne({
+    where: { user: userId },
+    populate: ["selfieUpload", "governmentId"],
+  });
+}
+
+/* ---------- EDITABLE DRAFT GUARD ---------- */
+async function getEditableDraft(ctx: Context) {
+  const sessionUser = ctx.state.user;
+  if (!sessionUser) {
+    ctx.unauthorized();
+    return null;
+  }
+
+  const user = await getFullUser(sessionUser.id);
+
+  let draft: any = await getDraft(user.id);
+
+  // create automatically
+  if (!draft) {
+    draft = await strapi.entityService.create(PENDING_UID, {
+      data: {
+        user: user.id,
+        email: user.email,
+        phoneNumber: user.phoneNumber || null,
+        currentStep: 1,
+        status: "draft",
+      },
+    });
+    return draft;
+  }
+
+  // lock after completion
+  if (draft.status === "completed") {
+    ctx.badRequest("Profile already completed and locked.");
+    return null;
+  }
+
+  return draft;
+}
+
+/* ---------- FINAL VALIDATION BEFORE CLIENT CREATION ---------- */
+async function validateBeforeClientCreation(draft: any) {
+  if (!draft.name || !draft.gender)
+    return "Please complete basic information";
+
+  if (!draft.date_of_birth)
+    return "Please complete body information";
+
+  if (!draft.latitude || !draft.longitude)
+    return "Please set your location";
+
+  if (!draft.selfieUpload)
+    return "Please upload selfie";
+
+  return null;
 }
 
 export default {
 
 /* ================= START / RESUME ================= */
 async me(ctx: Context) {
-const sessionUser = ctx.state.user;
-if (!sessionUser) return ctx.unauthorized("Login required");
+  const sessionUser = ctx.state.user;
+  if (!sessionUser) return ctx.unauthorized("Login required");
 
-const user = await getFullUser(sessionUser.id);
+  const user = await getFullUser(sessionUser.id);
 
-const existing = await strapi.db.query(CLIENT_UID).findOne({
-  where: { user: user.id },
-});
-
-if (existing) return ctx.send({ status: "completed" });
-
-let draft: any = await getDraft(user.id);
-
-if (!draft) {
-  draft = await strapi.entityService.create(PENDING_UID, {
-    data: {
-      user: user.id,
-      email: user.email,
-      phoneNumber: user.phoneNumber || null,
-      currentStep: 1,
-      status: "draft",
-    },
+  const existing = await strapi.db.query(CLIENT_UID).findOne({
+    where: { user: user.id },
   });
-}
 
-ctx.send({
-  currentStep: draft.currentStep,
-  status: draft.status,
-});
+  if (existing) return ctx.send({ status: "completed", currentStep: 5 });
 
+  let draft: any = await getDraft(user.id);
+
+  if (!draft) {
+    draft = await strapi.entityService.create(PENDING_UID, {
+      data: {
+        user: user.id,
+        email: user.email,
+        phoneNumber: user.phoneNumber || null,
+        currentStep: 1,
+        status: "draft",
+      },
+    });
+  }
+
+  ctx.send({
+    currentStep: draft.currentStep,
+    status: draft.status,
+  });
 },
 
 /* ================= STEP 1 BASIC INFO ================= */
 async basicInfo(ctx: Context) {
-const sessionUser = ctx.state.user;
-if (!sessionUser) return ctx.unauthorized();
+  const draft: any = await getEditableDraft(ctx);
+  if (!draft) return;
 
-const user = await getFullUser(sessionUser.id);
-const body = getBody(ctx);
-const draft: any = await getDraft(user.id);
+  const sessionUser = ctx.state.user;
+  const user = await getFullUser(sessionUser.id);
+  const body = getBody(ctx);
 
-if (!draft || draft.currentStep !== 1)
-  return ctx.badRequest("Invalid step order");
+  await strapi.entityService.update(PENDING_UID, draft.id, {
+    data: {
+      name: body.name,
+      gender: body.gender,
+      email: body.email || user.email,
+      phoneNumber: body.phoneNumber || user.phoneNumber,
+      currentStep: Math.max(draft.currentStep || 1, 2),
+    },
+  });
 
-await strapi.entityService.update(PENDING_UID, draft.id, {
-  data: {
-    name: body.name,
-    gender: body.gender,
-    email: body.email || user.email,
-    phoneNumber: body.phoneNumber || user.phoneNumber,
-    currentStep: 2,
-  },
-});
-
-ctx.send({ nextStep: 2 });
-
+  ctx.send({ nextStep: 2 });
 },
 
 /* ================= STEP 2 BODY INFO ================= */
 async bodyInfo(ctx: Context) {
-  const sessionUser = ctx.state.user;
-  if (!sessionUser) return ctx.unauthorized();
+  const draft: any = await getEditableDraft(ctx);
+  if (!draft) return;
 
-  const user = await getFullUser(sessionUser.id);
   const body = getBody(ctx);
-  const draft: any = await getDraft(user.id);
 
-  if (!draft || draft.currentStep !== 2)
-    return ctx.badRequest("Invalid step order");
-
-  /* ---------- DOB REQUIRED ---------- */
   if (!body.date_of_birth)
     return ctx.badRequest("date_of_birth is required");
 
   const dob = new Date(body.date_of_birth);
   const today = new Date();
 
-  /* invalid date */
   if (isNaN(dob.getTime()))
     return ctx.badRequest("Invalid date_of_birth format. Use YYYY-MM-DD");
 
-  /* future date protection */
   if (dob > today)
     return ctx.badRequest("date_of_birth cannot be in the future");
 
-  /* ---------- SAVE ---------- */
   await strapi.entityService.update(PENDING_UID, draft.id, {
     data: {
       date_of_birth: body.date_of_birth,
       height: body.height,
       weight: body.weight,
-      currentStep: 3,
+      currentStep: Math.max(draft.currentStep || 1, 3),
     },
   });
 
@@ -134,137 +171,126 @@ async bodyInfo(ctx: Context) {
 
 /* ================= STEP 3 LOCATION ================= */
 async location(ctx: Context) {
-const sessionUser = ctx.state.user;
-if (!sessionUser) return ctx.unauthorized();
+  const draft: any = await getEditableDraft(ctx);
+  if (!draft) return;
 
-const user = await getFullUser(sessionUser.id);
-const body = getBody(ctx);
-const draft: any = await getDraft(user.id);
+  const body = getBody(ctx);
 
-if (!draft || draft.currentStep !== 3)
-  return ctx.badRequest("Invalid step order");
+  await strapi.entityService.update(PENDING_UID, draft.id, {
+    data: {
+      latitude: body.latitude,
+      longitude: body.longitude,
+      currentStep: Math.max(draft.currentStep || 1, 4),
+    },
+  });
 
-await strapi.entityService.update(PENDING_UID, draft.id, {
-  data: {
-    latitude: body.latitude,
-    longitude: body.longitude,
-    currentStep: 4,
-  },
-});
-
-ctx.send({ nextStep: 4 });
-
+  ctx.send({ nextStep: 4 });
 },
 
 /* ================= STEP 4 SELFIE ================= */
 async selfie(ctx: Context) {
-const sessionUser = ctx.state.user;
-if (!sessionUser) return ctx.unauthorized();
+  const draft: any = await getEditableDraft(ctx);
+  if (!draft) return;
 
-const user = await getFullUser(sessionUser.id);
-const files: any = ctx.request.files;
-const draft: any = await getDraft(user.id);
+  const files: any = ctx.request.files;
+  if (!files || !files.selfieUpload)
+    return ctx.badRequest("Please upload selfie");
 
-if (!draft || draft.currentStep !== 4)
-  return ctx.badRequest("Invalid step order");
+  // replace old selfie
+  if (draft.selfieUpload?.id) {
+    await strapi.plugin("upload").service("upload").remove(draft.selfieUpload);
+  }
 
-if (!files || !files.selfieUpload)
-  return ctx.badRequest("Please upload selfie");
+  const uploadService = strapi.plugin("upload").service("upload");
+  const rawFile = Array.isArray(files.selfieUpload)
+    ? files.selfieUpload[0]
+    : files.selfieUpload;
 
-const uploadService = strapi.plugin("upload").service("upload");
+  const uploaded = await uploadService.upload({
+    data: { fileInfo: { folder: UPLOAD_FOLDER_ID } },
+    files: rawFile,
+  });
 
-const rawFile = Array.isArray(files.selfieUpload)
-  ? files.selfieUpload[0]
-  : files.selfieUpload;
+  const file = uploaded[0];
 
-const uploaded = await uploadService.upload({
-  data: {
-    fileInfo: {
-      folder: UPLOAD_FOLDER_ID, // 🔴 THIS is the real v5 fix
+  await strapi.entityService.update(PENDING_UID, draft.id, {
+    data: {
+      selfieUpload: file.id,
+      currentStep: Math.max(draft.currentStep || 1, 5),
     },
-  },
-  files: rawFile,
-});
+  });
 
-const file = uploaded[0];
-
-await strapi.entityService.update(PENDING_UID, draft.id, {
-  data: {
-    selfieUpload: file.id,
-    currentStep: 5,
-  },
-});
-
-ctx.send({
-  nextStep: 5,
-  fileUrl: file.url,
-});
-
+  ctx.send({ nextStep: 5, fileUrl: file.url });
 },
 
-/* ================= STEP 5 GOVERNMENT ID ================= */
+/* ================= STEP 5 GOVERNMENT ID & FINAL SUBMIT ================= */
 async governmentId(ctx: Context) {
-const sessionUser = ctx.state.user;
-if (!sessionUser) return ctx.unauthorized();
+  const draft: any = await getEditableDraft(ctx);
+  if (!draft) return;
 
-const user = await getFullUser(sessionUser.id);
-const files: any = ctx.request.files;
-const draft: any = await getDraft(user.id);
+  const validationError = await validateBeforeClientCreation(draft);
+  if (validationError) return ctx.badRequest(validationError);
 
-if (!draft || draft.currentStep !== 5)
-  return ctx.badRequest("Invalid step order");
+  const sessionUser = ctx.state.user;
+  const user = await getFullUser(sessionUser.id);
+  const files: any = ctx.request.files;
 
-if (!files || !files.governmentId)
-  return ctx.badRequest("Please upload government ID");
+  if (!files || !files.governmentId)
+    return ctx.badRequest("Please upload government ID");
 
-const uploadService = strapi.plugin("upload").service("upload");
+  const uploadService = strapi.plugin("upload").service("upload");
 
-const rawFile = Array.isArray(files.governmentId)
-  ? files.governmentId[0]
-  : files.governmentId;
+  const rawFile = Array.isArray(files.governmentId)
+    ? files.governmentId[0]
+    : files.governmentId;
 
-const uploaded = await uploadService.upload({
-  data: {
-    fileInfo: {
-      folder: UPLOAD_FOLDER_ID,
+  const uploaded = await uploadService.upload({
+    data: { fileInfo: { folder: UPLOAD_FOLDER_ID } },
+    files: rawFile,
+  });
+
+  const idFile = uploaded[0];
+
+  const finalDraft: any = await strapi.entityService.findOne(
+    PENDING_UID,
+    draft.id,
+    { populate: ["selfieUpload"] }
+  );
+
+  // 🔴 EXISTING CLIENT CREATION LOGIC (UNCHANGED)
+  const client = await strapi.entityService.create(CLIENT_UID, {
+    data: {
+      user: user.id,
+      name: finalDraft.name,
+      gender: finalDraft.gender,
+      email: finalDraft.email,
+      phoneNumber: finalDraft.phoneNumber,
+      date_of_birth: finalDraft.date_of_birth,
+      height: finalDraft.height,
+      weight: finalDraft.weight,
+      latitude: finalDraft.latitude,
+      longitude: finalDraft.longitude,
+      selfieUpload: finalDraft.selfieUpload?.id ?? null,
+      governmentId: idFile.id,
+      approvedAt: new Date(),
     },
-  },
-  files: rawFile,
-});
+  });
 
-const idFile = uploaded[0];
+  // 🔒 lock draft (DO NOT DELETE)
+  await strapi.entityService.update(PENDING_UID, draft.id, {
+    data: {
+      status: "completed",
+      governmentId: idFile.id,
+      currentStep: 5,
+    },
+  });
 
-const finalDraft: any = await strapi.entityService.findOne(
-  PENDING_UID,
-  draft.id,
-  { populate: ["selfieUpload"] }
-);
-
-const client = await strapi.entityService.create(CLIENT_UID, {
-  data: {
-    user: user.id,
-    name: finalDraft.name,
-    gender: finalDraft.gender,
-    email: finalDraft.email,
-    phoneNumber: finalDraft.phoneNumber,
-    date_of_birth: finalDraft.date_of_birth,
-    height: finalDraft.height,
-    weight: finalDraft.weight,
-    latitude: finalDraft.latitude,
-    longitude: finalDraft.longitude,
-    selfieUpload: finalDraft.selfieUpload?.id ?? null,
-    governmentId: idFile.id,
-    approvedAt: new Date(),
-  },
-});
-
-await strapi.entityService.delete(PENDING_UID, draft.id);
-
-ctx.send({
-  success: true,
-  message: "Client profile created successfully",
-  client,
-});
-
+  ctx.send({
+    success: true,
+    message: "Client profile created successfully",
+    client,
+  });
 },
+
 };
+
