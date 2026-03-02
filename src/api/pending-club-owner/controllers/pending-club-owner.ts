@@ -358,9 +358,8 @@ export default {
       data: { club_owner_documents: { connect: docIds } as any },
     });
 
-    await strapi.entityService.update(PENDING_UID, draft.id, {
-      data: { status: "completed", currentStep: 6 },
-    });
+    /* ---------- DELETE PENDING ONBOARDING ---------- */
+    await strapi.entityService.delete(PENDING_UID, draft.id);
 
     ctx.send({
       success: true,
