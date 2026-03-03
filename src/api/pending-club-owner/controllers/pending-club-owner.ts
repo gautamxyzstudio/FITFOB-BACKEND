@@ -277,8 +277,7 @@ export default {
     }
   },
 
- /* ===================================================== */
-async getMyDocuments(ctx: Context) {
+  async getMyDocuments(ctx: Context) {
 
   const user = ctx.state.user;
   if (!user) {
