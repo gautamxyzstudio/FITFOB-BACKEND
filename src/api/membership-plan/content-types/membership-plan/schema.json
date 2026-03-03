@@ -28,7 +28,7 @@
     },
     "user_subscription": {
       "type": "relation",
-      "relation": "oneToOne",
+      "relation": "oneToMany",
       "target": "api::user-subscription.user-subscription",
       "mappedBy": "membership_plan"
     }

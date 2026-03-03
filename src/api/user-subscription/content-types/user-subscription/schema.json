@@ -13,13 +13,13 @@
   "attributes": {
     "client_detail": {
       "type": "relation",
-      "relation": "oneToOne",
+      "relation": "manyToOne",
       "target": "api::client-detail.client-detail",
       "inversedBy": "user_subscription"
     },
     "membership_plan": {
       "type": "relation",
-      "relation": "oneToOne",
+      "relation": "manyToOne",
       "target": "api::membership-plan.membership-plan",
       "inversedBy": "user_subscription"
     },
@@ -35,9 +35,7 @@
     "subscription_status": {
       "type": "enumeration",
       "enum": [
-        "active",
-        "completed",
-        "expired"
+        "active", "completed", "expired", "upgraded", "cancelled"
       ]
     },
     "start_date": {

@@ -502,7 +502,6 @@ export interface ApiClientDetailClientDetail
     name: Schema.Attribute.String;
     phoneNumber: Schema.Attribute.String;
     publishedAt: Schema.Attribute.DateTime;
-    qrCode: Schema.Attribute.Text;
     selfieUpload: Schema.Attribute.Media<
       'images' | 'files' | 'videos' | 'audios'
     >;
@@ -514,7 +513,7 @@ export interface ApiClientDetailClientDetail
       'plugin::users-permissions.user'
     >;
     user_subscription: Schema.Attribute.Relation<
-      'oneToOne',
+      'oneToMany',
       'api::user-subscription.user-subscription'
     >;
     weight: Schema.Attribute.String;
@@ -649,7 +648,7 @@ export interface ApiMembershipPlanMembershipPlan
     updatedBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
       Schema.Attribute.Private;
     user_subscription: Schema.Attribute.Relation<
-      'oneToOne',
+      'oneToMany',
       'api::user-subscription.user-subscription'
     >;
     visit_limit: Schema.Attribute.Integer;
@@ -877,7 +876,7 @@ export interface ApiUserSubscriptionUserSubscription
   };
   attributes: {
     client_detail: Schema.Attribute.Relation<
-      'oneToOne',
+      'manyToOne',
       'api::client-detail.client-detail'
     >;
     createdAt: Schema.Attribute.DateTime;
@@ -891,14 +890,14 @@ export interface ApiUserSubscriptionUserSubscription
     > &
       Schema.Attribute.Private;
     membership_plan: Schema.Attribute.Relation<
-      'oneToOne',
+      'manyToOne',
       'api::membership-plan.membership-plan'
     >;
     publishedAt: Schema.Attribute.DateTime;
     remaining_visits: Schema.Attribute.Integer;
     start_date: Schema.Attribute.Date;
     subscription_status: Schema.Attribute.Enumeration<
-      ['active', 'completed', 'expired']
+      ['active', 'completed', 'expired', 'upgraded', 'cancelled']
     >;
     total_visits: Schema.Attribute.Integer;
     updatedAt: Schema.Attribute.DateTime;

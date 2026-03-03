@@ -1,5 +1,5 @@
 import { Context } from "koa";
-import { generateClientAssets } from "../../../utils/generateClientIdAndQrCode";
+import { generateClientAssets } from "../../../utils/generateClientId";
 
 const PENDING_UID = "api::pending-client-detail.pending-client-detail";
 const CLIENT_UID = "api::client-detail.client-detail";
@@ -259,7 +259,7 @@ export default {
     );
 
     /* ---------- GENERATE CLIENT ID + QR FIRST ---------- */
-    const { clientId, qrCode } = await generateClientAssets();
+    const { clientId} = await generateClientAssets();
 
     // CLIENT CREATION LOGIC 
     const client = await strapi.entityService.create(CLIENT_UID, {
@@ -278,7 +278,6 @@ export default {
         governmentId: idFile.id,
         approvedAt: new Date(),
         clientId: clientId,
-        qrCode: qrCode,
       },
     });
 

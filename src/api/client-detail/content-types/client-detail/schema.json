@@ -68,16 +68,13 @@
     },
     "user_subscription": {
       "type": "relation",
-      "relation": "oneToOne",
+      "relation": "oneToMany",
       "target": "api::user-subscription.user-subscription",
       "mappedBy": "client_detail"
     },
     "clientId": {
       "type": "string",
       "unique": true
-    },
-    "qrCode": {
-      "type": "text"
     },
     "client_checkins": {
       "type": "relation",
