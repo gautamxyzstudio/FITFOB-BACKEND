@@ -19,49 +19,51 @@ export default factories.createCoreController(
     ======================================================= */
     async find(ctx: Context) {
       try {
-        const { ownerName, clubName } = ctx.query as any;
+        const { search } = ctx.query as any;
 
         const filters: any = {
           user: { isVerified: true },
         };
-
-        // Optional ownerName DB filter (normal contains)
-        if (ownerName?.trim()) {
-          filters.ownerName = { $containsi: ownerName.trim() };
-        }
 
         const data: any[] = await strapi.entityService.findMany(
           "api::club-owner.club-owner",
           {
             populate: POPULATE,
             filters,
-            sort: { id: "asc" },
+            sort: { id: "asc" }, // ✅ sort by id ascending
           }
         );
 
         let finalData = data;
 
-        // 🔥 Space-insensitive clubName filter (only if provided)
-        if (clubName?.trim()) {
-          const searchValue = clubName.replace(/\s+/g, "").toLowerCase();
+        // 🔍 Global search (ownerName + clubName)
+        if (search?.trim()) {
+          const searchValue = search.replace(/\s+/g, "").toLowerCase();
 
           finalData = data.filter((item: any) => {
-            const dbValue = item.clubName
+            const owner = item.ownerName
               ?.replace(/\s+/g, "")
               .toLowerCase();
 
-            return dbValue?.includes(searchValue);
+            const club = item.clubName
+              ?.replace(/\s+/g, "")
+              .toLowerCase();
+
+            return (
+              owner?.includes(searchValue) ||
+              club?.includes(searchValue)
+            );
           });
         }
 
         ctx.body = {
+          success: true,
           total: finalData.length,
           data: finalData,
-
         };
       } catch (err) {
         console.error(err);
-        ctx.throw(500, "Unable to fetch club owners");
+        ctx.throw(500, "Failed to fetch unverified club owners");
       }
     },
 
@@ -70,36 +72,40 @@ export default factories.createCoreController(
     ======================================================= */
     async unverified(ctx: Context) {
       try {
-        const { ownerName, clubName } = ctx.query as any;
+        const { search } = ctx.query as any;
 
         const filters: any = {
           user: { isVerified: false },
         };
-
-        if (ownerName?.trim()) {
-          filters.ownerName = { $containsi: ownerName.trim() };
-        }
 
         const data: any[] = await strapi.entityService.findMany(
           "api::club-owner.club-owner",
           {
             populate: POPULATE,
             filters,
-            sort: { id: "asc" },
+            sort: { id: "asc" }, // ✅ sort by id ascending
           }
         );
 
         let finalData = data;
 
-        if (clubName?.trim()) {
-          const searchValue = clubName.replace(/\s+/g, "").toLowerCase();
+        // 🔍 Global search (ownerName + clubName)
+        if (search?.trim()) {
+          const searchValue = search.replace(/\s+/g, "").toLowerCase();
 
           finalData = data.filter((item: any) => {
-            const dbValue = item.clubName
+            const owner = item.ownerName
               ?.replace(/\s+/g, "")
               .toLowerCase();
 
-            return dbValue?.includes(searchValue);
+            const club = item.clubName
+              ?.replace(/\s+/g, "")
+              .toLowerCase();
+
+            return (
+              owner?.includes(searchValue) ||
+              club?.includes(searchValue)
+            );
           });
         }
 
