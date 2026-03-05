@@ -30,7 +30,7 @@ export default factories.createCoreController(
           {
             populate: POPULATE,
             filters,
-            sort: { id: "asc" }, // ✅ sort by id ascending
+            sort: { id: "desc" }, // ✅ sort by id ascending
           }
         );
 
@@ -83,7 +83,7 @@ export default factories.createCoreController(
           {
             populate: POPULATE,
             filters,
-            sort: { id: "asc" }, // ✅ sort by id ascending
+            sort: { id: "desc" }, // ✅ sort by id ascending
           }
         );
 
