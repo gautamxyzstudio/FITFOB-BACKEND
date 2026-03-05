@@ -1,5 +1,6 @@
 export default [
   "strapi::errors",
+  "global::global-error", // ⭐ Custom global error handler
 
   {
     name: "strapi::security",

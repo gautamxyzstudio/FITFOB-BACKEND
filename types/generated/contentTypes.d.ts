@@ -1288,6 +1288,9 @@ export interface PluginUsersPermissionsUser
       Schema.Attribute.SetMinMaxLength<{
         minLength: 3;
       }>;
+    verification_status: Schema.Attribute.Enumeration<
+      ['pending', 'rejected', 'approved']
+    >;
   };
 }
 

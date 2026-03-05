@@ -14,7 +14,7 @@
       "name": "Apache 2.0",
       "url": "https://www.apache.org/licenses/LICENSE-2.0.html"
     },
-    "x-generation-date": "2026-03-05T08:38:35.698Z"
+    "x-generation-date": "2026-03-05T09:55:36.912Z"
   },
   "x-strapi-config": {
     "plugins": [
@@ -6685,6 +6685,14 @@
               "mfa_failed_attempts": {
                 "type": "integer"
               },
+              "verification_status": {
+                "type": "string",
+                "enum": [
+                  "pending",
+                  "rejected",
+                  "approved"
+                ]
+              },
               "createdAt": {
                 "type": "string",
                 "format": "date-time"
@@ -8845,6 +8853,14 @@
               },
               "mfa_failed_attempts": {
                 "type": "integer"
+              },
+              "verification_status": {
+                "type": "string",
+                "enum": [
+                  "pending",
+                  "rejected",
+                  "approved"
+                ]
               },
               "createdAt": {
                 "type": "string",
@@ -12000,6 +12016,14 @@
                   },
                   "mfa_failed_attempts": {
                     "type": "integer"
+                  },
+                  "verification_status": {
+                    "type": "string",
+                    "enum": [
+                      "pending",
+                      "rejected",
+                      "approved"
+                    ]
                   },
                   "createdAt": {
                     "type": "string",
@@ -15190,6 +15214,14 @@
               "mfa_failed_attempts": {
                 "type": "integer"
               },
+              "verification_status": {
+                "type": "string",
+                "enum": [
+                  "pending",
+                  "rejected",
+                  "approved"
+                ]
+              },
               "createdAt": {
                 "type": "string",
                 "format": "date-time"
@@ -16637,6 +16669,14 @@
               },
               "mfa_failed_attempts": {
                 "type": "integer"
+              },
+              "verification_status": {
+                "type": "string",
+                "enum": [
+                  "pending",
+                  "rejected",
+                  "approved"
+                ]
               },
               "createdAt": {
                 "type": "string",
