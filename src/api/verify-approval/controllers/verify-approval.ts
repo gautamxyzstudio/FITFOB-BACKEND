@@ -1,94 +1,87 @@
-import { Context } from "koa";
-
 export default {
-
-  async verifyApproval(ctx: Context) {
+  /* ---------- APPROVE USER ---------- */
+  async verificationApproved(ctx: any) {
     try {
       const { id } = ctx.params;
 
       if (!id) {
-        return ctx.badRequest("User id required");
+        return ctx.badRequest("User id is required");
       }
-      // find user
-      const user = await strapi.entityService.findOne(
-        "plugin::users-permissions.user",
-        id
-      );
+
+      const user = await strapi.db
+        .query("plugin::users-permissions.user")
+        .findOne({
+          where: { id },
+        });
 
       if (!user) {
         return ctx.notFound("User not found");
       }
 
-      if (user.isVerified === true) {
-        return ctx.badRequest("User already verified");
-      }
-
-      // UPDATE USER
-      const updatedUser = await strapi.entityService.update(
-        "plugin::users-permissions.user",
-        id,
-        {
-          data: {
-            isVerified: true,
-          },
-        }
-      );
-
-      ctx.send({
-        message: "User approved successfully",
-        user: {
-          id: updatedUser.id,
-          username: updatedUser.username,
-          email: updatedUser.email,
-          isVerified: updatedUser.isVerified,
+      await strapi.db.query("plugin::users-permissions.user").update({
+        where: { id },
+        data: {
+          verification_status: "approved",
         },
       });
-    } catch (err) {
-      strapi.log.error(err);
-      ctx.internalServerError("Approval failed");
+
+      const updatedUser = await strapi.db
+        .query("plugin::users-permissions.user")
+        .findOne({
+          where: { id },
+          populate: ["role"],
+        });
+
+      ctx.body = {
+        message: "User verification approved",
+        user: updatedUser,
+      };
+    } catch (err: any) {
+      strapi.log.error("APPROVE ERROR:", err);
+      return ctx.internalServerError("Failed to approve user");
     }
   },
 
-  async revokeApproval(ctx: Context) {
+  /* ---------- REJECT USER ---------- */
+  async verificationRejected(ctx: any) {
     try {
       const { id } = ctx.params;
 
-      const user = await strapi.entityService.findOne(
-        "plugin::users-permissions.user",
-        id
-      );
+      if (!id) {
+        return ctx.badRequest("User id is required");
+      }
+
+      const user = await strapi.db
+        .query("plugin::users-permissions.user")
+        .findOne({
+          where: { id },
+        });
 
       if (!user) {
         return ctx.notFound("User not found");
       }
 
-      if (!user.isVerified) {
-        return ctx.badRequest("User is already unverified");
-      }
-
-      const updatedUser = await strapi.entityService.update(
-        "plugin::users-permissions.user",
-        id,
-        {
-          data: {
-            isVerified: false,
-          },
-        }
-      );
-
-      ctx.send({
-        message: "User approval revoked successfully",
-        user: {
-          id: updatedUser.id,
-          username: updatedUser.username,
-          email: updatedUser.email,
-          isVerified: updatedUser.isVerified,
+      await strapi.db.query("plugin::users-permissions.user").update({
+        where: { id },
+        data: {
+          verification_status: "rejected",
         },
       });
-    } catch (err) {
-      strapi.log.error(err);
-      ctx.internalServerError("Failed to revoke approval");
+
+      const updatedUser = await strapi.db
+        .query("plugin::users-permissions.user")
+        .findOne({
+          where: { id },
+          populate: ["role"],
+        });
+
+      ctx.body = {
+        message: "User verification rejected",
+        user: updatedUser,
+      };
+    } catch (err: any) {
+      strapi.log.error("REJECT ERROR:", err);
+      return ctx.internalServerError("Failed to reject user");
     }
-  }
-  // fix
+  },
 };

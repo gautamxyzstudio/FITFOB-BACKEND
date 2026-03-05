@@ -189,7 +189,7 @@ export default {
 
       await strapi.db.query("plugin::users-permissions.user").update({
         where: { id: user.id },
-        data: { phoneNumber: phone, cognitoSub, isVerified: false },
+        data: { phoneNumber: phone, cognitoSub, isVerified: false , verification_status: "pending"},
       });
 
       logs.push("STRAPI USER CREATED ✔");
@@ -244,6 +244,7 @@ export default {
           email: fullUser.email,
           phoneNumber: fullUser.phoneNumber,
           isVerified: fullUser.isVerified,
+          verification_status: fullUser.verification_status,
           cognitoSub: fullUser.cognitoSub,
           confirmed: fullUser.confirmed,
           blocked: fullUser.blocked,
@@ -256,9 +257,13 @@ export default {
       /* ---------- print logs AFTER HTTP response ---------- */
       postVerifyLogs(logs);
 
-    } catch (err) {
-      strapi.log.error("VERIFY ERROR", err);
-      ctx.internalServerError("OTP verification failed");
-    }
+    } catch (err: any) {
+  strapi.log.error("VERIFY ERROR:", err);
+
+  return ctx.internalServerError({
+    message: err?.message || "OTP verification failed",
+    stack: err?.stack,
+  });
+}
   },
 };

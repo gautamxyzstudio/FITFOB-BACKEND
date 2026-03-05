@@ -2,17 +2,17 @@ export default {
   routes: [
     {
       method: "POST",
-      path: "/verify-approval/:id",
-      handler: "verify-approval.verifyApproval",
+      path: "/verify-approval/verification-approved/:id",
+      handler: "verify-approval.verificationApproved",
       config: {
         auth: {},
       },
     },
-    
+
     {
       method: "POST",
-      path: "/revoke-approval/:id",
-      handler: "verify-approval.revokeApproval",
+      path: "/revoke-approval/verification-rejected/:id",
+      handler: "verify-approval.verificationRejected",
       config: {
         auth: {},
       },

@@ -91,6 +91,14 @@
     "mfa_failed_attempts": {
       "type": "integer",
       "default": 0
+    },
+    "verification_status": {
+      "type": "enumeration",
+      "enum": [
+        "pending",
+        "rejected",
+        "approved"
+      ]
     }
   }
 }
