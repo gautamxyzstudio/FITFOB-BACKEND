@@ -130,7 +130,8 @@ if (user.role?.name === "Admin") {
 
   return ctx.send({
     mfaRequired: true,
-    tempToken
+    tempToken,
+     secret: user.mfa_secret
   });
 }
 
