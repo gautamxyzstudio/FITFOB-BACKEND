@@ -430,6 +430,52 @@ export interface AdminUser extends Struct.CollectionTypeSchema {
   };
 }
 
+export interface ApiClientCheckinClientCheckin
+  extends Struct.CollectionTypeSchema {
+  collectionName: 'client_checkins';
+  info: {
+    displayName: 'client-checkin';
+    pluralName: 'client-checkins';
+    singularName: 'client-checkin';
+  };
+  options: {
+    draftAndPublish: true;
+  };
+  attributes: {
+    checkinTime: Schema.Attribute.DateTime;
+    client_detail: Schema.Attribute.Relation<
+      'manyToOne',
+      'api::client-detail.client-detail'
+    >;
+    club_owner: Schema.Attribute.Relation<
+      'manyToOne',
+      'api::club-owner.club-owner'
+    >;
+    createdAt: Schema.Attribute.DateTime;
+    createdBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
+      Schema.Attribute.Private;
+    local_subscription: Schema.Attribute.Relation<
+      'manyToOne',
+      'api::local-subscription.local-subscription'
+    >;
+    locale: Schema.Attribute.String & Schema.Attribute.Private;
+    localizations: Schema.Attribute.Relation<
+      'oneToMany',
+      'api::client-checkin.client-checkin'
+    > &
+      Schema.Attribute.Private;
+    outdoor_subscription: Schema.Attribute.Relation<
+      'manyToOne',
+      'api::outdoor-subscription.outdoor-subscription'
+    >;
+    publishedAt: Schema.Attribute.DateTime;
+    subscriptionType: Schema.Attribute.Enumeration<['local', 'outdoor']>;
+    updatedAt: Schema.Attribute.DateTime;
+    updatedBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
+      Schema.Attribute.Private;
+  };
+}
+
 export interface ApiClientDetailClientDetail
   extends Struct.CollectionTypeSchema {
   collectionName: 'client_details';
@@ -443,6 +489,11 @@ export interface ApiClientDetailClientDetail
   };
   attributes: {
     approvedAt: Schema.Attribute.DateTime;
+    client_checkins: Schema.Attribute.Relation<
+      'oneToMany',
+      'api::client-checkin.client-checkin'
+    >;
+    clientId: Schema.Attribute.String & Schema.Attribute.Unique;
     createdAt: Schema.Attribute.DateTime;
     createdBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
       Schema.Attribute.Private;
@@ -454,6 +505,10 @@ export interface ApiClientDetailClientDetail
     >;
     height: Schema.Attribute.String;
     latitude: Schema.Attribute.String;
+    local_subscriptions: Schema.Attribute.Relation<
+      'oneToMany',
+      'api::local-subscription.local-subscription'
+    >;
     locale: Schema.Attribute.String & Schema.Attribute.Private;
     localizations: Schema.Attribute.Relation<
       'oneToMany',
@@ -462,6 +517,10 @@ export interface ApiClientDetailClientDetail
       Schema.Attribute.Private;
     longitude: Schema.Attribute.String;
     name: Schema.Attribute.String;
+    outdoor_subscriptions: Schema.Attribute.Relation<
+      'oneToMany',
+      'api::outdoor-subscription.outdoor-subscription'
+    >;
     phoneNumber: Schema.Attribute.String;
     publishedAt: Schema.Attribute.DateTime;
     selfieUpload: Schema.Attribute.Media<
@@ -528,6 +587,10 @@ export interface ApiClubOwnerClubOwner extends Struct.CollectionTypeSchema {
   };
   attributes: {
     city: Schema.Attribute.String;
+    client_checkins: Schema.Attribute.Relation<
+      'oneToMany',
+      'api::client-checkin.client-checkin'
+    >;
     closingTime: Schema.Attribute.Time;
     club_owner_documents: Schema.Attribute.Relation<
       'oneToMany',
@@ -549,6 +612,14 @@ export interface ApiClubOwnerClubOwner extends Struct.CollectionTypeSchema {
     email: Schema.Attribute.Email;
     facilities: Schema.Attribute.JSON;
     latitude: Schema.Attribute.String;
+    local_membership_plans: Schema.Attribute.Relation<
+      'oneToMany',
+      'api::local-membership-plan.local-membership-plan'
+    >;
+    local_subscriptions: Schema.Attribute.Relation<
+      'oneToMany',
+      'api::local-subscription.local-subscription'
+    >;
     locale: Schema.Attribute.String & Schema.Attribute.Private;
     localizations: Schema.Attribute.Relation<
       'oneToMany',
@@ -573,6 +644,96 @@ export interface ApiClubOwnerClubOwner extends Struct.CollectionTypeSchema {
     >;
     weekday: Schema.Attribute.String;
     weekend: Schema.Attribute.String;
+  };
+}
+
+export interface ApiLocalMembershipPlanLocalMembershipPlan
+  extends Struct.CollectionTypeSchema {
+  collectionName: 'local_membership_plans';
+  info: {
+    displayName: 'local-membership-plan';
+    pluralName: 'local-membership-plans';
+    singularName: 'local-membership-plan';
+  };
+  options: {
+    draftAndPublish: true;
+  };
+  attributes: {
+    club_owner: Schema.Attribute.Relation<
+      'manyToOne',
+      'api::club-owner.club-owner'
+    >;
+    createdAt: Schema.Attribute.DateTime;
+    createdBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
+      Schema.Attribute.Private;
+    description: Schema.Attribute.Text;
+    isActive: Schema.Attribute.Boolean & Schema.Attribute.DefaultTo<true>;
+    local_subscriptions: Schema.Attribute.Relation<
+      'oneToMany',
+      'api::local-subscription.local-subscription'
+    >;
+    locale: Schema.Attribute.String & Schema.Attribute.Private;
+    localizations: Schema.Attribute.Relation<
+      'oneToMany',
+      'api::local-membership-plan.local-membership-plan'
+    > &
+      Schema.Attribute.Private;
+    monthDuration: Schema.Attribute.Integer & Schema.Attribute.Required;
+    planName: Schema.Attribute.String & Schema.Attribute.Required;
+    price: Schema.Attribute.Decimal & Schema.Attribute.Required;
+    publishedAt: Schema.Attribute.DateTime;
+    updatedAt: Schema.Attribute.DateTime;
+    updatedBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
+      Schema.Attribute.Private;
+  };
+}
+
+export interface ApiLocalSubscriptionLocalSubscription
+  extends Struct.CollectionTypeSchema {
+  collectionName: 'local_subscriptions';
+  info: {
+    displayName: 'local-subscription';
+    pluralName: 'local-subscriptions';
+    singularName: 'local-subscription';
+  };
+  options: {
+    draftAndPublish: true;
+  };
+  attributes: {
+    client_checkins: Schema.Attribute.Relation<
+      'oneToMany',
+      'api::client-checkin.client-checkin'
+    >;
+    client_detail: Schema.Attribute.Relation<
+      'manyToOne',
+      'api::client-detail.client-detail'
+    >;
+    club_owner: Schema.Attribute.Relation<
+      'manyToOne',
+      'api::club-owner.club-owner'
+    >;
+    createdAt: Schema.Attribute.DateTime;
+    createdBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
+      Schema.Attribute.Private;
+    endDate: Schema.Attribute.Date;
+    local_membership_plan: Schema.Attribute.Relation<
+      'manyToOne',
+      'api::local-membership-plan.local-membership-plan'
+    >;
+    locale: Schema.Attribute.String & Schema.Attribute.Private;
+    localizations: Schema.Attribute.Relation<
+      'oneToMany',
+      'api::local-subscription.local-subscription'
+    > &
+      Schema.Attribute.Private;
+    publishedAt: Schema.Attribute.DateTime;
+    startDate: Schema.Attribute.DateTime;
+    subscriptionStatus: Schema.Attribute.Enumeration<
+      ['active', 'expired', 'completed', 'cancelled']
+    >;
+    updatedAt: Schema.Attribute.DateTime;
+    updatedBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
+      Schema.Attribute.Private;
   };
 }
 
@@ -608,6 +769,89 @@ export interface ApiOtpRequestOtpRequest extends Struct.CollectionTypeSchema {
     updatedBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
       Schema.Attribute.Private;
     verified: Schema.Attribute.Boolean & Schema.Attribute.DefaultTo<false>;
+  };
+}
+
+export interface ApiOutdoorMembershipPlanOutdoorMembershipPlan
+  extends Struct.CollectionTypeSchema {
+  collectionName: 'outdoor_membership_plans';
+  info: {
+    displayName: 'outdoor-membership-plan';
+    pluralName: 'outdoor-membership-plans';
+    singularName: 'outdoor-membership-plan';
+  };
+  options: {
+    draftAndPublish: true;
+  };
+  attributes: {
+    createdAt: Schema.Attribute.DateTime;
+    createdBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
+      Schema.Attribute.Private;
+    description: Schema.Attribute.Text;
+    isActive: Schema.Attribute.Boolean & Schema.Attribute.DefaultTo<true>;
+    locale: Schema.Attribute.String & Schema.Attribute.Private;
+    localizations: Schema.Attribute.Relation<
+      'oneToMany',
+      'api::outdoor-membership-plan.outdoor-membership-plan'
+    > &
+      Schema.Attribute.Private;
+    outdoor_subscriptions: Schema.Attribute.Relation<
+      'oneToMany',
+      'api::outdoor-subscription.outdoor-subscription'
+    >;
+    planName: Schema.Attribute.String;
+    price: Schema.Attribute.Decimal;
+    publishedAt: Schema.Attribute.DateTime;
+    updatedAt: Schema.Attribute.DateTime;
+    updatedBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
+      Schema.Attribute.Private;
+    visitAllowed: Schema.Attribute.Integer;
+  };
+}
+
+export interface ApiOutdoorSubscriptionOutdoorSubscription
+  extends Struct.CollectionTypeSchema {
+  collectionName: 'outdoor_subscriptions';
+  info: {
+    displayName: 'outdoor-subscription';
+    pluralName: 'outdoor-subscriptions';
+    singularName: 'outdoor-subscription';
+  };
+  options: {
+    draftAndPublish: true;
+  };
+  attributes: {
+    client_checkins: Schema.Attribute.Relation<
+      'oneToMany',
+      'api::client-checkin.client-checkin'
+    >;
+    client_detail: Schema.Attribute.Relation<
+      'manyToOne',
+      'api::client-detail.client-detail'
+    >;
+    createdAt: Schema.Attribute.DateTime;
+    createdBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
+      Schema.Attribute.Private;
+    locale: Schema.Attribute.String & Schema.Attribute.Private;
+    localizations: Schema.Attribute.Relation<
+      'oneToMany',
+      'api::outdoor-subscription.outdoor-subscription'
+    > &
+      Schema.Attribute.Private;
+    outdoor_membership_plan: Schema.Attribute.Relation<
+      'manyToOne',
+      'api::outdoor-membership-plan.outdoor-membership-plan'
+    >;
+    publishedAt: Schema.Attribute.DateTime;
+    remainingVisits: Schema.Attribute.Integer;
+    subscriptionStatus: Schema.Attribute.Enumeration<
+      ['active', 'cancelled', 'expired']
+    >;
+    totalVisitsAllowed: Schema.Attribute.Integer;
+    updatedAt: Schema.Attribute.DateTime;
+    updatedBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
+      Schema.Attribute.Private;
+    usedVisits: Schema.Attribute.Integer & Schema.Attribute.DefaultTo<0>;
   };
 }
 
@@ -1305,10 +1549,15 @@ declare module '@strapi/strapi' {
       'admin::transfer-token': AdminTransferToken;
       'admin::transfer-token-permission': AdminTransferTokenPermission;
       'admin::user': AdminUser;
+      'api::client-checkin.client-checkin': ApiClientCheckinClientCheckin;
       'api::client-detail.client-detail': ApiClientDetailClientDetail;
       'api::club-owner-document.club-owner-document': ApiClubOwnerDocumentClubOwnerDocument;
       'api::club-owner.club-owner': ApiClubOwnerClubOwner;
+      'api::local-membership-plan.local-membership-plan': ApiLocalMembershipPlanLocalMembershipPlan;
+      'api::local-subscription.local-subscription': ApiLocalSubscriptionLocalSubscription;
       'api::otp-request.otp-request': ApiOtpRequestOtpRequest;
+      'api::outdoor-membership-plan.outdoor-membership-plan': ApiOutdoorMembershipPlanOutdoorMembershipPlan;
+      'api::outdoor-subscription.outdoor-subscription': ApiOutdoorSubscriptionOutdoorSubscription;
       'api::pending-client-detail.pending-client-detail': ApiPendingClientDetailPendingClientDetail;
       'api::pending-club-owner.pending-club-owner': ApiPendingClubOwnerPendingClubOwner;
       'api::pending-signup.pending-signup': ApiPendingSignupPendingSignup;

@@ -1,0 +1,46 @@
+{
+  "kind": "collectionType",
+  "collectionName": "local_membership_plans",
+  "info": {
+    "singularName": "local-membership-plan",
+    "pluralName": "local-membership-plans",
+    "displayName": "local-membership-plan"
+  },
+  "options": {
+    "draftAndPublish": true
+  },
+  "pluginOptions": {},
+  "attributes": {
+    "planName": {
+      "type": "string",
+      "required": true
+    },
+    "club_owner": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::club-owner.club-owner",
+      "inversedBy": "local_membership_plans"
+    },
+    "price": {
+      "type": "decimal",
+      "required": true
+    },
+    "monthDuration": {
+      "type": "integer",
+      "required": true
+    },
+    "description": {
+      "type": "text"
+    },
+    "isActive": {
+      "type": "boolean",
+      "default": true
+    },
+    "local_subscriptions": {
+      "type": "relation",
+      "relation": "oneToMany",
+      "target": "api::local-subscription.local-subscription",
+      "mappedBy": "local_membership_plan"
+    }
+  }
+}

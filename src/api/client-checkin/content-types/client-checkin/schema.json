@@ -1,0 +1,49 @@
+{
+  "kind": "collectionType",
+  "collectionName": "client_checkins",
+  "info": {
+    "singularName": "client-checkin",
+    "pluralName": "client-checkins",
+    "displayName": "client-checkin"
+  },
+  "options": {
+    "draftAndPublish": true
+  },
+  "pluginOptions": {},
+  "attributes": {
+    "client_detail": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::client-detail.client-detail",
+      "inversedBy": "client_checkins"
+    },
+    "club_owner": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::club-owner.club-owner",
+      "inversedBy": "client_checkins"
+    },
+    "subscriptionType": {
+      "type": "enumeration",
+      "enum": [
+        "local",
+        "outdoor"
+      ]
+    },
+    "checkinTime": {
+      "type": "datetime"
+    },
+    "local_subscription": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::local-subscription.local-subscription",
+      "inversedBy": "client_checkins"
+    },
+    "outdoor_subscription": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::outdoor-subscription.outdoor-subscription",
+      "inversedBy": "client_checkins"
+    }
+  }
+}

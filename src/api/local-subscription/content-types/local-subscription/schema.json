@@ -1,0 +1,54 @@
+{
+  "kind": "collectionType",
+  "collectionName": "local_subscriptions",
+  "info": {
+    "singularName": "local-subscription",
+    "pluralName": "local-subscriptions",
+    "displayName": "local-subscription"
+  },
+  "options": {
+    "draftAndPublish": true
+  },
+  "pluginOptions": {},
+  "attributes": {
+    "client_detail": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::client-detail.client-detail",
+      "inversedBy": "local_subscriptions"
+    },
+    "club_owner": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::club-owner.club-owner",
+      "inversedBy": "local_subscriptions"
+    },
+    "local_membership_plan": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::local-membership-plan.local-membership-plan",
+      "inversedBy": "local_subscriptions"
+    },
+    "startDate": {
+      "type": "datetime"
+    },
+    "endDate": {
+      "type": "date"
+    },
+    "subscriptionStatus": {
+      "type": "enumeration",
+      "enum": [
+        "active",
+        "expired",
+        "completed",
+        "cancelled"
+      ]
+    },
+    "client_checkins": {
+      "type": "relation",
+      "relation": "oneToMany",
+      "target": "api::client-checkin.client-checkin",
+      "mappedBy": "local_subscription"
+    }
+  }
+}

@@ -1,0 +1,37 @@
+{
+  "kind": "collectionType",
+  "collectionName": "outdoor_membership_plans",
+  "info": {
+    "singularName": "outdoor-membership-plan",
+    "pluralName": "outdoor-membership-plans",
+    "displayName": "outdoor-membership-plan"
+  },
+  "options": {
+    "draftAndPublish": true
+  },
+  "pluginOptions": {},
+  "attributes": {
+    "planName": {
+      "type": "string"
+    },
+    "price": {
+      "type": "decimal"
+    },
+    "description": {
+      "type": "text"
+    },
+    "visitAllowed": {
+      "type": "integer"
+    },
+    "isActive": {
+      "type": "boolean",
+      "default": true
+    },
+    "outdoor_subscriptions": {
+      "type": "relation",
+      "relation": "oneToMany",
+      "target": "api::outdoor-subscription.outdoor-subscription",
+      "mappedBy": "outdoor_membership_plan"
+    }
+  }
+}

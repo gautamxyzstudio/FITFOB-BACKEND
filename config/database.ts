@@ -17,5 +17,12 @@ export default ({ env }) => ({
       min: 2,
       max: 10,
     },
+       migrations: {
+      forceMigration: false,
+    },
+ 
+    schema: {
+      dropSchema: false,
+    },
   },
 });

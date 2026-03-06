@@ -65,6 +65,28 @@
     },
     "date_of_birth": {
       "type": "date"
+    },
+      "clientId": {
+      "type": "string",
+      "unique": true
+    },
+    "local_subscriptions": {
+      "type": "relation",
+      "relation": "oneToMany",
+      "target": "api::local-subscription.local-subscription",
+      "mappedBy": "client_detail"
+    },
+    "outdoor_subscriptions": {
+      "type": "relation",
+      "relation": "oneToMany",
+      "target": "api::outdoor-subscription.outdoor-subscription",
+      "mappedBy": "client_detail"
+    },
+    "client_checkins": {
+      "type": "relation",
+      "relation": "oneToMany",
+      "target": "api::client-checkin.client-checkin",
+      "mappedBy": "client_detail"
     }
   }
 }
