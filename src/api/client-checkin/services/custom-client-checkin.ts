@@ -47,7 +47,7 @@ export default () => ({
       throw new Error("Client already checked in try again after 4 hours");
     }
 
-    /* LOCAL SUBSCRIPTION */
+    /* LOCAL SUBSCRIPTION (LATEST ONE) */
 
     const localSub = await strapi.db
       .query("api::local-subscription.local-subscription")
@@ -55,7 +55,8 @@ export default () => ({
         where: {
           client_detail: client.id,
           club_owner: clubOwner.id
-        }
+        },
+        orderBy: { endDate: "desc" }   // 🔧 ensures latest membership
       });
 
     const today = new Date();
@@ -91,7 +92,7 @@ export default () => ({
       }
     }
 
-    /* OUTDOOR SUBSCRIPTION */
+    /* OUTDOOR SUBSCRIPTION (LATEST ACTIVE) */
 
     const outdoorSub = await strapi.db
       .query("api::outdoor-subscription.outdoor-subscription")
@@ -99,7 +100,8 @@ export default () => ({
         where: {
           client_detail: client.id,
           subscriptionStatus: "active"
-        }
+        },
+        orderBy: { createdAt: "desc" }   // 🔧 ensures latest outdoor subscription
       });
 
     if (!outdoorSub) {
@@ -152,13 +154,16 @@ export default () => ({
       throw new Error("Client not found");
     }
 
+    /* LATEST OUTDOOR SUBSCRIPTION */
+
     const outdoorSub = await strapi.db
       .query("api::outdoor-subscription.outdoor-subscription")
       .findOne({
         where: {
           client_detail: client.id,
           subscriptionStatus: "active"
-        }
+        },
+        orderBy: { createdAt: "desc" }
       });
 
     if (!outdoorSub) {
