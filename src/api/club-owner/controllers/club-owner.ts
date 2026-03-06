@@ -22,7 +22,7 @@ export default factories.createCoreController(
         const { search } = ctx.query as any;
 
         const filters: any = {
-          user: { isVerified: true },
+          user: { verification_status: 'approved' },
         };
 
         const data: any[] = await strapi.entityService.findMany(
@@ -75,7 +75,7 @@ export default factories.createCoreController(
         const { search } = ctx.query as any;
 
         const filters: any = {
-          user: { isVerified: false },
+          user: { verification_status: 'pending' },
         };
 
         const data: any[] = await strapi.entityService.findMany(

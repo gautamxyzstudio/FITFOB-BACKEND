@@ -44,21 +44,28 @@ export default {
       let user: any;
 
       if (isEmail(identifier)) {
-        user = await strapi.db
-          .query("plugin::users-permissions.user")
-          .findOne({
-            where: { email: identifier },
+        const users = await strapi.entityService.findMany(
+          "plugin::users-permissions.user",
+          {
+            filters: { email: identifier },
             populate: ["role"],
-          });
+          }
+        );
+
+        user = users[0];
+
       } else {
         strapi.log.info(`[LOGIN] Searching phone: ${identifier}`);
 
-        user = await strapi.db
-          .query("plugin::users-permissions.user")
-          .findOne({
-            where: { phoneNumber: identifier },
+        const users = await strapi.entityService.findMany(
+          "plugin::users-permissions.user",
+          {
+            filters: { phoneNumber: identifier },
             populate: ["role"],
-          });
+          }
+        );
+
+        user = users[0];
       }
 
       if (!user) return ctx.badRequest("User not found");
@@ -79,61 +86,60 @@ export default {
         return ctx.unauthorized("Invalid credentials");
       }
 
-/* ======================================================
-   🔐 ADMIN MFA SYSTEM (QR SETUP + OTP LOGIN)
-====================================================== */
+      /* ======================================================
+         🔐 ADMIN MFA SYSTEM (QR SETUP + OTP LOGIN)
+      ====================================================== */
 
-if (user.role?.name === "Admin") {
+      if (user.role?.name === "Admin") {
 
-  // ---------- FIRST TIME LOGIN (NO MFA YET) ----------
-  if (!user.mfa_secret) {
+        // ---------- FIRST TIME LOGIN (NO MFA YET) ----------
+        if (!user.mfa_secret) {
 
-    // create secret for authenticator
-    const secret = speakeasy.generateSecret({
-      length: 20,
-      name: `FitFob (${user.email})`,
-      issuer: "FitFob"
-    });
+          // create secret for authenticator
+          const secret = speakeasy.generateSecret({
+            length: 20,
+            name: `FitFob (${user.email})`,
+            issuer: "FitFob"
+          });
 
-    // store temporary secret (NOT ACTIVE YET)
-    await strapi.entityService.update(
-      "plugin::users-permissions.user",
-      user.id,
-      {
-        data: { mfa_temp_secret: secret.base32 }
+          // store temporary secret (NOT ACTIVE YET)
+          await strapi.entityService.update(
+            "plugin::users-permissions.user",
+            user.id,
+            {
+              data: { mfa_temp_secret: secret.base32 }
+            }
+          );
+
+          // generate QR code
+          const qr = await QRCode.toDataURL(secret.otpauth_url);
+
+          // tell frontend to scan
+          return ctx.send({
+            mfaSetup: true,
+            qr
+          });
+        }
+
+        // ---------- MFA ALREADY ENABLED (NORMAL ADMIN LOGIN) ----------
+        const tempToken = uuidv4();
+
+        await strapi.entityService.update(
+          "plugin::users-permissions.user",
+          user.id,
+          {
+            data: {
+              mfa_temp_token: tempToken,
+              mfa_identifier: identifier
+            }
+          }
+        );
+
+        return ctx.send({
+          mfaRequired: true,
+          tempToken
+        });
       }
-    );
-
-    // generate QR code
-    const qr = await QRCode.toDataURL(secret.otpauth_url);
-
-    // tell frontend to scan
-    return ctx.send({
-      mfaSetup: true,
-      qr
-    });
-  }
-
-  // ---------- MFA ALREADY ENABLED (NORMAL ADMIN LOGIN) ----------
-  const tempToken = uuidv4();
-
-  await strapi.entityService.update(
-    "plugin::users-permissions.user",
-    user.id,
-    {
-      data: {
-        mfa_temp_token: tempToken,
-        mfa_identifier: identifier
-      }
-    }
-  );
-
-  return ctx.send({
-    mfaRequired: true,
-    tempToken,
-     secret: user.mfa_secret
-  });
-}
 
 
       /* ======================================================
@@ -166,6 +172,7 @@ if (user.role?.name === "Admin") {
           email: user.email,
           phoneNumber: user.phoneNumber,
           isVerified: user.isVerified,
+          verification_status: user.verification_status,
           cognitoSub: user.cognitoSub,
           confirmed: user.confirmed,
           blocked: user.blocked,
