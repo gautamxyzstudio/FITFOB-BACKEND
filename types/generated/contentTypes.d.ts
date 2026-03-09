@@ -1289,7 +1289,15 @@ export interface PluginUsersPermissionsUser
         minLength: 3;
       }>;
     verification_status: Schema.Attribute.Enumeration<
-      ['pending', 'rejected', 'approved']
+      [
+        'pending',
+        'rejected',
+        'approved',
+        'in-review',
+        'more-information-required',
+        'document-mising',
+        'action-pending',
+      ]
     >;
   };
 }

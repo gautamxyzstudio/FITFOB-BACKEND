@@ -97,7 +97,11 @@
       "enum": [
         "pending",
         "rejected",
-        "approved"
+        "approved",
+        "in-review",
+        "more-information-required",
+        "document-mising",
+        "action-pending"
       ]
     }
   }
