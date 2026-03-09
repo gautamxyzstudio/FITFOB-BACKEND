@@ -56,7 +56,7 @@ async function getEditableDraft(ctx: Context) {
 /* ---------------- SUBMISSION VALIDATION ---------------- */
 async function validateBeforeSubmission(draft: any) {
 
-  if (!draft.clubName || !draft.ownerName || !draft.phoneNumber || !draft.email)
+  if (!draft.clubName || !draft.ownerName)
     return "Please complete owner details";
 
   if (!draft.latitude || !draft.longitude)
