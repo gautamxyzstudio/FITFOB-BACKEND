@@ -189,5 +189,43 @@ export default factories.createCoreController(
       };
     },
 
+
+    async getMyClubOwner(ctx) {
+
+      try {
+
+        /* GET USER FROM JWT TOKEN */
+        const user = ctx.state.user;
+
+        if (!user) {
+          return ctx.unauthorized("Authentication required");
+        }
+
+        /* FIND CLUB OWNER OF THIS USER */
+        const clubOwner = await strapi.db
+          .query("api::club-owner.club-owner")
+          .findOne({
+            where: { user: user.id },
+            populate: {
+              user: true,
+              logo: true,
+              clubPhotos: true,
+              club_owner_documents: true
+            }
+          });
+
+        if (!clubOwner) {
+          return ctx.notFound("Club owner not found");
+        }
+
+        ctx.body = clubOwner;
+
+      } catch (error) {
+        strapi.log.error(error);
+        return ctx.internalServerError("Something went wrong");
+      }
+
+    }
+
   })
 );

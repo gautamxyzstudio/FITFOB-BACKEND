@@ -21,8 +21,16 @@ export default {
       path: "/club-owners/:id",
       handler: "club-owner.update",
       config: {
-        auth: {}, 
+        auth: {},
       },
     },
+    {
+      method: "GET",
+      path: "/club-owner/me",
+      handler: "club-owner.getMyClubOwner",
+      config: {
+        auth: {}
+      }
+    }
   ],
 };
