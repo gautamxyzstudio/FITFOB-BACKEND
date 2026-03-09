@@ -1,36 +1,30 @@
 export default () => ({
 
   /* ====================================== */
-  /* SCAN QR */
+  /* COMMON HELPERS */
   /* ====================================== */
 
-  async scan(clientId: string, clubOwnerUserId: number) {
-
-    /* FIND CLUB OWNER FROM TOKEN */
-
+  async getClubOwner(userId: number) {
     const clubOwner = await strapi.db
       .query("api::club-owner.club-owner")
-      .findOne({
-        where: { user: clubOwnerUserId }
-      });
+      .findOne({ where: { user: userId } });
 
-    if (!clubOwner) {
-      throw new Error("Gym not found");
-    }
+    if (!clubOwner) throw new Error("Gym not found");
 
-    /* FIND CLIENT */
+    return clubOwner;
+  },
 
+  async getClient(clientId: string) {
     const client = await strapi.db
       .query("api::client-detail.client-detail")
-      .findOne({
-        where: { clientId }
-      });
+      .findOne({ where: { clientId } });
 
-    if (!client) {
-      throw new Error("Client not found");
-    }
+    if (!client) throw new Error("Client not found");
 
-    /* 4 HOUR RULE */
+    return client;
+  },
+
+  async checkRecentCheckin(clientId: number) {
 
     const fourHoursAgo = new Date(Date.now() - 4 * 60 * 60 * 1000);
 
@@ -38,16 +32,30 @@ export default () => ({
       .query("api::client-checkin.client-checkin")
       .findOne({
         where: {
-          client_detail: client.id,
+          client_detail: clientId,
           checkinTime: { $gt: fourHoursAgo }
         }
       });
 
     if (recentCheckin) {
-      throw new Error("Client already checked in try again after 4 hours");
+      throw new Error("Client already checked in. Try again after 4 hours");
     }
+  },
 
-    /* LOCAL SUBSCRIPTION (LATEST ONE) */
+  /* ====================================== */
+  /* SCAN QR */
+  /* ====================================== */
+
+  async scan(clientId: string, clubOwnerUserId: number) {
+
+    const clubOwner = await this.getClubOwner(clubOwnerUserId);
+    const client = await this.getClient(clientId);
+
+    await this.checkRecentCheckin(client.id);
+
+    const today = new Date();
+
+    /* ---------------- LOCAL SUBSCRIPTION ---------------- */
 
     const localSub = await strapi.db
       .query("api::local-subscription.local-subscription")
@@ -56,10 +64,8 @@ export default () => ({
           client_detail: client.id,
           club_owner: clubOwner.id
         },
-        orderBy: { endDate: "desc" }   // 🔧 ensures latest membership
+        orderBy: { endDate: "desc" }
       });
-
-    const today = new Date();
 
     if (localSub) {
 
@@ -92,69 +98,7 @@ export default () => ({
       }
     }
 
-    /* OUTDOOR SUBSCRIPTION (LATEST ACTIVE) */
-
-    const outdoorSub = await strapi.db
-      .query("api::outdoor-subscription.outdoor-subscription")
-      .findOne({
-        where: {
-          client_detail: client.id,
-          subscriptionStatus: "active"
-        },
-        orderBy: { createdAt: "desc" }   // 🔧 ensures latest outdoor subscription
-      });
-
-    if (!outdoorSub) {
-      throw new Error("No valid membership found");
-    }
-
-    if (outdoorSub.remainingVisits <= 0) {
-      throw new Error("Outdoor membership has no remaining visits");
-    }
-
-    /* IF LOCAL EXISTS BUT EXPIRED */
-
-    if (localSub) {
-      return {
-        status: "choose",
-        message: "Local membership expired. Use outdoor membership?",
-        remainingVisits: outdoorSub.remainingVisits
-      };
-    }
-
-    /* IF NO LOCAL → DIRECT OUTDOOR */
-
-    return await this.createOutdoorCheckin(client, clubOwner.id, outdoorSub);
-
-  },
-
-  /* ====================================== */
-  /* CONFIRM OUTDOOR */
-  /* ====================================== */
-
-  async confirmOutdoor(clientId: string, clubOwnerUserId: number) {
-
-    const clubOwner = await strapi.db
-      .query("api::club-owner.club-owner")
-      .findOne({
-        where: { user: clubOwnerUserId }
-      });
-
-    if (!clubOwner) {
-      throw new Error("Gym not found");
-    }
-
-    const client = await strapi.db
-      .query("api::client-detail.client-detail")
-      .findOne({
-        where: { clientId }
-      });
-
-    if (!client) {
-      throw new Error("Client not found");
-    }
-
-    /* LATEST OUTDOOR SUBSCRIPTION */
+    /* ---------------- OUTDOOR SUBSCRIPTION ---------------- */
 
     const outdoorSub = await strapi.db
       .query("api::outdoor-subscription.outdoor-subscription")
@@ -167,8 +111,52 @@ export default () => ({
       });
 
     if (!outdoorSub) {
-      throw new Error("Outdoor membership not found");
+
+      if (localSub) {
+
+        if (new Date(localSub.endDate) < today) {
+          throw new Error("Local membership expired");
+        }
+
+      }
+
+      throw new Error("No membership found");
     }
+
+    if (localSub) {
+      return {
+        status: "choose",
+        message: "Local membership expired. Use outdoor membership?",
+        remainingVisits: outdoorSub.remainingVisits
+      };
+    }
+
+    return await this.createOutdoorCheckin(client, clubOwner.id, outdoorSub);
+
+  },
+
+  /* ====================================== */
+  /* CONFIRM OUTDOOR */
+  /* ====================================== */
+
+  async confirmOutdoor(clientId: string, clubOwnerUserId: number) {
+
+    const clubOwner = await this.getClubOwner(clubOwnerUserId);
+    const client = await this.getClient(clientId);
+
+    await this.checkRecentCheckin(client.id);
+
+    const outdoorSub = await strapi.db
+      .query("api::outdoor-subscription.outdoor-subscription")
+      .findOne({
+        where: {
+          client_detail: client.id,
+          subscriptionStatus: "active"
+        },
+        orderBy: { createdAt: "desc" }
+      });
+
+    if (!outdoorSub) throw new Error("Outdoor membership not found");
 
     if (outdoorSub.remainingVisits <= 0) {
       throw new Error("Outdoor membership has no remaining visits");
@@ -193,8 +181,6 @@ export default () => ({
         throw new Error("No visits remaining");
       }
 
-      /* UPDATE VISITS */
-
       await strapi.entityService.update(
         "api::outdoor-subscription.outdoor-subscription",
         outdoorSub.id,
@@ -205,8 +191,6 @@ export default () => ({
           }
         }
       );
-
-      /* CREATE CHECKIN */
 
       await strapi.entityService.create(
         "api::client-checkin.client-checkin",
