@@ -1,8 +1,14 @@
 export default {
+
   /* ---------- APPROVE USER ---------- */
   async verificationApproved(ctx: any) {
     try {
       const { id } = ctx.params;
+      const adminUser = ctx.state.user;
+
+      if (!adminUser) {
+        return ctx.unauthorized("Authentication required");
+      }
 
       if (!id) {
         return ctx.badRequest("User id is required");
@@ -23,6 +29,8 @@ export default {
         data: {
           verification_status: "approved",
           rejection_reason: null,
+          approved_by: adminUser.id,
+          rejected_by: null,
         },
       });
 
@@ -30,7 +38,15 @@ export default {
         .query("plugin::users-permissions.user")
         .findOne({
           where: { id },
-          populate: ["role"],
+          populate: {
+            role: true,
+            approved_by: {
+              populate: ["role"],
+            },
+            rejected_by: {
+              populate: ["role"],
+            },
+          },
         });
 
       ctx.body = {
@@ -41,12 +57,19 @@ export default {
       strapi.log.error("APPROVE ERROR:", err);
       return ctx.internalServerError("Failed to approve user");
     }
+
+
   },
 
   /* ---------- REJECT USER ---------- */
   async verificationRejected(ctx: any) {
     try {
       const { id } = ctx.params;
+      const adminUser = ctx.state.user;
+
+      if (!adminUser) {
+        return ctx.unauthorized("Authentication required");
+      }
 
       if (!id) {
         return ctx.badRequest("User id is required");
@@ -74,6 +97,8 @@ export default {
         data: {
           verification_status: "rejected",
           rejection_reason: reason,
+          rejected_by: adminUser.id,
+          approved_by: null,
         },
       });
 
@@ -81,18 +106,26 @@ export default {
         .query("plugin::users-permissions.user")
         .findOne({
           where: { id },
-          populate: ["role"],
+          populate: {
+            role: true,
+            approved_by: {
+              populate: ["role"],
+            },
+            rejected_by: {
+              populate: ["role"],
+            },
+          },
         });
 
       ctx.body = {
         message: "User verification rejected",
         user: updatedUser,
       };
-
     } catch (err: any) {
       strapi.log.error("REJECT ERROR:", err);
       return ctx.internalServerError("Failed to reject user");
     }
-  }
 
+
+  },
 };
