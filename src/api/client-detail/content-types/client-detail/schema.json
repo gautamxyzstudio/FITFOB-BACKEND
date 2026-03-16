@@ -65,6 +65,10 @@
     },
     "date_of_birth": {
       "type": "date"
+    },
+    "read_by_admins": {
+      "type": "json",
+      "default": []
     }
   }
 }

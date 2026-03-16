@@ -103,6 +103,10 @@
       "required": true,
       "unique": true,
       "configurable": false
+    },
+    "read_by_admins": {
+      "type": "json",
+      "default": []
     }
   }
 }

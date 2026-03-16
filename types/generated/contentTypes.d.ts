@@ -464,6 +464,7 @@ export interface ApiClientDetailClientDetail
     name: Schema.Attribute.String;
     phoneNumber: Schema.Attribute.String;
     publishedAt: Schema.Attribute.DateTime;
+    read_by_admins: Schema.Attribute.JSON & Schema.Attribute.DefaultTo<[]>;
     selfieUpload: Schema.Attribute.Media<
       'images' | 'files' | 'videos' | 'audios'
     >;
@@ -562,6 +563,7 @@ export interface ApiClubOwnerClubOwner extends Struct.CollectionTypeSchema {
     phoneNumber: Schema.Attribute.String;
     pincode: Schema.Attribute.String;
     publishedAt: Schema.Attribute.DateTime;
+    read_by_admins: Schema.Attribute.JSON & Schema.Attribute.DefaultTo<[]>;
     services: Schema.Attribute.JSON;
     state: Schema.Attribute.String;
     updatedAt: Schema.Attribute.DateTime;

@@ -14,7 +14,7 @@
       "name": "Apache 2.0",
       "url": "https://www.apache.org/licenses/LICENSE-2.0.html"
     },
-    "x-generation-date": "2026-03-16T06:36:17.989Z"
+    "x-generation-date": "2026-03-16T11:19:44.107Z"
   },
   "x-strapi-config": {
     "plugins": [
@@ -5310,6 +5310,7 @@
                 "type": "string",
                 "format": "date"
               },
+              "read_by_admins": {},
               "locale": {
                 "type": "string"
               },
@@ -6815,6 +6816,7 @@
             "type": "string",
             "format": "date"
           },
+          "read_by_admins": {},
           "createdAt": {
             "type": "string",
             "format": "date-time"
@@ -7279,6 +7281,7 @@
                   "type": "string",
                   "format": "date"
                 },
+                "read_by_admins": {},
                 "createdAt": {
                   "type": "string",
                   "format": "date-time"
@@ -7489,6 +7492,7 @@
               "clubId": {
                 "type": "string"
               },
+              "read_by_admins": {},
               "locale": {
                 "type": "string"
               },
@@ -9671,6 +9675,7 @@
                     "clubId": {
                       "type": "string"
                     },
+                    "read_by_admins": {},
                     "createdAt": {
                       "type": "string",
                       "format": "date-time"
@@ -10374,6 +10379,7 @@
           "clubId": {
             "type": "string"
           },
+          "read_by_admins": {},
           "createdAt": {
             "type": "string",
             "format": "date-time"
@@ -13059,6 +13065,7 @@
               "clubId": {
                 "type": "string"
               },
+              "read_by_admins": {},
               "createdAt": {
                 "type": "string",
                 "format": "date-time"
@@ -18308,6 +18315,7 @@
                     "clubId": {
                       "type": "string"
                     },
+                    "read_by_admins": {},
                     "createdAt": {
                       "type": "string",
                       "format": "date-time"
