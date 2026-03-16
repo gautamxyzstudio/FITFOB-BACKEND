@@ -1274,6 +1274,7 @@ export interface PluginUsersPermissionsUser
     phoneNumber: Schema.Attribute.String;
     provider: Schema.Attribute.String;
     publishedAt: Schema.Attribute.DateTime;
+    rejection_reason: Schema.Attribute.String;
     resetPasswordToken: Schema.Attribute.String & Schema.Attribute.Private;
     role: Schema.Attribute.Relation<
       'manyToOne',
@@ -1289,15 +1290,7 @@ export interface PluginUsersPermissionsUser
         minLength: 3;
       }>;
     verification_status: Schema.Attribute.Enumeration<
-      [
-        'pending',
-        'rejected',
-        'approved',
-        'in-review',
-        'more-information-required',
-        'document-mising',
-        'action-pending',
-      ]
+      ['pending', 'rejected', 'approved', 'in-review']
     >;
   };
 }

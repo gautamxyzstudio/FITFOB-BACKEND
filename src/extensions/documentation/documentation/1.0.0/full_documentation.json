@@ -14,7 +14,7 @@
       "name": "Apache 2.0",
       "url": "https://www.apache.org/licenses/LICENSE-2.0.html"
     },
-    "x-generation-date": "2026-03-09T10:41:49.326Z"
+    "x-generation-date": "2026-03-16T05:51:29.113Z"
   },
   "x-strapi-config": {
     "plugins": [
@@ -6691,11 +6691,11 @@
                   "pending",
                   "rejected",
                   "approved",
-                  "in-review",
-                  "more-information-required",
-                  "document-mising",
-                  "action-pending"
+                  "in-review"
                 ]
+              },
+              "rejection_reason": {
+                "type": "string"
               },
               "createdAt": {
                 "type": "string",
@@ -8864,11 +8864,11 @@
                   "pending",
                   "rejected",
                   "approved",
-                  "in-review",
-                  "more-information-required",
-                  "document-mising",
-                  "action-pending"
+                  "in-review"
                 ]
+              },
+              "rejection_reason": {
+                "type": "string"
               },
               "createdAt": {
                 "type": "string",
@@ -12031,11 +12031,11 @@
                       "pending",
                       "rejected",
                       "approved",
-                      "in-review",
-                      "more-information-required",
-                      "document-mising",
-                      "action-pending"
+                      "in-review"
                     ]
+                  },
+                  "rejection_reason": {
+                    "type": "string"
                   },
                   "createdAt": {
                     "type": "string",
@@ -15232,11 +15232,11 @@
                   "pending",
                   "rejected",
                   "approved",
-                  "in-review",
-                  "more-information-required",
-                  "document-mising",
-                  "action-pending"
+                  "in-review"
                 ]
+              },
+              "rejection_reason": {
+                "type": "string"
               },
               "createdAt": {
                 "type": "string",
@@ -16692,11 +16692,11 @@
                   "pending",
                   "rejected",
                   "approved",
-                  "in-review",
-                  "more-information-required",
-                  "document-mising",
-                  "action-pending"
+                  "in-review"
                 ]
+              },
+              "rejection_reason": {
+                "type": "string"
               },
               "createdAt": {
                 "type": "string",

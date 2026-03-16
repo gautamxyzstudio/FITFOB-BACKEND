@@ -22,6 +22,7 @@ export default {
         where: { id },
         data: {
           verification_status: "approved",
+          rejection_reason: null,
         },
       });
 
@@ -51,6 +52,13 @@ export default {
         return ctx.badRequest("User id is required");
       }
 
+      const body = ctx.request.body || {};
+      const reason = body.rejection_reason?.trim();
+
+      if (!reason) {
+        return ctx.badRequest("Rejection reason is required");
+      }
+
       const user = await strapi.db
         .query("plugin::users-permissions.user")
         .findOne({
@@ -65,6 +73,7 @@ export default {
         where: { id },
         data: {
           verification_status: "rejected",
+          rejection_reason: reason,
         },
       });
 
@@ -79,9 +88,11 @@ export default {
         message: "User verification rejected",
         user: updatedUser,
       };
+
     } catch (err: any) {
       strapi.log.error("REJECT ERROR:", err);
       return ctx.internalServerError("Failed to reject user");
     }
-  },
+  }
+
 };
