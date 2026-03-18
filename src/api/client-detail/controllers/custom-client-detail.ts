@@ -82,120 +82,130 @@ export default {
     }
   },
 
-async approvedClients(ctx: any) {
-  try {
+  async approvedClients(ctx: any) {
+    try {
 
-    const { search } = ctx.query as any;
+      const { search } = ctx.query as any;
 
-    const data: any[] = await strapi.entityService.findMany(
-      "api::client-detail.client-detail",
-      {
-        populate: {
-          user: {
-            populate: {
-              role: true
-            }
+      const data: any[] = await strapi.entityService.findMany(
+        "api::client-detail.client-detail",
+        {
+          populate: {
+            user: {
+              populate: {
+                role: true
+              }
+            },
+            selfieUpload: true,
+            governmentId: true
           },
-          selfieUpload: true,
-          governmentId: true
-        },
-        sort: { id: "desc" }
+          sort: { id: "desc" }
+        }
+      );
+
+      // filter approved users
+      let finalData = data.filter(
+        (item: any) => item.user?.verification_status === "approved"
+      );
+
+      // 🔍 Search
+      if (search?.trim()) {
+
+        const searchValue = search.replace(/\s+/g, "").toLowerCase();
+
+        finalData = finalData.filter((item: any) => {
+
+          const name = item.name?.replace(/\s+/g, "").toLowerCase();
+          const email = item.email?.replace(/\s+/g, "").toLowerCase();
+          const phone = item.phoneNumber?.replace(/\s+/g, "").toLowerCase();
+
+          return (
+            name?.includes(searchValue) ||
+            email?.includes(searchValue) ||
+            phone?.includes(searchValue)
+          );
+
+        });
       }
-    );
 
-    // filter approved users
-    let finalData = data.filter(
-      (item: any) => item.user?.verification_status === "approved"
-    );
+      finalData = finalData.map(item => ({
+        ...item,
+        isRead: item.read_by_admins?.length > 0
+      }));
 
-    // 🔍 Search
-    if (search?.trim()) {
+      ctx.body = {
+        success: true,
+        total: finalData.length,
+        data: finalData,
+      };
 
-      const searchValue = search.replace(/\s+/g, "").toLowerCase();
-
-      finalData = finalData.filter((item: any) => {
-
-        const name = item.name?.replace(/\s+/g, "").toLowerCase();
-        const email = item.email?.replace(/\s+/g, "").toLowerCase();
-        const phone = item.phoneNumber?.replace(/\s+/g, "").toLowerCase();
-
-        return (
-          name?.includes(searchValue) ||
-          email?.includes(searchValue) ||
-          phone?.includes(searchValue)
-        );
-
-      });
+    } catch (err) {
+      console.error(err);
+      ctx.throw(500, "Failed to fetch approved clients");
     }
+  },
 
-    ctx.body = {
-      success: true,
-      total: finalData.length,
-      data: finalData,
-    };
+  async pendingClients(ctx: any) {
+    try {
 
-  } catch (err) {
-    console.error(err);
-    ctx.throw(500, "Failed to fetch approved clients");
-  }
-},
+      const { search } = ctx.query as any;
 
-async pendingClients(ctx: any) {
-  try {
-
-    const { search } = ctx.query as any;
-
-    const data: any[] = await strapi.entityService.findMany(
-      "api::client-detail.client-detail",
-      {
-        populate: {
-          user: {
-            populate: {
-              role: true
-            }
+      const data: any[] = await strapi.entityService.findMany(
+        "api::client-detail.client-detail",
+        {
+          populate: {
+            user: {
+              populate: {
+                role: true
+              }
+            },
+            selfieUpload: true,
+            governmentId: true
           },
-          selfieUpload: true,
-          governmentId: true
-        },
-        sort: { id: "desc" }
+          sort: { id: "desc" }
+        }
+      );
+
+      // filter pending users
+      let finalData = data.filter(
+        (item: any) => item.user?.verification_status === "pending"
+      );
+
+      // 🔍 Search
+      if (search?.trim()) {
+
+        const searchValue = search.replace(/\s+/g, "").toLowerCase();
+
+        finalData = finalData.filter((item: any) => {
+
+          const name = item.name?.replace(/\s+/g, "").toLowerCase();
+          const email = item.email?.replace(/\s+/g, "").toLowerCase();
+          const phone = item.phoneNumber?.replace(/\s+/g, "").toLowerCase();
+
+          return (
+            name?.includes(searchValue) ||
+            email?.includes(searchValue) ||
+            phone?.includes(searchValue)
+          );
+
+        });
       }
-    );
 
-    // filter pending users
-    let finalData = data.filter(
-      (item: any) => item.user?.verification_status === "pending"
-    );
+      finalData = finalData.map(item => ({
+        ...item,
+        isRead: item.read_by_admins?.length > 0
+      }));
 
-    // 🔍 Search
-    if (search?.trim()) {
+      ctx.body = {
+        success: true,
+        total: finalData.length,
+        data: finalData,
+      };
 
-      const searchValue = search.replace(/\s+/g, "").toLowerCase();
-
-      finalData = finalData.filter((item: any) => {
-
-        const name = item.name?.replace(/\s+/g, "").toLowerCase();
-        const email = item.email?.replace(/\s+/g, "").toLowerCase();
-        const phone = item.phoneNumber?.replace(/\s+/g, "").toLowerCase();
-
-        return (
-          name?.includes(searchValue) ||
-          email?.includes(searchValue) ||
-          phone?.includes(searchValue)
-        );
-
-      });
+    } catch (err) {
+      console.error(err);
+      ctx.throw(500, "Failed to fetch pending clients");
     }
-
-    ctx.body = {
-      success: true,
-      total: finalData.length,
-      data: finalData,
-    };
-
-  } catch (err) {
-    console.error(err);
-    ctx.throw(500, "Failed to fetch pending clients");
   }
-}
 
 };

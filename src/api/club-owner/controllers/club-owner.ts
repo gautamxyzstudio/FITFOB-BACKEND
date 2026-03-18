@@ -56,6 +56,15 @@ export default factories.createCoreController(
           });
         }
 
+      finalData = finalData.map(item => {
+  const obj = JSON.parse(JSON.stringify(item)); // 🔥 important
+
+  return {
+    ...obj,
+    isRead: (obj.read_by_admins || []).length > 0
+  };
+});
+
         ctx.body = {
           success: true,
           total: finalData.length,
@@ -108,6 +117,15 @@ export default factories.createCoreController(
             );
           });
         }
+
+       finalData = finalData.map(item => {
+  const obj = JSON.parse(JSON.stringify(item)); // 🔥 important
+
+  return {
+    ...obj,
+    isRead: (obj.read_by_admins || []).length > 0
+  };
+});
 
         ctx.body = {
           success: true,
