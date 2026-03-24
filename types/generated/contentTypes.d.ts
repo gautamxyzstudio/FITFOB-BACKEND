@@ -448,6 +448,8 @@ export interface ApiClientDetailClientDetail
       Schema.Attribute.Private;
     date_of_birth: Schema.Attribute.Date;
     email: Schema.Attribute.Email;
+    faceMatched: Schema.Attribute.Boolean;
+    faceSimilarity: Schema.Attribute.Decimal;
     gender: Schema.Attribute.String;
     governmentId: Schema.Attribute.Media<
       'images' | 'files' | 'videos' | 'audios'

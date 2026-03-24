@@ -69,6 +69,13 @@
     "read_by_admins": {
       "type": "json",
       "default": []
-    }
+    },
+    "faceMatched": {
+  "type": "boolean",
+  "default": null
+},
+"faceSimilarity": {
+  "type": "decimal"
+}
   }
 }
