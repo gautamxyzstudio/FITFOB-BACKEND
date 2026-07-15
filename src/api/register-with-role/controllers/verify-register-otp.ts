@@ -40,7 +40,9 @@ export default {
       identifier = normalizePhone(identifier);
 
       if (!signupToken)
-        return ctx.badRequest("Verification session expired. Please request OTP again.");
+        return ctx.badRequest(
+          "Verification session expired. Please request OTP again.",
+        );
 
       const logs: string[] = [];
       logs.push(`[VERIFY] ${identifier}`);
@@ -55,18 +57,23 @@ export default {
             signupToken,
             purpose: "register",
           },
-        }
+        },
       );
       const record = records[0];
       if (!record)
-        return ctx.badRequest("Invalid or expired verification session. Please register again.");
-      
+        return ctx.badRequest(
+          "Invalid or expired verification session. Please register again.",
+        );
+
       /* ---------- OTP EXPIRY (FIXED) ---------- */
 
       const otpExpiresAt = new Date(record.expires_at).getTime();
 
       if (Date.now() >= otpExpiresAt) {
-        await strapi.entityService.delete("api::otp-request.otp-request", record.id);
+        await strapi.entityService.delete(
+          "api::otp-request.otp-request",
+          record.id,
+        );
         return ctx.badRequest("OTP expired. Please resend OTP.");
       }
 
@@ -74,14 +81,21 @@ export default {
 
       const valid = await bcrypt.compare(otp, record.otp_hash);
       if (!valid) {
-        await strapi.entityService.update("api::otp-request.otp-request", record.id, {
-          data: { attempts: record.attempts + 1 },
-        });
+        await strapi.entityService.update(
+          "api::otp-request.otp-request",
+          record.id,
+          {
+            data: { attempts: record.attempts + 1 },
+          },
+        );
         return ctx.badRequest("Invalid OTP");
       }
 
       // consume OTP
-      await strapi.entityService.delete("api::otp-request.otp-request", record.id);
+      await strapi.entityService.delete(
+        "api::otp-request.otp-request",
+        record.id,
+      );
 
       /* ---------- FETCH PENDING SIGNUP ---------- */
 
@@ -92,7 +106,7 @@ export default {
             identifier,
             signupToken,
           },
-        }
+        },
       );
 
       const pending = pendingRecords[0];
@@ -105,66 +119,19 @@ export default {
       const password = signupData.password;
       const role = signupData.role ?? "Client";
 
-   const username = email
-  ? email.toLowerCase()
-  : phone;
+      const username = email ? email.toLowerCase() : phone;
 
-      /* ---------- COGNITO FIRST ---------- */
-
-      let cognitoSub: string;
-      const cognitoIdentifier =
-        phone !== null ? phone : (email as string).toLowerCase();
-      try {
-        const result = await createCognitoUser(
-          cognitoIdentifier,
-          password,
-          username,
-          !!phone
-        );
-
-        cognitoSub = result.sub;
-        logs.push(...result.logs);
-
-        const groupResult = await addUserToCognitoGroup(cognitoSub, role);
-        logs.push(...groupResult.logs);
-
-        logs.push("COGNITO USER CREATED ✔");
-
-        const groupName =
-          role === "Admin"
-            ? "Admin_users"
-            : role === "ClubOwner"
-              ? "ClubOwner_users"
-              : "Member_users";
-
-        logs.push(`GROUP ASSIGNED ✔ → ${groupName}`);
-
-      } catch (err: any) {
-  console.error("COGNITO ERROR FULL:", JSON.stringify(err, null, 2));
-  strapi.log.error("COGNITO ERROR:", err);
-
-  if (pending?.id) {
-    await strapi.entityService.delete(
-      "api::pending-signup.pending-signup",
-      pending.id
-    );
-  }
-
-  return ctx.internalServerError(
-    err?.name || err?.message || "Account creation failed."
-  );
-}
       /* ---------- STRAPI USER ---------- */
 
       // normalize role (safety)
       const roleType =
-  role === "SuperAdmin"
-    ? "super-admin"
-    : role === "Admin"
-    ? "admin"
-    : role === "ClubOwner"
-    ? "clubowner"
-    : "client";
+        role === "SuperAdmin"
+          ? "super-admin"
+          : role === "Admin"
+          ? "admin"
+          : role === "ClubOwner"
+          ? "clubowner"
+          : "client";
 
       // fetch role from Strapi
       const strapiRole = await strapi.db
@@ -180,21 +147,87 @@ export default {
 
       const userService = strapi.plugin("users-permissions").service("user");
 
-      const user = await userService.add({
-        username,
-        email: email || `${phone}@phone.user`,
-        password,
-        confirmed: true,
-        provider: "local",
-        role: strapiRole.id,
-      });
-
-      await strapi.db.query("plugin::users-permissions.user").update({
-        where: { id: user.id },
-        data: { phoneNumber: phone, cognitoSub, isVerified: false , verification_status: "pending"},
-      });
+      let user;
+      try {
+        user = await userService.add({
+          username,
+          email: email || `${phone}@phone.user`,
+          password,
+          confirmed: true,
+          provider: "local",
+          role: strapiRole.id,
+        });
+      } catch (err: any) {
+        strapi.log.error("STRAPI USER CREATION ERROR:", err);
+        return ctx.internalServerError(
+          err?.message || "Account creation failed in Strapi.",
+        );
+      }
 
       logs.push("STRAPI USER CREATED ✔");
+
+      /* ---------- COGNITO ---------- */
+
+      let cognitoSub: string;
+      const cognitoIdentifier =
+        phone !== null ? phone : (email as string).toLowerCase();
+      try {
+        const result = await createCognitoUser(
+          cognitoIdentifier,
+          password,
+          username,
+          !!phone,
+        );
+
+        cognitoSub = result.sub;
+        logs.push(...result.logs);
+
+        const groupResult = await addUserToCognitoGroup(cognitoSub, role);
+        logs.push(...groupResult.logs);
+
+        logs.push("COGNITO USER CREATED ✔");
+
+        const groupName =
+          role === "Admin"
+            ? "Admin_users"
+            : role === "ClubOwner"
+            ? "ClubOwner_users"
+            : "Member_users";
+
+        logs.push(`GROUP ASSIGNED ✔ → ${groupName}`);
+      } catch (err: any) {
+        console.error("COGNITO ERROR FULL:", JSON.stringify(err, null, 2));
+        strapi.log.error("COGNITO ERROR:", err);
+
+        // Rollback Strapi User
+        if (user?.id) {
+          await strapi.db.query("plugin::users-permissions.user").delete({
+            where: { id: user.id },
+          });
+        }
+
+        if (pending?.id) {
+          await strapi.entityService.delete(
+            "api::pending-signup.pending-signup",
+            pending.id,
+          );
+        }
+
+        return ctx.internalServerError(
+          err?.name || err?.message || "Account creation failed.",
+        );
+      }
+
+      /* ---------- UPDATE STRAPI USER WITH COGNITO SUB ---------- */
+      await strapi.db.query("plugin::users-permissions.user").update({
+        where: { id: user.id },
+        data: {
+          phoneNumber: phone,
+          cognitoSub,
+          isVerified: false,
+          verification_status: "pending",
+        },
+      });
 
       /* ---------- LOGIN ---------- */
 
@@ -202,7 +235,6 @@ export default {
       try {
         tokens = await cognitoLogin(cognitoIdentifier, password);
       } catch (e) {
-
         // rollback strapi user if login fails
         await strapi.db.query("plugin::users-permissions.user").delete({
           where: { id: user.id },
@@ -210,11 +242,11 @@ export default {
 
         await strapi.entityService.delete(
           "api::pending-signup.pending-signup",
-          pending.id
+          pending.id,
         );
 
         return ctx.internalServerError(
-          "Account created but login failed. Please register again."
+          "Account created but login failed. Please register again.",
         );
       }
       const jwtService = strapi.plugin("users-permissions").service("jwt");
@@ -224,13 +256,15 @@ export default {
 
       await strapi.entityService.delete(
         "api::pending-signup.pending-signup",
-        pending.id
+        pending.id,
       );
 
-      const fullUser = await strapi.db.query("plugin::users-permissions.user").findOne({
-        where: { id: user.id },
-        populate: ["role"],
-      });
+      const fullUser = await strapi.db
+        .query("plugin::users-permissions.user")
+        .findOne({
+          where: { id: user.id },
+          populate: ["role"],
+        });
 
       ctx.body = {
         jwt,
@@ -258,14 +292,13 @@ export default {
 
       /* ---------- print logs AFTER HTTP response ---------- */
       postVerifyLogs(logs);
-
     } catch (err: any) {
-  strapi.log.error("VERIFY ERROR:", err);
+      strapi.log.error("VERIFY ERROR:", err);
 
-  return ctx.internalServerError({
-    message: err?.message || "OTP verification failed",
-    stack: err?.stack,
-  });
-}
+      return ctx.internalServerError({
+        message: err?.message || "OTP verification failed",
+        stack: err?.stack,
+      });
+    }
   },
 };
