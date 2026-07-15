@@ -152,7 +152,7 @@ export default {
           email,
           password,
           confirmed: true,
-          provider: "google",
+          provider: "local",
           role: strapiRole.id,
         });
       } catch (err) {
