@@ -29,7 +29,7 @@ export default [
   {
     name: "strapi::cors",
     config: {
-      origin: ["http://localhost:1337", "http://localhost:5173","https://admin.fitfob.com"],
+      origin: ["http://localhost:1337", "https://localhost:5173","https://admin.fitfob.com"],
       credentials: true,
     },
   },
