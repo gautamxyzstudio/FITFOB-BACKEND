@@ -326,7 +326,7 @@ export default {
     }
   },
 
-    /* ================= STEP 6 GOVERNMENT ID & SELFIE MATCH AND SUBMIT ================= */
+  /* ================= STEP 6 GOVERNMENT ID & SELFIE MATCH AND SUBMIT ================= */
 
   async verifyClient(ctx: Context) {
     try {
@@ -363,7 +363,7 @@ export default {
       const idUrl: string = pendingClient.governmentId.url;
 
       const baseUrl =
-  process.env.BACKEND_URL || strapi.config.get("server.url");
+        process.env.BACKEND_URL || strapi.config.get("server.url");
 
       const fullSelfieUrl = selfieUrl.startsWith("http")
         ? selfieUrl
@@ -418,6 +418,16 @@ export default {
           },
         }
       );
+
+      if (verificationStatus === "in-review") {
+        return ctx.send({
+          success: true,
+          status: "in-review",
+          similarity: result.similarity,
+          message:
+            "Your verification has been submitted for manual review.",
+        });
+      }
 
       // CLIENT CREATION LOGIC 
       const client = await strapi.entityService.create(CLIENT_UID, {
@@ -478,195 +488,6 @@ export default {
       return ctx.internalServerError("Verification failed");
     }
   },
-
-  //   async governmentId(ctx: Context) {
-  //     const draft: any = await getEditableDraft(ctx);
-  //     if (!draft) return;
-
-  //     const validationError = await validateBeforeClientCreation(draft);
-  //     if (validationError) return ctx.badRequest(validationError);
-
-  //     const sessionUser = ctx.state.user;
-  //     const user = await getFullUser(sessionUser.id);
-  //     const files: any = ctx.request.files;
-
-  //     if (!files || !files.governmentId)
-  //       return ctx.badRequest("Please upload government ID");
-
-  //     const uploadService = strapi.plugin("upload").service("upload");
-
-  //     const rawFile = Array.isArray(files.governmentId)
-  //       ? files.governmentId[0]
-  //       : files.governmentId;
-
-  //     const uploaded = await uploadService.upload({
-  //       data: { fileInfo: { folder: UPLOAD_FOLDER_ID } },
-  //       files: rawFile,
-  //     });
-
-  //     const idFile = uploaded[0];
-
-  //     const finalDraft: any = await strapi.entityService.findOne(
-  //       PENDING_UID,
-  //       draft.id,
-  //       { populate: ["selfieUpload"] }
-  //     );
-
-  //     // CLIENT CREATION LOGIC 
-  //     const client = await strapi.entityService.create(CLIENT_UID, {
-  //       data: {
-  //         user: user.id,
-  //         name: finalDraft.name,
-  //         gender: finalDraft.gender,
-  //         email: finalDraft.email,
-  //         phoneNumber: finalDraft.phoneNumber,
-  //         date_of_birth: finalDraft.date_of_birth,
-  //         height: finalDraft.height,
-  //         weight: finalDraft.weight,
-  //         latitude: finalDraft.latitude,
-  //         longitude: finalDraft.longitude,
-  //         selfieUpload: finalDraft.selfieUpload?.id ?? null,
-  //         governmentId: idFile.id,
-  //         approvedAt: new Date(),
-  //       },
-  //     });
-
-  //     // 🔒 lock draft (DO NOT DELETE)
-  //     await strapi.entityService.update(PENDING_UID, draft.id, {
-  //       data: {
-  //         status: "completed",
-  //         governmentId: idFile.id,
-  //         currentStep: 5,
-  //       },
-  //     });
-
-  //     /* 🔥 FETCH CLIENT WITH MEDIA */
-  //     const fullClient = await strapi.entityService.findOne(
-  //       CLIENT_UID,
-  //       client.id,
-  //       {
-  //         populate: {
-  //           selfieUpload: true,
-  //           governmentId: true,
-  //           user: true,
-  //         },
-  //       }
-  //     );
-
-  //     /* 🧹 DELETE THE PENDING DRAFT AFTER SUCCESSFUL CREATION */
-  // await strapi.entityService.delete(PENDING_UID, draft.id);
-
-  //     ctx.send({
-  //       success: true,
-  //       message: "Client profile created successfully",
-  //       client: fullClient,
-  //     });
-  //   },
-
-   //   async verifyClientId(ctx: Context) {
-  //     try {
-  //       const { clientId } = ctx.params;
-
-  //       if (!clientId) {
-  //         return ctx.badRequest("clientId is required");
-  //       }
-
-  //       // 1. Fetch client
-  //       const client: any = await strapi.entityService.findOne(
-  //         "api::client-detail.client-detail",
-  //         clientId,
-  //         {
-  //           populate: ["selfieUpload", "governmentId"],
-  //         }
-  //       );
-
-  //       if (!client) {
-  //         return ctx.notFound("Client not found");
-  //       }
-
-  //       // 🔥 2. If already verified → return cached result
-  //       if (client.faceMatched !== null && client.faceMatched !== undefined) {
-  //         return ctx.send({
-  //           success: true,
-  //           clientId,
-  //           matched: client.faceMatched,
-  //           similarity: client.faceSimilarity,
-  //           source: "cache", // 🔥 important
-  //         });
-  //       }
-
-  //       // 3. Validate images
-  //       if (!client.selfieUpload || !client.governmentId) {
-  //         return ctx.badRequest("Selfie or Government ID missing");
-  //       }
-
-  //       const selfieUrl: string = client.selfieUpload.url;
-  //       const idUrl: string = client.governmentId.url;
-
-  //       const baseUrl =
-  //         strapi.config.get("server.url") || "http://localhost:1337/api";
-
-  //       const fullSelfieUrl = selfieUrl.startsWith("http")
-  //         ? selfieUrl
-  //         : `${baseUrl}${selfieUrl}`;
-
-  //       const fullIdUrl = idUrl.startsWith("http")
-  //         ? idUrl
-  //         : `${baseUrl}${idUrl}`;
-
-  //       // 4. Convert to buffer
-  //       const [selfieRes, idRes] = await Promise.all([
-  //         axios.get<ArrayBuffer>(fullSelfieUrl, {
-  //           responseType: "arraybuffer",
-  //         }),
-  //         axios.get<ArrayBuffer>(fullIdUrl, {
-  //           responseType: "arraybuffer",
-  //         }),
-  //       ]);
-
-  //       const selfieBuffer = Buffer.from(selfieRes.data);
-  //       const idBuffer = Buffer.from(idRes.data);
-
-  //       // 5. AWS compare
-  //       const result = await compareFaces(selfieBuffer, idBuffer);
-
-  //       // 🔥 6. Decide status (business logic)
-  //       let matched = false;
-
-  //       if (result.similarity >= 90) {
-  //         matched = true; // auto approve
-  //       } else if (result.similarity >= 80) {
-  //         matched = false; // manual review zone
-  //       } else {
-  //         matched = false; // reject
-  //       }
-
-  //       // 7. Save result (IMPORTANT)
-  //       await strapi.entityService.update(
-  //         "api::client-detail.client-detail",
-  //         clientId,
-  //         {
-  //           data: {
-  //             faceMatched: matched,
-  //             faceSimilarity: result.similarity,
-  //             approvedAt: matched ? new Date() : null,
-  //           },
-  //         }
-  //       );
-
-  //       // 8. Response
-  //       return ctx.send({
-  //         success: true,
-  //         clientId,
-  //         matched,
-  //         similarity: result.similarity,
-  //         source: "aws",
-  //       });
-  //     } catch (error) {
-  //       console.error("VERIFY ERROR:", error);
-  //       return ctx.internalServerError("Verification failed");
-  //     }
-  //   },
 
 };
 
