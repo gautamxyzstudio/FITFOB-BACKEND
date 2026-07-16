@@ -75,6 +75,21 @@
     },
     "date_of_birth": {
       "type": "date"
+    },
+    "documentVerified": {
+      "type": "boolean",
+      "default": false
+    },
+    "documentType": {
+      "type": "enumeration",
+      "enum": [
+        "aadhaar",
+        "passport",
+        "driving-license",
+        "pan",
+        "voter-id",
+        "unknown"
+      ]
     }
   }
 }

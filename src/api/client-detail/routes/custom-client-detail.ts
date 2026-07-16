@@ -32,14 +32,6 @@ export default {
         auth: {}
       }
     },
-      {
-      method: "POST",
-      path: "/verify-client/:clientId",
-      handler: "custom-client-detail.verifyClientId",
-      config: {
-        auth: false,
-      },
-    },
 
   ]
 };

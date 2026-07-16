@@ -448,7 +448,6 @@ export interface ApiClientDetailClientDetail
       Schema.Attribute.Private;
     date_of_birth: Schema.Attribute.Date;
     email: Schema.Attribute.Email;
-    faceMatched: Schema.Attribute.Boolean;
     faceSimilarity: Schema.Attribute.Decimal;
     gender: Schema.Attribute.String;
     governmentId: Schema.Attribute.Media<
@@ -632,6 +631,11 @@ export interface ApiPendingClientDetailPendingClientDetail
       Schema.Attribute.Private;
     currentStep: Schema.Attribute.Integer & Schema.Attribute.DefaultTo<1>;
     date_of_birth: Schema.Attribute.Date;
+    documentType: Schema.Attribute.Enumeration<
+      ['aadhaar', 'passport', 'driving-license', 'pan', 'voter-id', 'unknown']
+    >;
+    documentVerified: Schema.Attribute.Boolean &
+      Schema.Attribute.DefaultTo<false>;
     email: Schema.Attribute.Email;
     gender: Schema.Attribute.String;
     governmentId: Schema.Attribute.Media<
