@@ -14,7 +14,7 @@
       "name": "Apache 2.0",
       "url": "https://www.apache.org/licenses/LICENSE-2.0.html"
     },
-    "x-generation-date": "2026-07-15T12:00:20.588Z"
+    "x-generation-date": "2026-07-16T11:17:13.029Z"
   },
   "x-strapi-config": {
     "plugins": [
@@ -5311,9 +5311,6 @@
                 "format": "date"
               },
               "read_by_admins": {},
-              "faceMatched": {
-                "type": "boolean"
-              },
               "faceSimilarity": {
                 "type": "number",
                 "format": "float"
@@ -6824,9 +6821,6 @@
             "format": "date"
           },
           "read_by_admins": {},
-          "faceMatched": {
-            "type": "boolean"
-          },
           "faceSimilarity": {
             "type": "number",
             "format": "float"
@@ -7296,9 +7290,6 @@
                   "format": "date"
                 },
                 "read_by_admins": {},
-                "faceMatched": {
-                  "type": "boolean"
-                },
                 "faceSimilarity": {
                   "type": "number",
                   "format": "float"
@@ -14019,6 +14010,20 @@
                 "type": "string",
                 "format": "date"
               },
+              "documentVerified": {
+                "type": "boolean"
+              },
+              "documentType": {
+                "type": "string",
+                "enum": [
+                  "aadhaar",
+                  "passport",
+                  "driving-license",
+                  "pan",
+                  "voter-id",
+                  "unknown"
+                ]
+              },
               "locale": {
                 "type": "string"
               },
@@ -15498,6 +15503,20 @@
             "type": "string",
             "format": "date"
           },
+          "documentVerified": {
+            "type": "boolean"
+          },
+          "documentType": {
+            "type": "string",
+            "enum": [
+              "aadhaar",
+              "passport",
+              "driving-license",
+              "pan",
+              "voter-id",
+              "unknown"
+            ]
+          },
           "createdAt": {
             "type": "string",
             "format": "date-time"
@@ -15967,6 +15986,20 @@
                 "date_of_birth": {
                   "type": "string",
                   "format": "date"
+                },
+                "documentVerified": {
+                  "type": "boolean"
+                },
+                "documentType": {
+                  "type": "string",
+                  "enum": [
+                    "aadhaar",
+                    "passport",
+                    "driving-license",
+                    "pan",
+                    "voter-id",
+                    "unknown"
+                  ]
                 },
                 "createdAt": {
                   "type": "string",
