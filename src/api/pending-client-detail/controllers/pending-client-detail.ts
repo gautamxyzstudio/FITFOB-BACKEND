@@ -87,35 +87,73 @@ export default {
 
   /* ================= START / RESUME ================= */
   async me(ctx: Context) {
-    const sessionUser = ctx.state.user;
-    if (!sessionUser) return ctx.unauthorized("Login required");
+    try {
+      const sessionUser = ctx.state.user;
 
-    const user = await getFullUser(sessionUser.id);
+      if (!sessionUser) {
+        return ctx.unauthorized("Login required");
+      }
 
-    const existing = await strapi.db.query(CLIENT_UID).findOne({
-      where: { user: user.id },
-    });
+      const user = await getFullUser(sessionUser.id);
 
-    if (existing) return ctx.send({ status: "completed", currentStep: 5 });
+      /* ================= CHECK CLIENT DETAIL ================= */
 
-    let draft: any = await getDraft(user.id);
-
-    if (!draft) {
-      draft = await strapi.entityService.create(PENDING_UID, {
-        data: {
-          user: user.id,
-          email: user.email,
-          phoneNumber: user.phoneNumber || null,
-          currentStep: 1,
-          status: "draft",
+      const existing = await strapi.db.query(CLIENT_UID).findOne({
+        where: {
+          user: {
+            id: user.id,
+          },
         },
       });
-    }
 
-    ctx.send({
-      currentStep: draft.currentStep,
-      status: draft.status,
-    });
+      /* ================= CLIENT DETAIL EXISTS ================= */
+
+      if (existing) {
+        return ctx.badRequest("Client detail already exists");
+      }
+
+      /* ================= CHECK PENDING CLIENT DETAIL ================= */
+
+      const draft: any = await strapi.db.query(PENDING_UID).findOne({
+        where: {
+          user: user.id,
+        },
+        populate: {
+          user: true,
+          selfieUpload: true,
+          governmentId: true,
+        },
+      });
+
+      /* ================= PENDING DETAIL EXISTS ================= */
+
+      if (draft) {
+        return ctx.send({
+          currentStep: draft.currentStep,
+          status: draft.status,
+          details: draft,
+        });
+      }
+
+      /* ================= NEITHER EXISTS ================= */
+      // Do NOT create a pending client detail here.
+      // Just return the default onboarding state.
+
+      return ctx.send({
+        currentStep: 1,
+        status: "draft",
+      });
+
+    } catch (error) {
+      strapi.log.error(
+        "Error fetching client onboarding details:",
+        error
+      );
+
+      return ctx.internalServerError(
+        "Failed to fetch client onboarding details"
+      );
+    }
   },
 
   /* ================= STEP 1 BASIC INFO ================= */
