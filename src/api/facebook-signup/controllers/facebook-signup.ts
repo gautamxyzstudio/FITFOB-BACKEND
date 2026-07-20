@@ -63,6 +63,15 @@ export default {
             ======================================================== */
 
             if (existingUser && existsInCognito) {
+
+                /* ================= ROLE CHECK ================= */
+
+                if (existingUser.role?.type !== "client") {
+                    return ctx.forbidden(
+                        "This account is not registered as a Client."
+                    );
+                }
+
                 const jwtService = strapi
                     .plugin("users-permissions")
                     .service("jwt");
@@ -389,6 +398,15 @@ export default {
             ======================================================== */
 
             if (existingUser && existsInCognito) {
+
+                /* ================= ROLE CHECK ================= */
+
+                if (existingUser.role?.type !== "clubowner") {
+                    return ctx.forbidden(
+                        "This account is not registered as a ClubOwner."
+                    );
+                }
+
                 const jwtService = strapi
                     .plugin("users-permissions")
                     .service("jwt");
