@@ -158,11 +158,13 @@ export default {
 
       // normalize role (safety)
       const roleType =
-        role === "Admin"
-          ? "admin"
-          : role === "ClubOwner"
-            ? "clubowner"
-            : "client";
+  role === "SuperAdmin"
+    ? "super-admin"
+    : role === "Admin"
+    ? "admin"
+    : role === "ClubOwner"
+    ? "clubowner"
+    : "client";
 
       // fetch role from Strapi
       const strapiRole = await strapi.db

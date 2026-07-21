@@ -42,6 +42,8 @@ export const addUserToCognitoGroup = async (
   } catch (error) {
     log("COGNITO GROUP ASSIGN ERROR");
     log(String(error));
+
+    throw error;
   }
 
   return { logs };

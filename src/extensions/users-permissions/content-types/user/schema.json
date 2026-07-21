@@ -98,11 +98,21 @@
         "pending",
         "rejected",
         "approved",
-        "in-review",
-        "more-information-required",
-        "document-mising",
-        "action-pending"
+        "in-review"
       ]
+    },
+    "rejection_reason": {
+      "type": "string"
+    },
+    "approved_by": {
+      "type": "relation",
+      "relation": "oneToOne",
+      "target": "plugin::users-permissions.user"
+    },
+    "rejected_by": {
+      "type": "relation",
+      "relation": "oneToOne",
+      "target": "plugin::users-permissions.user"
     }
   }
 }

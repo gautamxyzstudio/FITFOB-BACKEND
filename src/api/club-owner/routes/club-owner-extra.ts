@@ -31,6 +31,14 @@ export default {
       config: {
         auth: {}
       }
+    },
+    {
+      method: "POST",
+      path: "/club-owners/:id/read",
+      handler: "club-owner.markClubRead",
+        config: {     
+        auth: {},
+    }
     }
   ],
-};
+};  

@@ -56,6 +56,15 @@ export default factories.createCoreController(
           });
         }
 
+      finalData = finalData.map(item => {
+  const obj = JSON.parse(JSON.stringify(item)); // 🔥 important
+
+  return {
+    ...obj,
+    isRead: (obj.read_by_admins || []).length > 0
+  };
+});
+
         ctx.body = {
           success: true,
           total: finalData.length,
@@ -108,6 +117,15 @@ export default factories.createCoreController(
             );
           });
         }
+
+       finalData = finalData.map(item => {
+  const obj = JSON.parse(JSON.stringify(item)); // 🔥 important
+
+  return {
+    ...obj,
+    isRead: (obj.read_by_admins || []).length > 0
+  };
+});
 
         ctx.body = {
           success: true,
@@ -225,6 +243,54 @@ export default factories.createCoreController(
         return ctx.internalServerError("Something went wrong");
       }
 
+    },
+
+    /* =======================================================
+    MARK CLUB OWNER REQUEST AS READ BY ADMIN
+   ======================================================= */
+
+    async markClubRead(ctx: any) {
+      try {
+        const admin = ctx.state.user;
+        const { id } = ctx.params;
+
+        if (!admin) {
+          return ctx.unauthorized("Admin not found");
+        }
+
+        const club = await strapi.db
+          .query("api::club-owner.club-owner")
+          .findOne({
+            where: { id },
+            select: ["id", "read_by_admins"],
+          });
+
+        if (!club) {
+          return ctx.notFound("Club request not found");
+        }
+
+        let readers = club.read_by_admins || [];
+
+        if (!readers.includes(admin.id)) {
+          readers.push(admin.id);
+
+          await strapi.db
+            .query("api::club-owner.club-owner")
+            .update({
+              where: { id },
+              data: {
+                read_by_admins: readers,
+              },
+            });
+        }
+
+        ctx.send({
+          message: "Club request marked as read",
+        });
+      } catch (error) {
+        strapi.log.error("CLUB READ ERROR:", error);
+        ctx.internalServerError("Something went wrong");
+      }
     }
 
   })

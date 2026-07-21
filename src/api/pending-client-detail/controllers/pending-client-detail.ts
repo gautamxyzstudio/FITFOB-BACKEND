@@ -1,6 +1,8 @@
 import { Context } from "koa";
 import { generateClientAssets } from "../../../utils/generateClientId";
-
+import axios from "axios";
+import { compareFaces } from "../../../utils/awsRekognition";
+import { validateGovernmentDocument } from "../../../services/aws-document-validator";
 const PENDING_UID = "api::pending-client-detail.pending-client-detail";
 const CLIENT_UID = "api::client-detail.client-detail";
 
@@ -86,35 +88,73 @@ export default {
 
   /* ================= START / RESUME ================= */
   async me(ctx: Context) {
-    const sessionUser = ctx.state.user;
-    if (!sessionUser) return ctx.unauthorized("Login required");
+    try {
+      const sessionUser = ctx.state.user;
 
-    const user = await getFullUser(sessionUser.id);
+      if (!sessionUser) {
+        return ctx.unauthorized("Login required");
+      }
 
-    const existing = await strapi.db.query(CLIENT_UID).findOne({
-      where: { user: user.id },
-    });
+      const user = await getFullUser(sessionUser.id);
 
-    if (existing) return ctx.send({ status: "completed", currentStep: 5 });
+      /* ================= CHECK CLIENT DETAIL ================= */
 
-    let draft: any = await getDraft(user.id);
-
-    if (!draft) {
-      draft = await strapi.entityService.create(PENDING_UID, {
-        data: {
-          user: user.id,
-          email: user.email,
-          phoneNumber: user.phoneNumber || null,
-          currentStep: 1,
-          status: "draft",
+      const existing = await strapi.db.query(CLIENT_UID).findOne({
+        where: {
+          user: {
+            id: user.id,
+          },
         },
       });
-    }
 
-    ctx.send({
-      currentStep: draft.currentStep,
-      status: draft.status,
-    });
+      /* ================= CLIENT DETAIL EXISTS ================= */
+
+      if (existing) {
+        return ctx.badRequest("Client detail already exists");
+      }
+
+      /* ================= CHECK PENDING CLIENT DETAIL ================= */
+
+      const draft: any = await strapi.db.query(PENDING_UID).findOne({
+        where: {
+          user: user.id,
+        },
+        populate: {
+          user: true,
+          selfieUpload: true,
+          governmentId: true,
+        },
+      });
+
+      /* ================= PENDING DETAIL EXISTS ================= */
+
+      if (draft) {
+        return ctx.send({
+          currentStep: draft.currentStep,
+          status: draft.status,
+          details: draft,
+        });
+      }
+
+      /* ================= NEITHER EXISTS ================= */
+      // Do NOT create a pending client detail here.
+      // Just return the default onboarding state.
+
+      return ctx.send({
+        currentStep: 1,
+        status: "draft",
+      });
+
+    } catch (error) {
+      strapi.log.error(
+        "Error fetching client onboarding details:",
+        error
+      );
+
+      return ctx.internalServerError(
+        "Failed to fetch client onboarding details"
+      );
+    }
   },
 
   /* ================= STEP 1 BASIC INFO ================= */
@@ -225,6 +265,7 @@ export default {
   },
 
   /* ================= STEP 5 GOVERNMENT ID & FINAL SUBMIT ================= */
+
   async governmentId(ctx: Context) {
     const draft: any = await getEditableDraft(ctx);
     if (!draft) return;
@@ -232,12 +273,11 @@ export default {
     const validationError = await validateBeforeClientCreation(draft);
     if (validationError) return ctx.badRequest(validationError);
 
-    const sessionUser = ctx.state.user;
-    const user = await getFullUser(sessionUser.id);
     const files: any = ctx.request.files;
 
-    if (!files || !files.governmentId)
+    if (!files || !files.governmentId) {
       return ctx.badRequest("Please upload government ID");
+    }
 
     const uploadService = strapi.plugin("upload").service("upload");
 
@@ -245,72 +285,250 @@ export default {
       ? files.governmentId[0]
       : files.governmentId;
 
+    // Upload file
     const uploaded = await uploadService.upload({
-      data: { fileInfo: { folder: UPLOAD_FOLDER_ID } },
+      data: {
+        fileInfo: {
+          folder: UPLOAD_FOLDER_ID,
+        },
+      },
       files: rawFile,
     });
 
     const idFile = uploaded[0];
 
-    const finalDraft: any = await strapi.entityService.findOne(
-      PENDING_UID,
-      draft.id,
-      { populate: ["selfieUpload"] }
-    );
+    try {
+      /* ==========================================
+         DOWNLOAD FILE
+      ========================================== */
 
-    /* ---------- GENERATE CLIENT ID + QR FIRST ---------- */
-    const { clientId} = await generateClientAssets();
+      const fileUrl = idFile.url.startsWith("http")
+        ? idFile.url
+        : `${strapi.config.get("server.url")}${idFile.url}`;
 
-    // CLIENT CREATION LOGIC 
-    const client = await strapi.entityService.create(CLIENT_UID, {
-      data: {
-        user: user.id,
-        name: finalDraft.name,
-        gender: finalDraft.gender,
-        email: finalDraft.email,
-        phoneNumber: finalDraft.phoneNumber,
-        date_of_birth: finalDraft.date_of_birth,
-        height: finalDraft.height,
-        weight: finalDraft.weight,
-        latitude: finalDraft.latitude,
-        longitude: finalDraft.longitude,
-        selfieUpload: finalDraft.selfieUpload?.id ?? null,
-        governmentId: idFile.id,
-        approvedAt: new Date(),
-        clientId: clientId,
-      },
-    });
+      const response = await axios.get<ArrayBuffer>(fileUrl, {
+        responseType: "arraybuffer",
+      });
 
-    // 🔒 lock draft (DO NOT DELETE)
-    await strapi.entityService.update(PENDING_UID, draft.id, {
-      data: {
-        status: "completed",
-        governmentId: idFile.id,
-        currentStep: 5,
-      },
-    });
+      const buffer = Buffer.from(response.data);
 
-    /* 🔥 FETCH CLIENT WITH MEDIA */
-    const fullClient = await strapi.entityService.findOne(
-      CLIENT_UID,
-      client.id,
-      {
-        populate: {
-          selfieUpload: true,
-          governmentId: true,
-          user: true,
-        },
+      /* ==========================================
+         VALIDATE DOCUMENT (AWS)
+      ========================================== */
+
+      // You'll implement this service next
+      const documentResult = await validateGovernmentDocument(buffer);
+
+      if (!documentResult.valid) {
+        // Delete uploaded media
+        await uploadService.remove(idFile);
+
+        // Clear draft
+        await strapi.entityService.update(PENDING_UID, draft.id, {
+          data: {
+            governmentId: null,
+            documentVerified: false,
+            documentType: "unknown",
+          },
+        });
+
+        return ctx.badRequest("Please upload a valid government ID.");
       }
-    );
 
-    /* 🧹 DELETE THE PENDING DRAFT AFTER SUCCESSFUL CREATION */
-    await strapi.entityService.delete(PENDING_UID, draft.id);
+      /* ==========================================
+         SAVE TO PENDING DRAFT
+      ========================================== */
 
-    ctx.send({
-      success: true,
-      message: "Client profile created successfully",
-      client: fullClient,
-    });
+      await strapi.entityService.update(PENDING_UID, draft.id, {
+        data: {
+          governmentId: idFile.id,
+          documentVerified: true,
+          documentType: documentResult.documentType,
+          currentStep: 5,
+        },
+      });
+
+      return ctx.send({
+        success: true,
+        message: "Government ID uploaded successfully.",
+        documentType: documentResult.documentType,
+      });
+    } catch (error) {
+      console.error("Government ID validation error:", error);
+
+      // Cleanup uploaded media if AWS fails
+      try {
+        await uploadService.remove(idFile);
+      } catch (_) { }
+
+      return ctx.internalServerError("Unable to validate government ID.");
+    }
+  },
+
+  /* ================= STEP 6 GOVERNMENT ID & SELFIE MATCH AND SUBMIT ================= */
+
+  async verifyClient(ctx: Context) {
+    try {
+      const draft = await getEditableDraft(ctx);
+
+      if (!draft) {
+        return ctx.notFound("Pending client not found");
+      }
+
+      // 1. Fetch client
+      const pendingClient: any = await strapi.entityService.findOne(
+        PENDING_UID,
+        draft.id,
+        {
+          populate: ["selfieUpload", "governmentId", "user"],
+        }
+      );
+
+      if (!pendingClient) {
+        return ctx.notFound("Pending client not found");
+      }
+
+      if (!pendingClient.documentVerified) {
+        return ctx.badRequest("Government ID is not verified.");
+      }
+
+
+      // 3. Validate images
+      if (!pendingClient.selfieUpload || !pendingClient.governmentId) {
+        return ctx.badRequest("Selfie or Government ID missing");
+      }
+
+      const selfieUrl: string = pendingClient.selfieUpload.url;
+      const idUrl: string = pendingClient.governmentId.url;
+
+      const baseUrl =
+        process.env.BACKEND_URL || strapi.config.get("server.url");
+
+      const fullSelfieUrl = selfieUrl.startsWith("http")
+        ? selfieUrl
+        : `${baseUrl}${selfieUrl}`;
+
+      const fullIdUrl = idUrl.startsWith("http")
+        ? idUrl
+        : `${baseUrl}${idUrl}`;
+
+      // 4. Convert to buffer
+      const [selfieRes, idRes] = await Promise.all([
+        axios.get<ArrayBuffer>(fullSelfieUrl, {
+          responseType: "arraybuffer",
+        }),
+        axios.get<ArrayBuffer>(fullIdUrl, {
+          responseType: "arraybuffer",
+        }),
+      ]);
+
+      const selfieBuffer = Buffer.from(selfieRes.data);
+      const idBuffer = Buffer.from(idRes.data);
+
+      // 5. AWS compare
+      const result = await compareFaces(selfieBuffer, idBuffer);
+
+      // check existing
+      const existingClient = await strapi.db
+        .query(CLIENT_UID)
+        .findOne({
+          where: {
+            user: pendingClient.user.id,
+          },
+        });
+
+      if (existingClient) {
+        return ctx.badRequest("Client already exists.");
+      }
+
+      // 🔥 6. Decide status
+      const approved = result.similarity >= 90;
+
+      const verificationStatus = approved
+        ? "approved"
+        : "in-review";
+
+      await strapi.entityService.update(
+        "plugin::users-permissions.user",
+        pendingClient.user.id,
+        {
+          data: {
+            verification_status: verificationStatus,
+          },
+        }
+      );
+
+      if (verificationStatus === "in-review") {
+        return ctx.send({
+          success: true,
+          status: "in-review",
+          similarity: result.similarity,
+          message:
+            "Your verification has been submitted for manual review.",
+        });
+      }
+
+      const { clientId } = await generateClientAssets();
+
+      // CLIENT CREATION LOGIC 
+      const client = await strapi.entityService.create(CLIENT_UID, {
+        data: {
+          user: pendingClient.user.id,
+          name: pendingClient.name,
+          gender: pendingClient.gender,
+          email: pendingClient.email,
+          phoneNumber: pendingClient.phoneNumber,
+          date_of_birth: pendingClient.date_of_birth,
+          height: pendingClient.height,
+          weight: pendingClient.weight,
+          latitude: pendingClient.latitude,
+          longitude: pendingClient.longitude,
+
+          selfieUpload: pendingClient.selfieUpload.id,
+          governmentId: pendingClient.governmentId.id,
+
+          documentVerified: pendingClient.documentVerified,
+          documentType: pendingClient.documentType,
+
+          faceSimilarity: result.similarity,
+          clientId: clientId,
+        },
+      });
+
+      /* 🔥 FETCH CLIENT WITH MEDIA */
+      const fullClient = await strapi.entityService.findOne(
+        CLIENT_UID,
+        client.id,
+        {
+          populate: {
+            selfieUpload: true,
+            governmentId: true,
+            user: true,
+          },
+        }
+      );
+
+      /* 🧹 DELETE THE PENDING DRAFT AFTER SUCCESSFUL CREATION */
+      await strapi.entityService.delete(
+        PENDING_UID,
+        pendingClient.id
+      );
+
+      return ctx.send({
+        success: true,
+        status: verificationStatus,
+        similarity: result.similarity,
+        message:
+          verificationStatus === "approved"
+            ? "Client verified successfully."
+            : "Your verification has been submitted for manual review.",
+        client: fullClient,
+      });
+
+    } catch (error) {
+      console.error("VERIFY ERROR:", error);
+      return ctx.internalServerError("Verification failed");
+    }
   },
 
 };

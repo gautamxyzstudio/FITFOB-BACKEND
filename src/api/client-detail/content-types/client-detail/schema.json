@@ -86,7 +86,13 @@
       "type": "relation",
       "relation": "oneToMany",
       "target": "api::client-checkin.client-checkin",
-      "mappedBy": "client_detail"
+      "mappedBy": "client_detail"},
+    "read_by_admins": {
+      "type": "json",
+      "default": []
+    },
+    "faceSimilarity": {
+      "type": "decimal"
     }
   }
 }

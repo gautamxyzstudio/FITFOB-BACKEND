@@ -499,6 +499,7 @@ export interface ApiClientDetailClientDetail
       Schema.Attribute.Private;
     date_of_birth: Schema.Attribute.Date;
     email: Schema.Attribute.Email;
+    faceSimilarity: Schema.Attribute.Decimal;
     gender: Schema.Attribute.String;
     governmentId: Schema.Attribute.Media<
       'images' | 'files' | 'videos' | 'audios'
@@ -523,6 +524,7 @@ export interface ApiClientDetailClientDetail
     >;
     phoneNumber: Schema.Attribute.String;
     publishedAt: Schema.Attribute.DateTime;
+    read_by_admins: Schema.Attribute.JSON & Schema.Attribute.DefaultTo<[]>;
     selfieUpload: Schema.Attribute.Media<
       'images' | 'files' | 'videos' | 'audios'
     >;
@@ -633,6 +635,7 @@ export interface ApiClubOwnerClubOwner extends Struct.CollectionTypeSchema {
     phoneNumber: Schema.Attribute.String;
     pincode: Schema.Attribute.String;
     publishedAt: Schema.Attribute.DateTime;
+    read_by_admins: Schema.Attribute.JSON & Schema.Attribute.DefaultTo<[]>;
     services: Schema.Attribute.JSON;
     state: Schema.Attribute.String;
     updatedAt: Schema.Attribute.DateTime;
@@ -872,6 +875,11 @@ export interface ApiPendingClientDetailPendingClientDetail
       Schema.Attribute.Private;
     currentStep: Schema.Attribute.Integer & Schema.Attribute.DefaultTo<1>;
     date_of_birth: Schema.Attribute.Date;
+    documentType: Schema.Attribute.Enumeration<
+      ['aadhaar', 'passport', 'driving-license', 'pan', 'voter-id', 'unknown']
+    >;
+    documentVerified: Schema.Attribute.Boolean &
+      Schema.Attribute.DefaultTo<false>;
     email: Schema.Attribute.Email;
     gender: Schema.Attribute.String;
     governmentId: Schema.Attribute.Media<
@@ -1486,6 +1494,10 @@ export interface PluginUsersPermissionsUser
     draftAndPublish: false;
   };
   attributes: {
+    approved_by: Schema.Attribute.Relation<
+      'oneToOne',
+      'plugin::users-permissions.user'
+    >;
     blocked: Schema.Attribute.Boolean & Schema.Attribute.DefaultTo<false>;
     cognitoSub: Schema.Attribute.String;
     confirmationToken: Schema.Attribute.String & Schema.Attribute.Private;
@@ -1518,6 +1530,11 @@ export interface PluginUsersPermissionsUser
     phoneNumber: Schema.Attribute.String;
     provider: Schema.Attribute.String;
     publishedAt: Schema.Attribute.DateTime;
+    rejected_by: Schema.Attribute.Relation<
+      'oneToOne',
+      'plugin::users-permissions.user'
+    >;
+    rejection_reason: Schema.Attribute.String;
     resetPasswordToken: Schema.Attribute.String & Schema.Attribute.Private;
     role: Schema.Attribute.Relation<
       'manyToOne',
@@ -1533,15 +1550,7 @@ export interface PluginUsersPermissionsUser
         minLength: 3;
       }>;
     verification_status: Schema.Attribute.Enumeration<
-      [
-        'pending',
-        'rejected',
-        'approved',
-        'in-review',
-        'more-information-required',
-        'document-mising',
-        'action-pending',
-      ]
+      ['pending', 'rejected', 'approved', 'in-review']
     >;
   };
 }
