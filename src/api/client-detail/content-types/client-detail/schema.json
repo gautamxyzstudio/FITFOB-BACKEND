@@ -60,9 +60,7 @@
       "relation": "oneToOne",
       "target": "plugin::users-permissions.user"
     },
-    "approvedAt": {
-      "type": "datetime"
-    },
+   
     "date_of_birth": {
       "type": "date"
     },

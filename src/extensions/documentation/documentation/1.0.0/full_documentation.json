@@ -14,7 +14,7 @@
       "name": "Apache 2.0",
       "url": "https://www.apache.org/licenses/LICENSE-2.0.html"
     },
-    "x-generation-date": "2026-07-23T04:13:28.760Z"
+    "x-generation-date": "2026-07-23T11:15:57.312Z"
   },
   "x-strapi-config": {
     "plugins": [
@@ -9980,10 +9980,6 @@
                   }
                 }
               },
-              "approvedAt": {
-                "type": "string",
-                "format": "date-time"
-              },
               "date_of_birth": {
                 "type": "string",
                 "format": "date"
@@ -12441,10 +12437,6 @@
                 ],
                 "example": "string or id"
               },
-              "approvedAt": {
-                "type": "string",
-                "format": "date-time"
-              },
               "date_of_birth": {
                 "type": "string",
                 "format": "date"
@@ -14128,10 +14120,6 @@
               }
             }
           },
-          "approvedAt": {
-            "type": "string",
-            "format": "date-time"
-          },
           "date_of_birth": {
             "type": "string",
             "format": "date"
@@ -14559,10 +14547,6 @@
                           "type": "string"
                         }
                       }
-                    },
-                    "approvedAt": {
-                      "type": "string",
-                      "format": "date-time"
                     },
                     "date_of_birth": {
                       "type": "string",
@@ -19876,10 +19860,6 @@
                                         }
                                       }
                                     },
-                                    "approvedAt": {
-                                      "type": "string",
-                                      "format": "date-time"
-                                    },
                                     "date_of_birth": {
                                       "type": "string",
                                       "format": "date"
@@ -24759,10 +24739,6 @@
                                     "type": "string"
                                   }
                                 }
-                              },
-                              "approvedAt": {
-                                "type": "string",
-                                "format": "date-time"
                               },
                               "date_of_birth": {
                                 "type": "string",
@@ -29933,10 +29909,6 @@
                                   }
                                 }
                               },
-                              "approvedAt": {
-                                "type": "string",
-                                "format": "date-time"
-                              },
                               "date_of_birth": {
                                 "type": "string",
                                 "format": "date"
@@ -32673,10 +32645,6 @@
                     }
                   }
                 }
-              },
-              "approvedAt": {
-                "type": "string",
-                "format": "date-time"
               },
               "date_of_birth": {
                 "type": "string",
@@ -37466,10 +37434,6 @@
                         }
                       }
                     },
-                    "approvedAt": {
-                      "type": "string",
-                      "format": "date-time"
-                    },
                     "date_of_birth": {
                       "type": "string",
                       "format": "date"
@@ -41486,10 +41450,6 @@
                     }
                   }
                 }
-              },
-              "approvedAt": {
-                "type": "string",
-                "format": "date-time"
               },
               "date_of_birth": {
                 "type": "string",
@@ -49051,10 +49011,6 @@
                                           "type": "string"
                                         }
                                       }
-                                    },
-                                    "approvedAt": {
-                                      "type": "string",
-                                      "format": "date-time"
                                     },
                                     "date_of_birth": {
                                       "type": "string",

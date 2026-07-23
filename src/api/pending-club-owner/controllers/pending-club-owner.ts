@@ -165,23 +165,6 @@ export default {
     );
   }
 },
-
-    return ctx.send({
-      currentStep: 1,
-      status: "draft",
-    });
-
-  } catch (error) {
-    strapi.log.error(
-      "Error fetching club owner onboarding details:",
-      error
-    );
-
-    return ctx.internalServerError(
-      "Failed to fetch club owner onboarding details"
-    );
-  }
-},
   /* ===================================================== */
   async clubOwnerDetails(ctx: Context) {
     const draft: any = await getEditableDraft(ctx);

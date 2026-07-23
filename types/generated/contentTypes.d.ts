@@ -488,7 +488,6 @@ export interface ApiClientDetailClientDetail
     draftAndPublish: false;
   };
   attributes: {
-    approvedAt: Schema.Attribute.DateTime;
     client_checkins: Schema.Attribute.Relation<
       'oneToMany',
       'api::client-checkin.client-checkin'
@@ -658,7 +657,7 @@ export interface ApiDeviceTokenDeviceToken extends Struct.CollectionTypeSchema {
     singularName: 'device-token';
   };
   options: {
-    draftAndPublish: true;
+    draftAndPublish: false;
   };
   attributes: {
     createdAt: Schema.Attribute.DateTime;

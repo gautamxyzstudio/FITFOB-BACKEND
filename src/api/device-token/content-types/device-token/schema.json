@@ -7,7 +7,7 @@
     "displayName": "device-token"
   },
   "options": {
-    "draftAndPublish": true
+    "draftAndPublish": false
   },
   "pluginOptions": {},
   "attributes": {
