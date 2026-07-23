@@ -88,7 +88,8 @@
     "user": {
       "type": "relation",
       "relation": "oneToOne",
-      "target": "plugin::users-permissions.user"
+      "target": "plugin::users-permissions.user",
+      "mappedBy": "club_owner"
     },
     "club_owner_documents": {
       "type": "relation",
@@ -120,10 +121,10 @@
       "type": "relation",
       "relation": "oneToMany",
       "target": "api::client-checkin.client-checkin",
-      "mappedBy": "club_owner"},
+      "mappedBy": "club_owner"
+    },
     "read_by_admins": {
-      "type": "json",
-      "default": []
+      "type": "json"
     }
   }
 }

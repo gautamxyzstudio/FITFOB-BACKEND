@@ -523,7 +523,7 @@ export interface ApiClientDetailClientDetail
     >;
     phoneNumber: Schema.Attribute.String;
     publishedAt: Schema.Attribute.DateTime;
-    read_by_admins: Schema.Attribute.JSON & Schema.Attribute.DefaultTo<[]>;
+    read_by_admins: Schema.Attribute.JSON;
     selfieUpload: Schema.Attribute.Media<
       'images' | 'files' | 'videos' | 'audios'
     >;
@@ -634,7 +634,7 @@ export interface ApiClubOwnerClubOwner extends Struct.CollectionTypeSchema {
     phoneNumber: Schema.Attribute.String;
     pincode: Schema.Attribute.String;
     publishedAt: Schema.Attribute.DateTime;
-    read_by_admins: Schema.Attribute.JSON & Schema.Attribute.DefaultTo<[]>;
+    read_by_admins: Schema.Attribute.JSON;
     services: Schema.Attribute.JSON;
     state: Schema.Attribute.String;
     updatedAt: Schema.Attribute.DateTime;
@@ -1533,6 +1533,14 @@ export interface PluginUsersPermissionsUser
       'plugin::users-permissions.user'
     >;
     blocked: Schema.Attribute.Boolean & Schema.Attribute.DefaultTo<false>;
+    client_detail: Schema.Attribute.Relation<
+      'oneToOne',
+      'api::client-detail.client-detail'
+    >;
+    club_owner: Schema.Attribute.Relation<
+      'oneToOne',
+      'api::club-owner.club-owner'
+    >;
     cognitoSub: Schema.Attribute.String;
     confirmationToken: Schema.Attribute.String & Schema.Attribute.Private;
     confirmed: Schema.Attribute.Boolean & Schema.Attribute.DefaultTo<false>;

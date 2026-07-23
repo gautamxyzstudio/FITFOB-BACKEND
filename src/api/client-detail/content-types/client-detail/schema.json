@@ -58,13 +58,13 @@
     "user": {
       "type": "relation",
       "relation": "oneToOne",
-      "target": "plugin::users-permissions.user"
+      "target": "plugin::users-permissions.user",
+      "mappedBy": "client_detail"
     },
-   
     "date_of_birth": {
       "type": "date"
     },
-      "clientId": {
+    "clientId": {
       "type": "string",
       "unique": true
     },
@@ -84,10 +84,10 @@
       "type": "relation",
       "relation": "oneToMany",
       "target": "api::client-checkin.client-checkin",
-      "mappedBy": "client_detail"},
+      "mappedBy": "client_detail"
+    },
     "read_by_admins": {
-      "type": "json",
-      "default": []
+      "type": "json"
     },
     "faceSimilarity": {
       "type": "decimal"

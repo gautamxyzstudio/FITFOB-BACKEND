@@ -119,6 +119,18 @@
       "relation": "oneToMany",
       "target": "api::device-token.device-token",
       "mappedBy": "users_permissions_user"
+    },
+    "client_detail": {
+      "type": "relation",
+      "relation": "oneToOne",
+      "target": "api::client-detail.client-detail",
+      "inversedBy": "user"
+    },
+    "club_owner": {
+      "type": "relation",
+      "relation": "oneToOne",
+      "target": "api::club-owner.club-owner",
+      "inversedBy": "user"
     }
   }
 }

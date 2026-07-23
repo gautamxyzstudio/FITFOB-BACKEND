@@ -158,6 +158,44 @@ export default {
       const jwtService = strapi.plugin("users-permissions").service("jwt");
       const strapiJwt = jwtService.issue({ id: user.id }) as string;
 
+      /* ======================================================
+        GET CLIENT DETAIL FOR CLIENT ROLE
+     ====================================================== */
+
+      let clientDetail: any = null;
+
+      strapi.log.info(
+        `[LOGIN DEBUG] User ID: ${user.id}, Role: ${user.role?.name}`
+      );
+
+      if (user.role?.name?.toLowerCase() === "client") {
+        const userWithClientDetail: any = await strapi.db
+          .query("plugin::users-permissions.user")
+          .findOne({
+            where: {
+              id: user.id,
+            },
+            populate: {
+              client_detail: {
+                populate: {
+                  selfieUpload: true,
+                  governmentId: true,
+                  local_subscriptions: true,
+                  outdoor_subscriptions: true,
+                  client_checkins: true,
+                },
+              },
+            },
+          });
+
+        strapi.log.info(
+          `[LOGIN DEBUG] client_detail: ${JSON.stringify(
+            userWithClientDetail?.client_detail
+          )}`
+        );
+
+        clientDetail = userWithClientDetail?.client_detail ?? null;
+      }
       ctx.body = {
         jwt: strapiJwt,
         cognito: {
@@ -178,6 +216,7 @@ export default {
           blocked: user.blocked,
           role: user.role,
         },
+        clientDetail,
       };
 
     } catch (err) {
