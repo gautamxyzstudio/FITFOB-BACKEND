@@ -98,31 +98,73 @@ export default {
 
   /* ===================================================== */
   async me(ctx: Context) {
+  try {
     const user = ctx.state.user;
-    if (!user) return ctx.unauthorized();
 
-    const existingClub = await strapi.db.query(CLUB_UID).findOne({
-      where: { user: user.id },
-    });
-
-    if (existingClub) {
-      return ctx.send({ status: "completed", currentStep: 6 });
+    if (!user) {
+      return ctx.unauthorized("Login required");
     }
 
-    let draft: any = await getDraft(user.id);
+    /* ================= CHECK CLUB OWNER ================= */
 
-    if (!draft) {
-      draft = await strapi.entityService.create(PENDING_UID, {
-        data: { user: user.id, currentStep: 1, status: "draft" },
+    const existingClub = await strapi.db.query(CLUB_UID).findOne({
+      where: {
+        user: user.id,
+      },
+    });
+
+    /* ================= CLUB OWNER EXISTS ================= */
+
+    if (existingClub) {
+      return ctx.badRequest("Club owner detail already exists");
+    }
+
+    /* ================= CHECK PENDING CLUB OWNER ================= */
+
+    const draft: any = await strapi.db.query(PENDING_UID).findOne({
+      where: {
+        user: user.id,
+      },
+      populate: {
+        user: true,
+        logo: true,
+        clubPhotos: true,
+        club_owner_documents: {
+          populate: {
+            File: true,
+          },
+        },
+      },
+    });
+
+    /* ================= PENDING CLUB OWNER EXISTS ================= */
+
+    if (draft) {
+      return ctx.send({
+        currentStep: draft.currentStep,
+        status: draft.status,
+        details: draft,
       });
     }
 
-    ctx.send({
-      id: draft.id,
-      currentStep: draft.currentStep,
-      status: draft.status,
+    /* ================= NEITHER EXISTS ================= */
+
+    return ctx.send({
+      currentStep: 1,
+      status: "draft",
     });
-  },
+
+  } catch (error) {
+    strapi.log.error(
+      "Error fetching club owner onboarding details:",
+      error
+    );
+
+    return ctx.internalServerError(
+      "Failed to fetch club owner onboarding details"
+    );
+  }
+},
 
   /* ===================================================== */
   async clubOwnerDetails(ctx: Context) {
