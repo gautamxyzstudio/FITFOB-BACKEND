@@ -113,6 +113,12 @@
       "type": "relation",
       "relation": "oneToOne",
       "target": "plugin::users-permissions.user"
+    },
+    "device_tokens": {
+      "type": "relation",
+      "relation": "oneToMany",
+      "target": "api::device-token.device-token",
+      "mappedBy": "users_permissions_user"
     }
   }
 }

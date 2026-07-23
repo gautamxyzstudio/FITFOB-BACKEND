@@ -650,6 +650,42 @@ export interface ApiClubOwnerClubOwner extends Struct.CollectionTypeSchema {
   };
 }
 
+export interface ApiDeviceTokenDeviceToken extends Struct.CollectionTypeSchema {
+  collectionName: 'device_tokens';
+  info: {
+    displayName: 'device-token';
+    pluralName: 'device-tokens';
+    singularName: 'device-token';
+  };
+  options: {
+    draftAndPublish: true;
+  };
+  attributes: {
+    createdAt: Schema.Attribute.DateTime;
+    createdBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
+      Schema.Attribute.Private;
+    deviceId: Schema.Attribute.String;
+    isActive: Schema.Attribute.Boolean & Schema.Attribute.DefaultTo<true>;
+    lastUsedAt: Schema.Attribute.DateTime;
+    locale: Schema.Attribute.String & Schema.Attribute.Private;
+    localizations: Schema.Attribute.Relation<
+      'oneToMany',
+      'api::device-token.device-token'
+    > &
+      Schema.Attribute.Private;
+    platform: Schema.Attribute.Enumeration<['web', 'android', 'ios']>;
+    publishedAt: Schema.Attribute.DateTime;
+    token: Schema.Attribute.Text & Schema.Attribute.Required;
+    updatedAt: Schema.Attribute.DateTime;
+    updatedBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
+      Schema.Attribute.Private;
+    users_permissions_user: Schema.Attribute.Relation<
+      'manyToOne',
+      'plugin::users-permissions.user'
+    >;
+  };
+}
+
 export interface ApiLocalMembershipPlanLocalMembershipPlan
   extends Struct.CollectionTypeSchema {
   collectionName: 'local_membership_plans';
@@ -1505,6 +1541,10 @@ export interface PluginUsersPermissionsUser
     createdAt: Schema.Attribute.DateTime;
     createdBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
       Schema.Attribute.Private;
+    device_tokens: Schema.Attribute.Relation<
+      'oneToMany',
+      'api::device-token.device-token'
+    >;
     email: Schema.Attribute.Email &
       Schema.Attribute.SetMinMaxLength<{
         minLength: 6;
@@ -1570,6 +1610,7 @@ declare module '@strapi/strapi' {
       'api::client-detail.client-detail': ApiClientDetailClientDetail;
       'api::club-owner-document.club-owner-document': ApiClubOwnerDocumentClubOwnerDocument;
       'api::club-owner.club-owner': ApiClubOwnerClubOwner;
+      'api::device-token.device-token': ApiDeviceTokenDeviceToken;
       'api::local-membership-plan.local-membership-plan': ApiLocalMembershipPlanLocalMembershipPlan;
       'api::local-subscription.local-subscription': ApiLocalSubscriptionLocalSubscription;
       'api::otp-request.otp-request': ApiOtpRequestOtpRequest;
