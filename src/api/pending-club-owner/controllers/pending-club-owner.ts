@@ -97,7 +97,7 @@ async function uploadToFolder(file: any) {
 export default {
 
   /* ===================================================== */
- async me(ctx: Context) {
+  async me(ctx: Context) {
   try {
     const user = ctx.state.user;
 
@@ -148,8 +148,23 @@ export default {
     }
 
     /* ================= NEITHER EXISTS ================= */
-    // Do NOT create pending club owner here.
-    // It will be created when the user starts submitting onboarding data.
+
+    return ctx.send({
+      currentStep: 1,
+      status: "draft",
+    });
+
+  } catch (error) {
+    strapi.log.error(
+      "Error fetching club owner onboarding details:",
+      error
+    );
+
+    return ctx.internalServerError(
+      "Failed to fetch club owner onboarding details"
+    );
+  }
+},
 
     return ctx.send({
       currentStep: 1,

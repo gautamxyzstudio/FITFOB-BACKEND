@@ -55,26 +55,13 @@ export default {
 
       /* ============================================
          FINDER CENTER POSITIONS
-
-         Finder = 7x7 modules
-         Black center = 3x3 modules
-
-         We intentionally cover slightly MORE than
-         the original 3x3 center to prevent 1px
-         black lines caused by raster rounding.
       ============================================ */
 
       const innerSize = moduleSize * 3;
 
-      // Extra cleanup around original black center
       const cleanupPadding = 2;
 
       const cleanupSize = Math.ceil(innerSize) + cleanupPadding * 2;
-
-      /*
-        Position is shifted up/left by cleanupPadding,
-        so cleanup covers all four edges.
-      */
 
       const topLeft = {
         left:
@@ -110,9 +97,6 @@ export default {
 
       /* ============================================
          CREATE CLEAN FINDER CENTER
-
-         1. White rectangle removes original black
-         2. Red rounded rectangle is placed inside
       ============================================ */
 
       const redInset = cleanupPadding;
