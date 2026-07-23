@@ -29,9 +29,6 @@
         "ios"
       ]
     },
-    "deviceId": {
-      "type": "string"
-    },
     "isActive": {
       "type": "boolean",
       "default": true

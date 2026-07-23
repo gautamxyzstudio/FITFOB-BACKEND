@@ -14,7 +14,7 @@
       "name": "Apache 2.0",
       "url": "https://www.apache.org/licenses/LICENSE-2.0.html"
     },
-    "x-generation-date": "2026-07-23T11:15:57.312Z"
+    "x-generation-date": "2026-07-23T11:24:32.998Z"
   },
   "x-strapi-config": {
     "plugins": [
@@ -9821,9 +9821,6 @@
                             "ios"
                           ]
                         },
-                        "deviceId": {
-                          "type": "string"
-                        },
                         "isActive": {
                           "type": "boolean"
                         },
@@ -13960,9 +13957,6 @@
                         "android",
                         "ios"
                       ]
-                    },
-                    "deviceId": {
-                      "type": "string"
                     },
                     "isActive": {
                       "type": "boolean"
@@ -18572,9 +18566,6 @@
                         "android",
                         "ios"
                       ]
-                    },
-                    "deviceId": {
-                      "type": "string"
                     },
                     "isActive": {
                       "type": "boolean"
@@ -23271,9 +23262,6 @@
                             "ios"
                           ]
                         },
-                        "deviceId": {
-                          "type": "string"
-                        },
                         "isActive": {
                           "type": "boolean"
                         },
@@ -25777,9 +25765,6 @@
                   "ios"
                 ]
               },
-              "deviceId": {
-                "type": "string"
-              },
               "isActive": {
                 "type": "boolean"
               },
@@ -26596,9 +26581,6 @@
                         "ios"
                       ]
                     },
-                    "deviceId": {
-                      "type": "string"
-                    },
                     "isActive": {
                       "type": "boolean"
                     },
@@ -26765,9 +26747,6 @@
               "android",
               "ios"
             ]
-          },
-          "deviceId": {
-            "type": "string"
           },
           "isActive": {
             "type": "boolean"
@@ -28439,9 +28418,6 @@
                             "android",
                             "ios"
                           ]
-                        },
-                        "deviceId": {
-                          "type": "string"
                         },
                         "isActive": {
                           "type": "boolean"
@@ -32486,9 +32462,6 @@
                             "android",
                             "ios"
                           ]
-                        },
-                        "deviceId": {
-                          "type": "string"
                         },
                         "isActive": {
                           "type": "boolean"
@@ -37275,9 +37248,6 @@
                                   "ios"
                                 ]
                               },
-                              "deviceId": {
-                                "type": "string"
-                              },
                               "isActive": {
                                 "type": "boolean"
                               },
@@ -41291,9 +41261,6 @@
                             "android",
                             "ios"
                           ]
-                        },
-                        "deviceId": {
-                          "type": "string"
                         },
                         "isActive": {
                           "type": "boolean"
@@ -45368,9 +45335,6 @@
                         "ios"
                       ]
                     },
-                    "deviceId": {
-                      "type": "string"
-                    },
                     "isActive": {
                       "type": "boolean"
                     },
@@ -47023,9 +46987,6 @@
                         "android",
                         "ios"
                       ]
-                    },
-                    "deviceId": {
-                      "type": "string"
                     },
                     "isActive": {
                       "type": "boolean"

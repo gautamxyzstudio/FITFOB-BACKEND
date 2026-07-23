@@ -18,11 +18,9 @@ export default factories.createCoreController(
                 const {
                     token,
                     platform,
-                    deviceId,
                 } = ctx.request.body as {
                     token?: string;
                     platform?: "web" | "android" | "ios";
-                    deviceId?: string;
                 };
 
                 /* ================= VALIDATION ================= */
@@ -64,7 +62,6 @@ export default factories.createCoreController(
                             data: {
                                 users_permissions_user: user.id,
                                 platform,
-                                deviceId: deviceId || null,
                                 isActive: true,
                                 lastUsedAt: new Date(),
                             },
@@ -89,7 +86,6 @@ export default factories.createCoreController(
                             users_permissions_user: user.id,
                             token: normalizedToken,
                             platform,
-                            deviceId: deviceId || null,
                             isActive: true,
                             lastUsedAt: new Date(),
                             publishedAt: new Date(),
