@@ -25,21 +25,100 @@ export default () => ({
   },
 
   async checkRecentCheckin(clientId: number) {
+    const now = new Date();
 
-    const fourHoursAgo = new Date(Date.now() - 4 * 60 * 60 * 1000);
+    /* ======================================================
+       GET START OF TODAY IN IST
+       IST = UTC + 5:30
+    ====================================================== */
+
+    const IST_OFFSET = 5.5 * 60 * 60 * 1000;
+
+    // Current date/time shifted to IST
+    const nowIST = new Date(
+      now.getTime() + IST_OFFSET
+    );
+
+    // 00:00:00 of today in IST
+    const startOfTodayIST = new Date(
+      Date.UTC(
+        nowIST.getUTCFullYear(),
+        nowIST.getUTCMonth(),
+        nowIST.getUTCDate(),
+        0,
+        0,
+        0,
+        0
+      )
+    );
+
+    // Convert IST midnight back to UTC
+    const startOfTodayUTC = new Date(
+      startOfTodayIST.getTime() - IST_OFFSET
+    );
+
+    /* ======================================================
+       FOUR HOURS AGO
+    ====================================================== */
+
+    const fourHoursAgo = new Date(
+      now.getTime() - 4 * 60 * 60 * 1000
+    );
+
+    /*
+     * Use whichever is later:
+     *
+     * 1. Start of today
+     * 2. Four hours ago
+     *
+     * This ensures previous-day entries are NEVER checked.
+     */
+    const checkFrom =
+      fourHoursAgo > startOfTodayUTC
+        ? fourHoursAgo
+        : startOfTodayUTC;
+
+    /* ======================================================
+       FIND RECENT CHECK-IN FROM TODAY ONLY
+    ====================================================== */
 
     const recentCheckin = await strapi.db
       .query("api::client-checkin.client-checkin")
       .findOne({
         where: {
           client_detail: clientId,
-          checkinTime: { $gt: fourHoursAgo }
-        }
+
+          checkinTime: {
+            $gte: checkFrom,
+            $lte: now,
+          },
+        },
+
+        orderBy: {
+          checkinTime: "desc",
+        },
       });
 
+    /* ======================================================
+       ALREADY CHECKED IN
+    ====================================================== */
+
     if (recentCheckin) {
-      throw new Error("Client already checked in. Try again after 4 hours");
+      const checkinTime = new Date(
+        recentCheckin.checkinTime
+      ).toLocaleTimeString("en-IN", {
+        timeZone: "Asia/Kolkata",
+        hour: "2-digit",
+        minute: "2-digit",
+        hour12: true,
+      });
+
+      throw new Error(
+        `Client already checked in at ${checkinTime}. Try again after 4 hours`
+      );
     }
+
+    return null;
   },
 
   /* ====================================== */
