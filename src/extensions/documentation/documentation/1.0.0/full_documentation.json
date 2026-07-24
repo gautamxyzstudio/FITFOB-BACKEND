@@ -14,7 +14,7 @@
       "name": "Apache 2.0",
       "url": "https://www.apache.org/licenses/LICENSE-2.0.html"
     },
-    "x-generation-date": "2026-07-23T12:15:11.583Z"
+    "x-generation-date": "2026-07-24T05:48:57.356Z"
   },
   "x-strapi-config": {
     "plugins": [
@@ -9708,9 +9708,6 @@
                   "phoneNumber": {
                     "type": "string"
                   },
-                  "isVerified": {
-                    "type": "boolean"
-                  },
                   "mfa_secret": {
                     "type": "string"
                   },
@@ -13880,9 +13877,6 @@
               },
               "phoneNumber": {
                 "type": "string"
-              },
-              "isVerified": {
-                "type": "boolean"
               },
               "mfa_secret": {
                 "type": "string"
@@ -18525,9 +18519,6 @@
               },
               "phoneNumber": {
                 "type": "string"
-              },
-              "isVerified": {
-                "type": "boolean"
               },
               "mfa_secret": {
                 "type": "string"
@@ -23257,9 +23248,6 @@
                   "phoneNumber": {
                     "type": "string"
                   },
-                  "isVerified": {
-                    "type": "boolean"
-                  },
                   "mfa_secret": {
                     "type": "string"
                   },
@@ -26611,9 +26599,6 @@
               },
               "phoneNumber": {
                 "type": "string"
-              },
-              "isVerified": {
-                "type": "boolean"
               },
               "mfa_secret": {
                 "type": "string"
@@ -31406,9 +31391,6 @@
                   "phoneNumber": {
                     "type": "string"
                   },
-                  "isVerified": {
-                    "type": "boolean"
-                  },
                   "mfa_secret": {
                     "type": "string"
                   },
@@ -35485,9 +35467,6 @@
                   },
                   "phoneNumber": {
                     "type": "string"
-                  },
-                  "isVerified": {
-                    "type": "boolean"
                   },
                   "mfa_secret": {
                     "type": "string"
@@ -40307,9 +40286,6 @@
                         "phoneNumber": {
                           "type": "string"
                         },
-                        "isVerified": {
-                          "type": "boolean"
-                        },
                         "mfa_secret": {
                           "type": "string"
                         },
@@ -44356,9 +44332,6 @@
                   },
                   "phoneNumber": {
                     "type": "string"
-                  },
-                  "isVerified": {
-                    "type": "boolean"
                   },
                   "mfa_secret": {
                     "type": "string"
@@ -48465,9 +48438,6 @@
               },
               "phoneNumber": {
                 "type": "string"
-              },
-              "isVerified": {
-                "type": "boolean"
               },
               "mfa_secret": {
                 "type": "string"
@@ -52779,9 +52749,6 @@
               },
               "phoneNumber": {
                 "type": "string"
-              },
-              "isVerified": {
-                "type": "boolean"
               },
               "mfa_secret": {
                 "type": "string"
