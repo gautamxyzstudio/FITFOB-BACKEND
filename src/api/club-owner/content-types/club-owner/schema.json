@@ -11,6 +11,12 @@
   },
   "pluginOptions": {},
   "attributes": {
+    "clubId": {
+      "type": "string",
+      "required": true,
+      "unique": true,
+      "configurable": false
+    },
     "ownerName": {
       "type": "string"
     },
@@ -82,7 +88,8 @@
     "user": {
       "type": "relation",
       "relation": "oneToOne",
-      "target": "plugin::users-permissions.user"
+      "target": "plugin::users-permissions.user",
+      "mappedBy": "club_owner"
     },
     "club_owner_documents": {
       "type": "relation",
@@ -98,15 +105,26 @@
         "Luxury"
       ]
     },
-    "clubId": {
-      "type": "string",
-      "required": true,
-      "unique": true,
-      "configurable": false
+    "local_membership_plans": {
+      "type": "relation",
+      "relation": "oneToMany",
+      "target": "api::local-membership-plan.local-membership-plan",
+      "mappedBy": "club_owner"
+    },
+    "local_subscriptions": {
+      "type": "relation",
+      "relation": "oneToMany",
+      "target": "api::local-subscription.local-subscription",
+      "mappedBy": "club_owner"
+    },
+    "client_checkins": {
+      "type": "relation",
+      "relation": "oneToMany",
+      "target": "api::client-checkin.client-checkin",
+      "mappedBy": "club_owner"
     },
     "read_by_admins": {
-      "type": "json",
-      "default": []
+      "type": "json"
     }
   }
 }

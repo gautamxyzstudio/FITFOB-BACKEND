@@ -72,10 +72,6 @@
     "phoneNumber": {
       "type": "string"
     },
-    "isVerified": {
-      "type": "boolean",
-      "default": false
-    },
     "mfa_secret": {
       "type": "string"
     },
@@ -113,6 +109,24 @@
       "type": "relation",
       "relation": "oneToOne",
       "target": "plugin::users-permissions.user"
+    },
+    "device_tokens": {
+      "type": "relation",
+      "relation": "oneToMany",
+      "target": "api::device-token.device-token",
+      "mappedBy": "users_permissions_user"
+    },
+    "client_detail": {
+      "type": "relation",
+      "relation": "oneToOne",
+      "target": "api::client-detail.client-detail",
+      "inversedBy": "user"
+    },
+    "club_owner": {
+      "type": "relation",
+      "relation": "oneToOne",
+      "target": "api::club-owner.club-owner",
+      "inversedBy": "user"
     }
   }
 }

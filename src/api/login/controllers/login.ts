@@ -157,6 +157,167 @@ export default {
 
       const jwtService = strapi.plugin("users-permissions").service("jwt");
       const strapiJwt = jwtService.issue({ id: user.id }) as string;
+      /* ======================================================
+               GET USER ROLE
+            ====================================================== */
+
+      const roleName =
+        user.role?.name?.toLowerCase();
+
+      let clientDetail: any = null;
+      let clubOwnerDetail: any = null;
+
+      /* ======================================================
+         CLIENT ROLE → GET CLIENT DETAIL
+      ====================================================== */
+
+      /* ======================================================
+        CLIENT ROLE → GET CLIENT DETAIL
+     ====================================================== */
+
+      if (roleName === "client") {
+        const userWithClientDetail: any = await strapi.db
+          .query("plugin::users-permissions.user")
+          .findOne({
+            where: {
+              id: user.id,
+            },
+
+            populate: {
+              client_detail: {
+                populate: {
+                  selfieUpload: true,
+                  local_subscriptions: true,
+                  outdoor_subscriptions: true,
+                },
+              },
+            },
+          });
+
+        const detail = userWithClientDetail?.client_detail;
+
+        if (detail) {
+
+          const getUniqueSubscriptions = (subscriptions: any[] = []) => {
+            const uniqueMap = new Map<string, any>();
+
+            for (const subscription of subscriptions) {
+
+              const key =
+                subscription.documentId ??
+                String(subscription.id);
+
+              const existing = uniqueMap.get(key);
+
+              if (!existing) {
+                uniqueMap.set(key, subscription);
+                continue;
+              }
+
+              if (
+                !existing.publishedAt &&
+                subscription.publishedAt
+              ) {
+                uniqueMap.set(key, subscription);
+              }
+            }
+
+            return Array.from(uniqueMap.values());
+          };
+
+          const localSubscriptions =
+            getUniqueSubscriptions(
+              detail.local_subscriptions
+            );
+
+          const outdoorSubscriptions =
+            getUniqueSubscriptions(
+              detail.outdoor_subscriptions
+            );
+
+          clientDetail = {
+            email:
+              detail.email ??
+              user.email,
+
+            phone:
+              detail.phoneNumber ??
+              user.phoneNumber,
+
+            selfieUrl:
+              detail.selfieUpload?.url ??
+              null,
+
+            clientId:
+              detail.clientId,
+
+            name:
+              detail.name ??
+              null,
+
+            outdoor_subscriptions:
+              outdoorSubscriptions,
+
+            local_subscriptions:
+              localSubscriptions,
+          };
+        }
+      }
+
+      /* ======================================================
+         CLUB OWNER ROLE → GET CLUB OWNER DETAIL
+      ====================================================== */
+
+      else if (roleName === "clubowner") {
+        const userWithClubOwnerDetail: any =
+          await strapi.db
+            .query(
+              "plugin::users-permissions.user"
+            )
+            .findOne({
+              where: {
+                id: user.id,
+              },
+
+              populate: {
+                club_owner: {
+                  populate: {
+                    logo: true,
+                  },
+                },
+              },
+            });
+
+        const detail =
+          userWithClubOwnerDetail?.club_owner;
+
+        if (detail) {
+          clubOwnerDetail = {
+            clubId:
+              detail.clubId,
+
+            ownerName:
+              detail.ownerName ??
+              null,
+
+            clubName:
+              detail.clubName ??
+              null,
+
+            logoUrl:
+              detail.logo?.url ??
+              null,
+
+            phoneNumber:
+              detail.phoneNumber ??
+              user.phoneNumber,
+
+            email:
+              detail.email ??
+              user.email,
+          };
+        }
+      }
 
       ctx.body = {
         jwt: strapiJwt,
@@ -177,7 +338,17 @@ export default {
           confirmed: user.confirmed,
           blocked: user.blocked,
           role: user.role,
+          // Only returned for Client
+          ...(roleName === "client" && {
+            clientDetail,
+          }),
+
+          // Only returned for ClubOwner
+          ...(roleName === "clubowner" && {
+            clubOwnerDetail,
+          }),
         },
+
       };
 
     } catch (err) {

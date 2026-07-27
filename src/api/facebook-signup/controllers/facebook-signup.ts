@@ -32,42 +32,106 @@ export default {
 
             const logs: string[] = [];
 
-            /* ================= VERIFY GOOGLE ================= */
+            /* ================= VERIFY FACEBOOK ================= */
 
             const facebookUser = await verifyFacebookToken(accessToken);
 
             const email = facebookUser.email;
             const username = email;
 
-            logs.push(`[GOOGLE VERIFY] ${email}`);
+            logs.push(`[FACEBOOK VERIFY] ${email}`);
 
-            /* ================= EXISTING STRAPI USER ================= */
+            /* ================= CHECK EXISTING USER ================= */
+
+            /* ---------- CHECK STRAPI ---------- */
 
             const existingUser = await strapi.db
                 .query("plugin::users-permissions.user")
                 .findOne({
                     where: { email },
+                    populate: ["role"],
                 });
 
-            if (existingUser) {
-                return ctx.badRequest("User already exists. Please login.");
-            }
-
-            /* ================= EXISTING COGNITO USER ================= */
+            /* ---------- CHECK COGNITO ---------- */
 
             const existsInCognito = await checkCognitoUser(email);
 
-            if (existsInCognito) {
-                return ctx.badRequest("User already exists in cognito. Please login.");
+            /* ========================================================
+               CASE 1: USER EXISTS IN BOTH STRAPI + COGNITO
+               → DO NOT CREATE AGAIN
+               → RETURN JWT + EXISTING USER
+            ======================================================== */
+
+            if (existingUser && existsInCognito) {
+
+                /* ================= ROLE CHECK ================= */
+
+                if (existingUser.role?.type !== "client") {
+                    return ctx.forbidden(
+                        "This account is not registered as a Client."
+                    );
+                }
+
+                const jwtService = strapi
+                    .plugin("users-permissions")
+                    .service("jwt");
+
+                const jwt = jwtService.issue({
+                    id: existingUser.id,
+                });
+
+                ctx.body = {
+                    jwt,
+                    user: {
+                        id: existingUser.id,
+                        username: existingUser.username,
+                        email: existingUser.email,
+                        isVerified: existingUser.isVerified,
+                        verification_status: existingUser.verification_status,
+                        cognitoSub: existingUser.cognitoSub,
+                        confirmed: existingUser.confirmed,
+                        blocked: existingUser.blocked,
+                        role: existingUser.role,
+                    },
+                };
+
+                logs.push(
+                    `[FACEBOOK CLIENT EXISTING USER LOGIN SUCCESS] ${email}`
+                );
+
+                postLogs(logs);
+
+                return;
             }
 
-            /* ================= STRAPI ROLE ================= */
+            /* ========================================================
+               CASE 2: EXISTS IN STRAPI BUT NOT COGNITO
+            ======================================================== */
 
-            // const roles = await strapi.db
-            //   .query("plugin::users-permissions.role")
-            //   .findMany();
+            if (existingUser && !existsInCognito) {
+                return ctx.badRequest(
+                    "User exists in Strapi but not in Cognito."
+                );
+            }
 
-            // console.log("ROLES:", roles);
+            /* ========================================================
+               CASE 3: EXISTS IN COGNITO BUT NOT STRAPI
+            ======================================================== */
+
+            if (!existingUser && existsInCognito) {
+                return ctx.badRequest(
+                    "User exists in Cognito but not in Strapi."
+                );
+            }
+
+            /* ========================================================
+               CASE 4: DOES NOT EXIST IN EITHER
+               → CONTINUE NORMAL SIGNUP
+            ======================================================== */
+
+            logs.push(
+                `[FACEBOOK NEW USER] User not found in Strapi or Cognito: ${email}`
+            );
 
             /* ================= STRAPI ROLE ================= */
 
@@ -302,7 +366,7 @@ export default {
 
             const logs: string[] = [];
 
-            /* ================= VERIFY GOOGLE ================= */
+            /* ================= VERIFY FACEBOOK ================= */
 
             const facebookUser = await verifyFacebookToken(accessToken);
 
@@ -312,25 +376,97 @@ export default {
 
             logs.push(`[FACEBOOK VERIFY] ${email}`);
 
-            /* ================= EXISTING STRAPI USER ================= */
+            /* ================= CHECK EXISTING USER ================= */
+
+            /* ---------- CHECK STRAPI ---------- */
 
             const existingUser = await strapi.db
                 .query("plugin::users-permissions.user")
                 .findOne({
                     where: { email },
+                    populate: ["role"],
                 });
 
-            if (existingUser) {
-                return ctx.badRequest("User already exists. Please login.");
-            }
-
-            /* ================= EXISTING COGNITO USER ================= */
+            /* ---------- CHECK COGNITO ---------- */
 
             const existsInCognito = await checkCognitoUser(email);
 
-            if (existsInCognito) {
-                return ctx.badRequest("User already exists in cognito. Please login.");
+            /* ========================================================
+               CASE 1: USER EXISTS IN BOTH STRAPI + COGNITO
+               → DO NOT CREATE AGAIN
+               → RETURN JWT + EXISTING USER
+            ======================================================== */
+
+            if (existingUser && existsInCognito) {
+
+                /* ================= ROLE CHECK ================= */
+
+                if (existingUser.role?.type !== "clubowner") {
+                    return ctx.forbidden(
+                        "This account is not registered as a ClubOwner."
+                    );
+                }
+
+                const jwtService = strapi
+                    .plugin("users-permissions")
+                    .service("jwt");
+
+                const jwt = jwtService.issue({
+                    id: existingUser.id,
+                });
+
+                ctx.body = {
+                    jwt,
+                    user: {
+                        id: existingUser.id,
+                        username: existingUser.username,
+                        email: existingUser.email,
+                        isVerified: existingUser.isVerified,
+                        verification_status: existingUser.verification_status,
+                        cognitoSub: existingUser.cognitoSub,
+                        confirmed: existingUser.confirmed,
+                        blocked: existingUser.blocked,
+                        role: existingUser.role,
+                    },
+                };
+
+                logs.push(
+                    `[FACEBOOK CLUBOWNER EXISTING USER LOGIN SUCCESS] ${email}`
+                );
+
+                postLogs(logs);
+
+                return;
             }
+
+            /* ========================================================
+               CASE 2: EXISTS IN STRAPI BUT NOT COGNITO
+            ======================================================== */
+
+            if (existingUser && !existsInCognito) {
+                return ctx.badRequest(
+                    "User exists in Strapi but not in Cognito."
+                );
+            }
+
+            /* ========================================================
+               CASE 3: EXISTS IN COGNITO BUT NOT STRAPI
+            ======================================================== */
+
+            if (!existingUser && existsInCognito) {
+                return ctx.badRequest(
+                    "User exists in Cognito but not in Strapi."
+                );
+            }
+
+            /* ========================================================
+               CASE 4: DOES NOT EXIST IN EITHER
+               → CONTINUE NORMAL SIGNUP
+            ======================================================== */
+
+            logs.push(
+                `[FACEBOOK NEW USER] User not found in Strapi or Cognito: ${email}`
+            );
 
             /* ================= RANDOM PASSWORD ================= */
 
@@ -384,12 +520,6 @@ export default {
             /* ================= STRAPI ROLE ================= */
 
             const roleType = "clubowner";
-
-            // const roles = await strapi.db
-            //   .query("plugin::users-permissions.role")
-            //   .findMany();
-
-            // console.log("ROLES:", roles);
 
             /* ================= STRAPI ROLE ================= */
 
@@ -472,10 +602,21 @@ export default {
             } catch (err) {
                 /* ---------- rollback strapi user ---------- */
 
-                await strapi.db.query("plugin::users-permissions.user").delete({
-                    where: {
-                        id: user.id,
-                    },
+                await strapi.db
+                    .query("plugin::users-permissions.user")
+                    .delete({
+                        where: {
+                            id: user.id,
+                        },
+                    });
+
+                /* ---------- rollback cognito user ---------- */
+
+                await deleteCognitoUser(email).catch((rollbackErr) => {
+                    strapi.log.error(
+                        "COGNITO ROLLBACK FAILED:",
+                        rollbackErr
+                    );
                 });
 
                 return ctx.internalServerError(
