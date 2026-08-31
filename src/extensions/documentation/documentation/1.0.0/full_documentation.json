@@ -14,10 +14,13 @@
       "name": "Apache 2.0",
       "url": "https://www.apache.org/licenses/LICENSE-2.0.html"
     },
-    "x-generation-date": "2026-08-31T12:23:02.446Z"
+    "x-generation-date": "2026-08-31T13:08:13.537Z"
   },
   "x-strapi-config": {
-    "plugins": ["upload", "users-permissions"]
+    "plugins": [
+      "upload",
+      "users-permissions"
+    ]
   },
   "servers": [
     {
@@ -99,7 +102,9 @@
             }
           }
         },
-        "tags": ["Client-checkin"],
+        "tags": [
+          "Client-checkin"
+        ],
         "parameters": [
           {
             "name": "sort",
@@ -269,7 +274,9 @@
             }
           }
         },
-        "tags": ["Client-checkin"],
+        "tags": [
+          "Client-checkin"
+        ],
         "parameters": [],
         "operationId": "post/client-checkins",
         "requestBody": {
@@ -348,7 +355,9 @@
             }
           }
         },
-        "tags": ["Client-checkin"],
+        "tags": [
+          "Client-checkin"
+        ],
         "parameters": [
           {
             "name": "id",
@@ -426,7 +435,9 @@
             }
           }
         },
-        "tags": ["Client-checkin"],
+        "tags": [
+          "Client-checkin"
+        ],
         "parameters": [
           {
             "name": "id",
@@ -515,7 +526,9 @@
             }
           }
         },
-        "tags": ["Client-checkin"],
+        "tags": [
+          "Client-checkin"
+        ],
         "parameters": [
           {
             "name": "id",
@@ -595,7 +608,9 @@
             }
           }
         },
-        "tags": ["Client-detail"],
+        "tags": [
+          "Client-detail"
+        ],
         "parameters": [
           {
             "name": "sort",
@@ -765,7 +780,9 @@
             }
           }
         },
-        "tags": ["Client-detail"],
+        "tags": [
+          "Client-detail"
+        ],
         "parameters": [],
         "operationId": "post/client-details",
         "requestBody": {
@@ -844,7 +861,9 @@
             }
           }
         },
-        "tags": ["Client-detail"],
+        "tags": [
+          "Client-detail"
+        ],
         "parameters": [
           {
             "name": "id",
@@ -922,7 +941,9 @@
             }
           }
         },
-        "tags": ["Client-detail"],
+        "tags": [
+          "Client-detail"
+        ],
         "parameters": [
           {
             "name": "id",
@@ -1011,7 +1032,9 @@
             }
           }
         },
-        "tags": ["Client-detail"],
+        "tags": [
+          "Client-detail"
+        ],
         "parameters": [
           {
             "name": "id",
@@ -1091,7 +1114,9 @@
             }
           }
         },
-        "tags": ["Club-owner"],
+        "tags": [
+          "Club-owner"
+        ],
         "parameters": [
           {
             "name": "sort",
@@ -1261,7 +1286,9 @@
             }
           }
         },
-        "tags": ["Club-owner"],
+        "tags": [
+          "Club-owner"
+        ],
         "parameters": [],
         "operationId": "post/club-owners",
         "requestBody": {
@@ -1340,7 +1367,9 @@
             }
           }
         },
-        "tags": ["Club-owner"],
+        "tags": [
+          "Club-owner"
+        ],
         "parameters": [
           {
             "name": "id",
@@ -1418,7 +1447,9 @@
             }
           }
         },
-        "tags": ["Club-owner"],
+        "tags": [
+          "Club-owner"
+        ],
         "parameters": [
           {
             "name": "id",
@@ -1507,7 +1538,9 @@
             }
           }
         },
-        "tags": ["Club-owner"],
+        "tags": [
+          "Club-owner"
+        ],
         "parameters": [
           {
             "name": "id",
@@ -1587,7 +1620,9 @@
             }
           }
         },
-        "tags": ["Club-owner-document"],
+        "tags": [
+          "Club-owner-document"
+        ],
         "parameters": [
           {
             "name": "sort",
@@ -1757,7 +1792,9 @@
             }
           }
         },
-        "tags": ["Club-owner-document"],
+        "tags": [
+          "Club-owner-document"
+        ],
         "parameters": [],
         "operationId": "post/club-owner-documents",
         "requestBody": {
@@ -1836,7 +1873,9 @@
             }
           }
         },
-        "tags": ["Club-owner-document"],
+        "tags": [
+          "Club-owner-document"
+        ],
         "parameters": [
           {
             "name": "id",
@@ -1914,7 +1953,9 @@
             }
           }
         },
-        "tags": ["Club-owner-document"],
+        "tags": [
+          "Club-owner-document"
+        ],
         "parameters": [
           {
             "name": "id",
@@ -2003,7 +2044,9 @@
             }
           }
         },
-        "tags": ["Club-owner-document"],
+        "tags": [
+          "Club-owner-document"
+        ],
         "parameters": [
           {
             "name": "id",
@@ -2083,7 +2126,9 @@
             }
           }
         },
-        "tags": ["Device-token"],
+        "tags": [
+          "Device-token"
+        ],
         "parameters": [
           {
             "name": "sort",
@@ -2253,7 +2298,9 @@
             }
           }
         },
-        "tags": ["Device-token"],
+        "tags": [
+          "Device-token"
+        ],
         "parameters": [],
         "operationId": "post/device-tokens",
         "requestBody": {
@@ -2332,7 +2379,9 @@
             }
           }
         },
-        "tags": ["Device-token"],
+        "tags": [
+          "Device-token"
+        ],
         "parameters": [
           {
             "name": "id",
@@ -2410,7 +2459,9 @@
             }
           }
         },
-        "tags": ["Device-token"],
+        "tags": [
+          "Device-token"
+        ],
         "parameters": [
           {
             "name": "id",
@@ -2499,7 +2550,9 @@
             }
           }
         },
-        "tags": ["Device-token"],
+        "tags": [
+          "Device-token"
+        ],
         "parameters": [
           {
             "name": "id",
@@ -2579,7 +2632,9 @@
             }
           }
         },
-        "tags": ["Local-membership-plan"],
+        "tags": [
+          "Local-membership-plan"
+        ],
         "parameters": [
           {
             "name": "sort",
@@ -2749,7 +2804,9 @@
             }
           }
         },
-        "tags": ["Local-membership-plan"],
+        "tags": [
+          "Local-membership-plan"
+        ],
         "parameters": [],
         "operationId": "post/local-membership-plans",
         "requestBody": {
@@ -2828,7 +2885,9 @@
             }
           }
         },
-        "tags": ["Local-membership-plan"],
+        "tags": [
+          "Local-membership-plan"
+        ],
         "parameters": [
           {
             "name": "id",
@@ -2906,7 +2965,9 @@
             }
           }
         },
-        "tags": ["Local-membership-plan"],
+        "tags": [
+          "Local-membership-plan"
+        ],
         "parameters": [
           {
             "name": "id",
@@ -2995,7 +3056,9 @@
             }
           }
         },
-        "tags": ["Local-membership-plan"],
+        "tags": [
+          "Local-membership-plan"
+        ],
         "parameters": [
           {
             "name": "id",
@@ -3075,7 +3138,9 @@
             }
           }
         },
-        "tags": ["Local-subscription"],
+        "tags": [
+          "Local-subscription"
+        ],
         "parameters": [
           {
             "name": "sort",
@@ -3245,7 +3310,9 @@
             }
           }
         },
-        "tags": ["Local-subscription"],
+        "tags": [
+          "Local-subscription"
+        ],
         "parameters": [],
         "operationId": "post/local-subscriptions",
         "requestBody": {
@@ -3324,7 +3391,9 @@
             }
           }
         },
-        "tags": ["Local-subscription"],
+        "tags": [
+          "Local-subscription"
+        ],
         "parameters": [
           {
             "name": "id",
@@ -3402,7 +3471,9 @@
             }
           }
         },
-        "tags": ["Local-subscription"],
+        "tags": [
+          "Local-subscription"
+        ],
         "parameters": [
           {
             "name": "id",
@@ -3491,7 +3562,9 @@
             }
           }
         },
-        "tags": ["Local-subscription"],
+        "tags": [
+          "Local-subscription"
+        ],
         "parameters": [
           {
             "name": "id",
@@ -3571,7 +3644,9 @@
             }
           }
         },
-        "tags": ["Otp-request"],
+        "tags": [
+          "Otp-request"
+        ],
         "parameters": [
           {
             "name": "sort",
@@ -3741,7 +3816,9 @@
             }
           }
         },
-        "tags": ["Otp-request"],
+        "tags": [
+          "Otp-request"
+        ],
         "parameters": [],
         "operationId": "post/otp-requests",
         "requestBody": {
@@ -3820,7 +3897,9 @@
             }
           }
         },
-        "tags": ["Otp-request"],
+        "tags": [
+          "Otp-request"
+        ],
         "parameters": [
           {
             "name": "id",
@@ -3898,7 +3977,9 @@
             }
           }
         },
-        "tags": ["Otp-request"],
+        "tags": [
+          "Otp-request"
+        ],
         "parameters": [
           {
             "name": "id",
@@ -3987,7 +4068,9 @@
             }
           }
         },
-        "tags": ["Otp-request"],
+        "tags": [
+          "Otp-request"
+        ],
         "parameters": [
           {
             "name": "id",
@@ -4067,7 +4150,9 @@
             }
           }
         },
-        "tags": ["Outdoor-membership-plan"],
+        "tags": [
+          "Outdoor-membership-plan"
+        ],
         "parameters": [
           {
             "name": "sort",
@@ -4237,7 +4322,9 @@
             }
           }
         },
-        "tags": ["Outdoor-membership-plan"],
+        "tags": [
+          "Outdoor-membership-plan"
+        ],
         "parameters": [],
         "operationId": "post/outdoor-membership-plans",
         "requestBody": {
@@ -4316,7 +4403,9 @@
             }
           }
         },
-        "tags": ["Outdoor-membership-plan"],
+        "tags": [
+          "Outdoor-membership-plan"
+        ],
         "parameters": [
           {
             "name": "id",
@@ -4394,7 +4483,9 @@
             }
           }
         },
-        "tags": ["Outdoor-membership-plan"],
+        "tags": [
+          "Outdoor-membership-plan"
+        ],
         "parameters": [
           {
             "name": "id",
@@ -4483,7 +4574,9 @@
             }
           }
         },
-        "tags": ["Outdoor-membership-plan"],
+        "tags": [
+          "Outdoor-membership-plan"
+        ],
         "parameters": [
           {
             "name": "id",
@@ -4563,7 +4656,9 @@
             }
           }
         },
-        "tags": ["Outdoor-subscription"],
+        "tags": [
+          "Outdoor-subscription"
+        ],
         "parameters": [
           {
             "name": "sort",
@@ -4733,7 +4828,9 @@
             }
           }
         },
-        "tags": ["Outdoor-subscription"],
+        "tags": [
+          "Outdoor-subscription"
+        ],
         "parameters": [],
         "operationId": "post/outdoor-subscriptions",
         "requestBody": {
@@ -4812,7 +4909,9 @@
             }
           }
         },
-        "tags": ["Outdoor-subscription"],
+        "tags": [
+          "Outdoor-subscription"
+        ],
         "parameters": [
           {
             "name": "id",
@@ -4890,7 +4989,9 @@
             }
           }
         },
-        "tags": ["Outdoor-subscription"],
+        "tags": [
+          "Outdoor-subscription"
+        ],
         "parameters": [
           {
             "name": "id",
@@ -4979,7 +5080,9 @@
             }
           }
         },
-        "tags": ["Outdoor-subscription"],
+        "tags": [
+          "Outdoor-subscription"
+        ],
         "parameters": [
           {
             "name": "id",
@@ -5059,7 +5162,9 @@
             }
           }
         },
-        "tags": ["Pending-club-owner"],
+        "tags": [
+          "Pending-club-owner"
+        ],
         "parameters": [],
         "operationId": "get/pending-club-owner/me"
       }
@@ -5128,7 +5233,9 @@
             }
           }
         },
-        "tags": ["Pending-club-owner"],
+        "tags": [
+          "Pending-club-owner"
+        ],
         "parameters": [],
         "operationId": "post/pending-club-owner/club-owner-details",
         "requestBody": {
@@ -5207,7 +5314,9 @@
             }
           }
         },
-        "tags": ["Pending-club-owner"],
+        "tags": [
+          "Pending-club-owner"
+        ],
         "parameters": [],
         "operationId": "post/pending-club-owner/map-location",
         "requestBody": {
@@ -5286,7 +5395,9 @@
             }
           }
         },
-        "tags": ["Pending-club-owner"],
+        "tags": [
+          "Pending-club-owner"
+        ],
         "parameters": [],
         "operationId": "post/pending-club-owner/address-details",
         "requestBody": {
@@ -5365,7 +5476,9 @@
             }
           }
         },
-        "tags": ["Pending-club-owner"],
+        "tags": [
+          "Pending-club-owner"
+        ],
         "parameters": [],
         "operationId": "post/pending-club-owner/configure-club",
         "requestBody": {
@@ -5444,7 +5557,9 @@
             }
           }
         },
-        "tags": ["Pending-club-owner"],
+        "tags": [
+          "Pending-club-owner"
+        ],
         "parameters": [],
         "operationId": "post/pending-club-owner/upload-government-doc",
         "requestBody": {
@@ -5523,7 +5638,9 @@
             }
           }
         },
-        "tags": ["Pending-club-owner"],
+        "tags": [
+          "Pending-club-owner"
+        ],
         "parameters": [],
         "operationId": "get/pending-club-owner/documents"
       }
@@ -5592,7 +5709,9 @@
             }
           }
         },
-        "tags": ["Pending-club-owner"],
+        "tags": [
+          "Pending-club-owner"
+        ],
         "parameters": [],
         "operationId": "post/pending-club-owner/confirm-government-docs",
         "requestBody": {
@@ -5671,7 +5790,9 @@
             }
           }
         },
-        "tags": ["Pending-club-owner"],
+        "tags": [
+          "Pending-club-owner"
+        ],
         "parameters": [],
         "operationId": "post/pending-club-owner/upload-club-photos",
         "requestBody": {
@@ -5750,7 +5871,9 @@
             }
           }
         },
-        "tags": ["Pending-signup"],
+        "tags": [
+          "Pending-signup"
+        ],
         "parameters": [
           {
             "name": "sort",
@@ -5920,7 +6043,9 @@
             }
           }
         },
-        "tags": ["Pending-signup"],
+        "tags": [
+          "Pending-signup"
+        ],
         "parameters": [],
         "operationId": "post/pending-signups",
         "requestBody": {
@@ -5999,7 +6124,9 @@
             }
           }
         },
-        "tags": ["Pending-signup"],
+        "tags": [
+          "Pending-signup"
+        ],
         "parameters": [
           {
             "name": "id",
@@ -6077,7 +6204,9 @@
             }
           }
         },
-        "tags": ["Pending-signup"],
+        "tags": [
+          "Pending-signup"
+        ],
         "parameters": [
           {
             "name": "id",
@@ -6166,7 +6295,9 @@
             }
           }
         },
-        "tags": ["Pending-signup"],
+        "tags": [
+          "Pending-signup"
+        ],
         "parameters": [
           {
             "name": "id",
@@ -6246,7 +6377,9 @@
             }
           }
         },
-        "tags": ["Reset-password-session"],
+        "tags": [
+          "Reset-password-session"
+        ],
         "parameters": [
           {
             "name": "sort",
@@ -6416,7 +6549,9 @@
             }
           }
         },
-        "tags": ["Reset-password-session"],
+        "tags": [
+          "Reset-password-session"
+        ],
         "parameters": [],
         "operationId": "post/reset-password-sessions",
         "requestBody": {
@@ -6495,7 +6630,9 @@
             }
           }
         },
-        "tags": ["Reset-password-session"],
+        "tags": [
+          "Reset-password-session"
+        ],
         "parameters": [
           {
             "name": "id",
@@ -6573,7 +6710,9 @@
             }
           }
         },
-        "tags": ["Reset-password-session"],
+        "tags": [
+          "Reset-password-session"
+        ],
         "parameters": [
           {
             "name": "id",
@@ -6662,7 +6801,9 @@
             }
           }
         },
-        "tags": ["Reset-password-session"],
+        "tags": [
+          "Reset-password-session"
+        ],
         "parameters": [
           {
             "name": "id",
@@ -6697,14 +6838,18 @@
           }
         },
         "summary": "",
-        "tags": ["Upload - File"],
+        "tags": [
+          "Upload - File"
+        ],
         "requestBody": {
           "description": "Upload files",
           "required": true,
           "content": {
             "multipart/form-data": {
               "schema": {
-                "required": ["files"],
+                "required": [
+                  "files"
+                ],
                 "type": "object",
                 "properties": {
                   "path": {
@@ -6767,7 +6912,9 @@
           }
         },
         "summary": "",
-        "tags": ["Upload - File"],
+        "tags": [
+          "Upload - File"
+        ],
         "requestBody": {
           "description": "Upload files",
           "required": true,
@@ -6803,7 +6950,9 @@
     },
     "/upload/files": {
       "get": {
-        "tags": ["Upload - File"],
+        "tags": [
+          "Upload - File"
+        ],
         "responses": {
           "200": {
             "description": "Get a list of files",
@@ -6835,7 +6984,9 @@
             }
           }
         ],
-        "tags": ["Upload - File"],
+        "tags": [
+          "Upload - File"
+        ],
         "responses": {
           "200": {
             "description": "Get a specific file",
@@ -6862,7 +7013,9 @@
             }
           }
         ],
-        "tags": ["Upload - File"],
+        "tags": [
+          "Upload - File"
+        ],
         "responses": {
           "200": {
             "description": "Delete a file",
@@ -6891,7 +7044,9 @@
             }
           }
         ],
-        "tags": ["Users-Permissions - Auth"],
+        "tags": [
+          "Users-Permissions - Auth"
+        ],
         "summary": "Login with a provider",
         "description": "Redirects to provider login before being redirect to /auth/{provider}/callback",
         "responses": {
@@ -6913,7 +7068,9 @@
     },
     "/auth/local": {
       "post": {
-        "tags": ["Users-Permissions - Auth"],
+        "tags": [
+          "Users-Permissions - Auth"
+        ],
         "summary": "Local login",
         "description": "Returns a jwt token and user info",
         "requestBody": {
@@ -6964,7 +7121,9 @@
     },
     "/auth/local/register": {
       "post": {
-        "tags": ["Users-Permissions - Auth"],
+        "tags": [
+          "Users-Permissions - Auth"
+        ],
         "summary": "Register a user",
         "description": "Returns a jwt token and user info",
         "requestBody": {
@@ -7019,7 +7178,9 @@
     },
     "/auth/{provider}/callback": {
       "get": {
-        "tags": ["Users-Permissions - Auth"],
+        "tags": [
+          "Users-Permissions - Auth"
+        ],
         "summary": "Default Callback from provider auth",
         "parameters": [
           {
@@ -7058,7 +7219,9 @@
     },
     "/auth/forgot-password": {
       "post": {
-        "tags": ["Users-Permissions - Auth"],
+        "tags": [
+          "Users-Permissions - Auth"
+        ],
         "summary": "Send rest password email",
         "requestBody": {
           "required": true,
@@ -7088,7 +7251,9 @@
                   "properties": {
                     "ok": {
                       "type": "string",
-                      "enum": [true]
+                      "enum": [
+                        true
+                      ]
                     }
                   }
                 }
@@ -7110,7 +7275,9 @@
     },
     "/auth/reset-password": {
       "post": {
-        "tags": ["Users-Permissions - Auth"],
+        "tags": [
+          "Users-Permissions - Auth"
+        ],
         "summary": "Rest user password",
         "requestBody": {
           "required": true,
@@ -7164,7 +7331,9 @@
     },
     "/auth/change-password": {
       "post": {
-        "tags": ["Users-Permissions - Auth"],
+        "tags": [
+          "Users-Permissions - Auth"
+        ],
         "summary": "Update user's own password",
         "requestBody": {
           "required": true,
@@ -7218,7 +7387,9 @@
     },
     "/auth/email-confirmation": {
       "get": {
-        "tags": ["Users-Permissions - Auth"],
+        "tags": [
+          "Users-Permissions - Auth"
+        ],
         "summary": "Confirm user email",
         "parameters": [
           {
@@ -7249,7 +7420,9 @@
     },
     "/auth/send-email-confirmation": {
       "post": {
-        "tags": ["Users-Permissions - Auth"],
+        "tags": [
+          "Users-Permissions - Auth"
+        ],
         "summary": "Send confirmation email",
         "requestBody": {
           "required": true,
@@ -7279,7 +7452,9 @@
                     },
                     "sent": {
                       "type": "string",
-                      "enum": [true]
+                      "enum": [
+                        true
+                      ]
                     }
                   }
                 }
@@ -7301,7 +7476,9 @@
     },
     "/users-permissions/permissions": {
       "get": {
-        "tags": ["Users-Permissions - Users & Roles"],
+        "tags": [
+          "Users-Permissions - Users & Roles"
+        ],
         "summary": "Get default generated permissions",
         "responses": {
           "200": {
@@ -7370,7 +7547,9 @@
     },
     "/users-permissions/roles": {
       "get": {
-        "tags": ["Users-Permissions - Users & Roles"],
+        "tags": [
+          "Users-Permissions - Users & Roles"
+        ],
         "summary": "List roles",
         "responses": {
           "200": {
@@ -7429,7 +7608,9 @@
         }
       },
       "post": {
-        "tags": ["Users-Permissions - Users & Roles"],
+        "tags": [
+          "Users-Permissions - Users & Roles"
+        ],
         "summary": "Create a role",
         "requestBody": {
           "$ref": "#/components/requestBodies/Users-Permissions-RoleRequest"
@@ -7444,7 +7625,9 @@
                   "properties": {
                     "ok": {
                       "type": "string",
-                      "enum": [true]
+                      "enum": [
+                        true
+                      ]
                     }
                   }
                 }
@@ -7466,7 +7649,9 @@
     },
     "/users-permissions/roles/{id}": {
       "get": {
-        "tags": ["Users-Permissions - Users & Roles"],
+        "tags": [
+          "Users-Permissions - Users & Roles"
+        ],
         "summary": "Get a role",
         "parameters": [
           {
@@ -7531,7 +7716,9 @@
     },
     "/users-permissions/roles/{role}": {
       "put": {
-        "tags": ["Users-Permissions - Users & Roles"],
+        "tags": [
+          "Users-Permissions - Users & Roles"
+        ],
         "summary": "Update a role",
         "parameters": [
           {
@@ -7557,7 +7744,9 @@
                   "properties": {
                     "ok": {
                       "type": "string",
-                      "enum": [true]
+                      "enum": [
+                        true
+                      ]
                     }
                   }
                 }
@@ -7577,7 +7766,9 @@
         }
       },
       "delete": {
-        "tags": ["Users-Permissions - Users & Roles"],
+        "tags": [
+          "Users-Permissions - Users & Roles"
+        ],
         "summary": "Delete a role",
         "parameters": [
           {
@@ -7600,7 +7791,9 @@
                   "properties": {
                     "ok": {
                       "type": "string",
-                      "enum": [true]
+                      "enum": [
+                        true
+                      ]
                     }
                   }
                 }
@@ -7622,7 +7815,9 @@
     },
     "/users": {
       "get": {
-        "tags": ["Users-Permissions - Users & Roles"],
+        "tags": [
+          "Users-Permissions - Users & Roles"
+        ],
         "summary": "Get list of users",
         "responses": {
           "200": {
@@ -7663,7 +7858,9 @@
         }
       },
       "post": {
-        "tags": ["Users-Permissions - Users & Roles"],
+        "tags": [
+          "Users-Permissions - Users & Roles"
+        ],
         "summary": "Create a user",
         "requestBody": {
           "required": true,
@@ -7671,7 +7868,11 @@
             "application/json": {
               "schema": {
                 "type": "object",
-                "required": ["username", "email", "password"],
+                "required": [
+                  "username",
+                  "email",
+                  "password"
+                ],
                 "properties": {
                   "email": {
                     "type": "string"
@@ -7748,7 +7949,9 @@
     },
     "/users/{id}": {
       "get": {
-        "tags": ["Users-Permissions - Users & Roles"],
+        "tags": [
+          "Users-Permissions - Users & Roles"
+        ],
         "summary": "Get a user",
         "parameters": [
           {
@@ -7795,7 +7998,9 @@
         }
       },
       "put": {
-        "tags": ["Users-Permissions - Users & Roles"],
+        "tags": [
+          "Users-Permissions - Users & Roles"
+        ],
         "summary": "Update a user",
         "parameters": [
           {
@@ -7814,7 +8019,11 @@
             "application/json": {
               "schema": {
                 "type": "object",
-                "required": ["username", "email", "password"],
+                "required": [
+                  "username",
+                  "email",
+                  "password"
+                ],
                 "properties": {
                   "email": {
                     "type": "string"
@@ -7889,7 +8098,9 @@
         }
       },
       "delete": {
-        "tags": ["Users-Permissions - Users & Roles"],
+        "tags": [
+          "Users-Permissions - Users & Roles"
+        ],
         "summary": "Delete a user",
         "parameters": [
           {
@@ -7942,7 +8153,9 @@
     },
     "/users/me": {
       "get": {
-        "tags": ["Users-Permissions - Users & Roles"],
+        "tags": [
+          "Users-Permissions - Users & Roles"
+        ],
         "summary": "Get authenticated user info",
         "responses": {
           "200": {
@@ -7980,7 +8193,9 @@
     },
     "/users/count": {
       "get": {
-        "tags": ["Users-Permissions - Users & Roles"],
+        "tags": [
+          "Users-Permissions - Users & Roles"
+        ],
         "summary": "Get user count",
         "responses": {
           "200": {
@@ -8019,7 +8234,9 @@
     "schemas": {
       "Error": {
         "type": "object",
-        "required": ["error"],
+        "required": [
+          "error"
+        ],
         "properties": {
           "data": {
             "nullable": true,
@@ -8056,7 +8273,9 @@
       },
       "ClientCheckinRequest": {
         "type": "object",
-        "required": ["data"],
+        "required": [
+          "data"
+        ],
         "properties": {
           "data": {
             "type": "object",
@@ -8085,7 +8304,10 @@
               },
               "subscriptionType": {
                 "type": "string",
-                "enum": ["local", "outdoor"]
+                "enum": [
+                  "local",
+                  "outdoor"
+                ]
               },
               "checkinTime": {
                 "type": "string",
@@ -9503,7 +9725,12 @@
                   },
                   "verification_status": {
                     "type": "string",
-                    "enum": ["pending", "rejected", "approved", "in-review"]
+                    "enum": [
+                      "pending",
+                      "rejected",
+                      "approved",
+                      "in-review"
+                    ]
                   },
                   "rejection_reason": {
                     "type": "string"
@@ -9585,7 +9812,11 @@
                         },
                         "platform": {
                           "type": "string",
-                          "enum": ["web", "android", "ios"]
+                          "enum": [
+                            "web",
+                            "android",
+                            "ios"
+                          ]
                         },
                         "isActive": {
                           "type": "boolean"
@@ -10370,7 +10601,10 @@
                                 },
                                 "status": {
                                   "type": "string",
-                                  "enum": ["draft", "completed"]
+                                  "enum": [
+                                    "draft",
+                                    "completed"
+                                  ]
                                 },
                                 "clubName": {
                                   "type": "string"
@@ -10791,7 +11025,11 @@
                                 },
                                 "clubCategory": {
                                   "type": "string",
-                                  "enum": ["Basic", "Premium", "Luxury"]
+                                  "enum": [
+                                    "Basic",
+                                    "Premium",
+                                    "Luxury"
+                                  ]
                                 },
                                 "createdAt": {
                                   "type": "string",
@@ -10944,7 +11182,11 @@
                       },
                       "clubCategory": {
                         "type": "string",
-                        "enum": ["Basic", "Premium", "Luxury"]
+                        "enum": [
+                          "Basic",
+                          "Premium",
+                          "Luxury"
+                        ]
                       },
                       "local_membership_plans": {
                         "type": "array",
@@ -11143,7 +11385,10 @@
                                         },
                                         "subscriptionType": {
                                           "type": "string",
-                                          "enum": ["local", "outdoor"]
+                                          "enum": [
+                                            "local",
+                                            "outdoor"
+                                          ]
                                         },
                                         "checkinTime": {
                                           "type": "string",
@@ -12025,7 +12270,10 @@
           },
           "subscriptionType": {
             "type": "string",
-            "enum": ["local", "outdoor"]
+            "enum": [
+              "local",
+              "outdoor"
+            ]
           },
           "checkinTime": {
             "type": "string",
@@ -12154,7 +12402,9 @@
       },
       "ClientDetailRequest": {
         "type": "object",
-        "required": ["data"],
+        "required": [
+          "data"
+        ],
         "properties": {
           "data": {
             "type": "object",
@@ -13645,7 +13895,12 @@
               },
               "verification_status": {
                 "type": "string",
-                "enum": ["pending", "rejected", "approved", "in-review"]
+                "enum": [
+                  "pending",
+                  "rejected",
+                  "approved",
+                  "in-review"
+                ]
               },
               "rejection_reason": {
                 "type": "string"
@@ -13727,7 +13982,11 @@
                     },
                     "platform": {
                       "type": "string",
-                      "enum": ["web", "android", "ios"]
+                      "enum": [
+                        "web",
+                        "android",
+                        "ios"
+                      ]
                     },
                     "isActive": {
                       "type": "boolean"
@@ -14940,7 +15199,10 @@
                                       },
                                       "status": {
                                         "type": "string",
-                                        "enum": ["draft", "completed"]
+                                        "enum": [
+                                          "draft",
+                                          "completed"
+                                        ]
                                       },
                                       "clubName": {
                                         "type": "string"
@@ -15361,7 +15623,11 @@
                                       },
                                       "clubCategory": {
                                         "type": "string",
-                                        "enum": ["Basic", "Premium", "Luxury"]
+                                        "enum": [
+                                          "Basic",
+                                          "Premium",
+                                          "Luxury"
+                                        ]
                                       },
                                       "createdAt": {
                                         "type": "string",
@@ -15514,7 +15780,11 @@
                             },
                             "clubCategory": {
                               "type": "string",
-                              "enum": ["Basic", "Premium", "Luxury"]
+                              "enum": [
+                                "Basic",
+                                "Premium",
+                                "Luxury"
+                              ]
                             },
                             "local_membership_plans": {
                               "type": "array",
@@ -15741,7 +16011,10 @@
                                   },
                                   "subscriptionType": {
                                     "type": "string",
-                                    "enum": ["local", "outdoor"]
+                                    "enum": [
+                                      "local",
+                                      "outdoor"
+                                    ]
                                   },
                                   "checkinTime": {
                                     "type": "string",
@@ -16694,10 +16967,14 @@
       },
       "ClubOwnerRequest": {
         "type": "object",
-        "required": ["data"],
+        "required": [
+          "data"
+        ],
         "properties": {
           "data": {
-            "required": ["clubId"],
+            "required": [
+              "clubId"
+            ],
             "type": "object",
             "properties": {
               "clubId": {
@@ -16804,7 +17081,11 @@
               },
               "clubCategory": {
                 "type": "string",
-                "enum": ["Basic", "Premium", "Luxury"]
+                "enum": [
+                  "Basic",
+                  "Premium",
+                  "Luxury"
+                ]
               },
               "local_membership_plans": {
                 "type": "array",
@@ -16907,7 +17188,9 @@
       },
       "ClubOwner": {
         "type": "object",
-        "required": ["clubId"],
+        "required": [
+          "clubId"
+        ],
         "properties": {
           "id": {
             "oneOf": [
@@ -18254,7 +18537,12 @@
               },
               "verification_status": {
                 "type": "string",
-                "enum": ["pending", "rejected", "approved", "in-review"]
+                "enum": [
+                  "pending",
+                  "rejected",
+                  "approved",
+                  "in-review"
+                ]
               },
               "rejection_reason": {
                 "type": "string"
@@ -18336,7 +18624,11 @@
                     },
                     "platform": {
                       "type": "string",
-                      "enum": ["web", "android", "ios"]
+                      "enum": [
+                        "web",
+                        "android",
+                        "ios"
+                      ]
                     },
                     "isActive": {
                       "type": "boolean"
@@ -19549,7 +19841,10 @@
                                       },
                                       "status": {
                                         "type": "string",
-                                        "enum": ["draft", "completed"]
+                                        "enum": [
+                                          "draft",
+                                          "completed"
+                                        ]
                                       },
                                       "clubName": {
                                         "type": "string"
@@ -19970,7 +20265,11 @@
                                       },
                                       "clubCategory": {
                                         "type": "string",
-                                        "enum": ["Basic", "Premium", "Luxury"]
+                                        "enum": [
+                                          "Basic",
+                                          "Premium",
+                                          "Luxury"
+                                        ]
                                       },
                                       "createdAt": {
                                         "type": "string",
@@ -20123,7 +20422,11 @@
                             },
                             "clubCategory": {
                               "type": "string",
-                              "enum": ["Basic", "Premium", "Luxury"]
+                              "enum": [
+                                "Basic",
+                                "Premium",
+                                "Luxury"
+                              ]
                             },
                             "local_membership_plans": {
                               "type": "array",
@@ -20350,7 +20653,10 @@
                                   },
                                   "subscriptionType": {
                                     "type": "string",
-                                    "enum": ["local", "outdoor"]
+                                    "enum": [
+                                      "local",
+                                      "outdoor"
+                                    ]
                                   },
                                   "checkinTime": {
                                     "type": "string",
@@ -21164,7 +21470,11 @@
           },
           "clubCategory": {
             "type": "string",
-            "enum": ["Basic", "Premium", "Luxury"]
+            "enum": [
+              "Basic",
+              "Premium",
+              "Luxury"
+            ]
           },
           "local_membership_plans": {
             "type": "array",
@@ -21317,7 +21627,9 @@
       },
       "ClubOwnerDocumentRequest": {
         "type": "object",
-        "required": ["data"],
+        "required": [
+          "data"
+        ],
         "properties": {
           "data": {
             "type": "object",
@@ -22953,7 +23265,12 @@
                   },
                   "verification_status": {
                     "type": "string",
-                    "enum": ["pending", "rejected", "approved", "in-review"]
+                    "enum": [
+                      "pending",
+                      "rejected",
+                      "approved",
+                      "in-review"
+                    ]
                   },
                   "rejection_reason": {
                     "type": "string"
@@ -23035,7 +23352,11 @@
                         },
                         "platform": {
                           "type": "string",
-                          "enum": ["web", "android", "ios"]
+                          "enum": [
+                            "web",
+                            "android",
+                            "ios"
+                          ]
                         },
                         "isActive": {
                           "type": "boolean"
@@ -23801,7 +24122,10 @@
                                   },
                                   "subscriptionType": {
                                     "type": "string",
-                                    "enum": ["local", "outdoor"]
+                                    "enum": [
+                                      "local",
+                                      "outdoor"
+                                    ]
                                   },
                                   "checkinTime": {
                                     "type": "string",
@@ -24711,7 +25035,10 @@
                         },
                         "status": {
                           "type": "string",
-                          "enum": ["draft", "completed"]
+                          "enum": [
+                            "draft",
+                            "completed"
+                          ]
                         },
                         "clubName": {
                           "type": "string"
@@ -25132,7 +25459,11 @@
                         },
                         "clubCategory": {
                           "type": "string",
-                          "enum": ["Basic", "Premium", "Luxury"]
+                          "enum": [
+                            "Basic",
+                            "Premium",
+                            "Luxury"
+                          ]
                         },
                         "createdAt": {
                           "type": "string",
@@ -25285,7 +25616,11 @@
               },
               "clubCategory": {
                 "type": "string",
-                "enum": ["Basic", "Premium", "Luxury"]
+                "enum": [
+                  "Basic",
+                  "Premium",
+                  "Luxury"
+                ]
               },
               "local_membership_plans": {
                 "type": "array",
@@ -25530,10 +25865,14 @@
       },
       "DeviceTokenRequest": {
         "type": "object",
-        "required": ["data"],
+        "required": [
+          "data"
+        ],
         "properties": {
           "data": {
-            "required": ["token"],
+            "required": [
+              "token"
+            ],
             "type": "object",
             "properties": {
               "users_permissions_user": {
@@ -25552,7 +25891,11 @@
               },
               "platform": {
                 "type": "string",
-                "enum": ["web", "android", "ios"]
+                "enum": [
+                  "web",
+                  "android",
+                  "ios"
+                ]
               },
               "isActive": {
                 "type": "boolean"
@@ -25619,7 +25962,9 @@
       },
       "DeviceToken": {
         "type": "object",
-        "required": ["token"],
+        "required": [
+          "token"
+        ],
         "properties": {
           "id": {
             "oneOf": [
@@ -26272,7 +26617,12 @@
               },
               "verification_status": {
                 "type": "string",
-                "enum": ["pending", "rejected", "approved", "in-review"]
+                "enum": [
+                  "pending",
+                  "rejected",
+                  "approved",
+                  "in-review"
+                ]
               },
               "rejection_reason": {
                 "type": "string"
@@ -26354,7 +26704,11 @@
                     },
                     "platform": {
                       "type": "string",
-                      "enum": ["web", "android", "ios"]
+                      "enum": [
+                        "web",
+                        "android",
+                        "ios"
+                      ]
                     },
                     "isActive": {
                       "type": "boolean"
@@ -27862,7 +28216,10 @@
                                       },
                                       "status": {
                                         "type": "string",
-                                        "enum": ["draft", "completed"]
+                                        "enum": [
+                                          "draft",
+                                          "completed"
+                                        ]
                                       },
                                       "clubName": {
                                         "type": "string"
@@ -28283,7 +28640,11 @@
                                       },
                                       "clubCategory": {
                                         "type": "string",
-                                        "enum": ["Basic", "Premium", "Luxury"]
+                                        "enum": [
+                                          "Basic",
+                                          "Premium",
+                                          "Luxury"
+                                        ]
                                       },
                                       "createdAt": {
                                         "type": "string",
@@ -28436,7 +28797,11 @@
                             },
                             "clubCategory": {
                               "type": "string",
-                              "enum": ["Basic", "Premium", "Luxury"]
+                              "enum": [
+                                "Basic",
+                                "Premium",
+                                "Luxury"
+                              ]
                             },
                             "local_membership_plans": {
                               "type": "array",
@@ -28663,7 +29028,10 @@
                                   },
                                   "subscriptionType": {
                                     "type": "string",
-                                    "enum": ["local", "outdoor"]
+                                    "enum": [
+                                      "local",
+                                      "outdoor"
+                                    ]
                                   },
                                   "checkinTime": {
                                     "type": "string",
@@ -29459,7 +29827,11 @@
           },
           "platform": {
             "type": "string",
-            "enum": ["web", "android", "ios"]
+            "enum": [
+              "web",
+              "android",
+              "ios"
+            ]
           },
           "isActive": {
             "type": "boolean"
@@ -29555,10 +29927,16 @@
       },
       "LocalMembershipPlanRequest": {
         "type": "object",
-        "required": ["data"],
+        "required": [
+          "data"
+        ],
         "properties": {
           "data": {
-            "required": ["planName", "price", "monthDuration"],
+            "required": [
+              "planName",
+              "price",
+              "monthDuration"
+            ],
             "type": "object",
             "properties": {
               "planName": {
@@ -29660,7 +30038,11 @@
       },
       "LocalMembershipPlan": {
         "type": "object",
-        "required": ["planName", "price", "monthDuration"],
+        "required": [
+          "planName",
+          "price",
+          "monthDuration"
+        ],
         "properties": {
           "id": {
             "oneOf": [
@@ -31026,7 +31408,12 @@
                   },
                   "verification_status": {
                     "type": "string",
-                    "enum": ["pending", "rejected", "approved", "in-review"]
+                    "enum": [
+                      "pending",
+                      "rejected",
+                      "approved",
+                      "in-review"
+                    ]
                   },
                   "rejection_reason": {
                     "type": "string"
@@ -31108,7 +31495,11 @@
                         },
                         "platform": {
                           "type": "string",
-                          "enum": ["web", "android", "ios"]
+                          "enum": [
+                            "web",
+                            "android",
+                            "ios"
+                          ]
                         },
                         "isActive": {
                           "type": "boolean"
@@ -31874,7 +32265,10 @@
                                   },
                                   "subscriptionType": {
                                     "type": "string",
-                                    "enum": ["local", "outdoor"]
+                                    "enum": [
+                                      "local",
+                                      "outdoor"
+                                    ]
                                   },
                                   "checkinTime": {
                                     "type": "string",
@@ -32784,7 +33178,10 @@
                         },
                         "status": {
                           "type": "string",
-                          "enum": ["draft", "completed"]
+                          "enum": [
+                            "draft",
+                            "completed"
+                          ]
                         },
                         "clubName": {
                           "type": "string"
@@ -33205,7 +33602,11 @@
                         },
                         "clubCategory": {
                           "type": "string",
-                          "enum": ["Basic", "Premium", "Luxury"]
+                          "enum": [
+                            "Basic",
+                            "Premium",
+                            "Luxury"
+                          ]
                         },
                         "createdAt": {
                           "type": "string",
@@ -33358,7 +33759,11 @@
               },
               "clubCategory": {
                 "type": "string",
-                "enum": ["Basic", "Premium", "Luxury"]
+                "enum": [
+                  "Basic",
+                  "Premium",
+                  "Luxury"
+                ]
               },
               "local_membership_plans": {
                 "type": "array",
@@ -33619,7 +34024,9 @@
       },
       "LocalSubscriptionRequest": {
         "type": "object",
-        "required": ["data"],
+        "required": [
+          "data"
+        ],
         "properties": {
           "data": {
             "type": "object",
@@ -33667,7 +34074,12 @@
               },
               "subscriptionStatus": {
                 "type": "string",
-                "enum": ["active", "expired", "completed", "cancelled"]
+                "enum": [
+                  "active",
+                  "expired",
+                  "completed",
+                  "cancelled"
+                ]
               },
               "client_checkins": {
                 "type": "array",
@@ -35073,7 +35485,12 @@
                   },
                   "verification_status": {
                     "type": "string",
-                    "enum": ["pending", "rejected", "approved", "in-review"]
+                    "enum": [
+                      "pending",
+                      "rejected",
+                      "approved",
+                      "in-review"
+                    ]
                   },
                   "rejection_reason": {
                     "type": "string"
@@ -35155,7 +35572,11 @@
                         },
                         "platform": {
                           "type": "string",
-                          "enum": ["web", "android", "ios"]
+                          "enum": [
+                            "web",
+                            "android",
+                            "ios"
+                          ]
                         },
                         "isActive": {
                           "type": "boolean"
@@ -35940,7 +36361,10 @@
                                 },
                                 "status": {
                                   "type": "string",
-                                  "enum": ["draft", "completed"]
+                                  "enum": [
+                                    "draft",
+                                    "completed"
+                                  ]
                                 },
                                 "clubName": {
                                   "type": "string"
@@ -36361,7 +36785,11 @@
                                 },
                                 "clubCategory": {
                                   "type": "string",
-                                  "enum": ["Basic", "Premium", "Luxury"]
+                                  "enum": [
+                                    "Basic",
+                                    "Premium",
+                                    "Luxury"
+                                  ]
                                 },
                                 "createdAt": {
                                   "type": "string",
@@ -36514,7 +36942,11 @@
                       },
                       "clubCategory": {
                         "type": "string",
-                        "enum": ["Basic", "Premium", "Luxury"]
+                        "enum": [
+                          "Basic",
+                          "Premium",
+                          "Luxury"
+                        ]
                       },
                       "local_membership_plans": {
                         "type": "array",
@@ -36713,7 +37145,10 @@
                                         },
                                         "subscriptionType": {
                                           "type": "string",
-                                          "enum": ["local", "outdoor"]
+                                          "enum": [
+                                            "local",
+                                            "outdoor"
+                                          ]
                                         },
                                         "checkinTime": {
                                           "type": "string",
@@ -37621,7 +38056,12 @@
           },
           "subscriptionStatus": {
             "type": "string",
-            "enum": ["active", "expired", "completed", "cancelled"]
+            "enum": [
+              "active",
+              "expired",
+              "completed",
+              "cancelled"
+            ]
           },
           "client_checkins": {
             "type": "array",
@@ -37731,7 +38171,9 @@
       },
       "OtpRequestRequest": {
         "type": "object",
-        "required": ["data"],
+        "required": [
+          "data"
+        ],
         "properties": {
           "data": {
             "type": "object",
@@ -37754,7 +38196,10 @@
               },
               "purpose": {
                 "type": "string",
-                "enum": ["register", "reset_password"]
+                "enum": [
+                  "register",
+                  "reset_password"
+                ]
               },
               "last_sent_at": {
                 "type": "string",
@@ -37853,7 +38298,10 @@
           },
           "purpose": {
             "type": "string",
-            "enum": ["register", "reset_password"]
+            "enum": [
+              "register",
+              "reset_password"
+            ]
           },
           "last_sent_at": {
             "type": "string",
@@ -38292,7 +38740,10 @@
                 },
                 "purpose": {
                   "type": "string",
-                  "enum": ["register", "reset_password"]
+                  "enum": [
+                    "register",
+                    "reset_password"
+                  ]
                 },
                 "last_sent_at": {
                   "type": "string",
@@ -38391,7 +38842,9 @@
       },
       "OutdoorMembershipPlanRequest": {
         "type": "object",
-        "required": ["data"],
+        "required": [
+          "data"
+        ],
         "properties": {
           "data": {
             "type": "object",
@@ -39937,7 +40390,11 @@
                               },
                               "platform": {
                                 "type": "string",
-                                "enum": ["web", "android", "ios"]
+                                "enum": [
+                                  "web",
+                                  "android",
+                                  "ios"
+                                ]
                               },
                               "isActive": {
                                 "type": "boolean"
@@ -40722,7 +41179,10 @@
                                       },
                                       "status": {
                                         "type": "string",
-                                        "enum": ["draft", "completed"]
+                                        "enum": [
+                                          "draft",
+                                          "completed"
+                                        ]
                                       },
                                       "clubName": {
                                         "type": "string"
@@ -41143,7 +41603,11 @@
                                       },
                                       "clubCategory": {
                                         "type": "string",
-                                        "enum": ["Basic", "Premium", "Luxury"]
+                                        "enum": [
+                                          "Basic",
+                                          "Premium",
+                                          "Luxury"
+                                        ]
                                       },
                                       "createdAt": {
                                         "type": "string",
@@ -41296,7 +41760,11 @@
                             },
                             "clubCategory": {
                               "type": "string",
-                              "enum": ["Basic", "Premium", "Luxury"]
+                              "enum": [
+                                "Basic",
+                                "Premium",
+                                "Luxury"
+                              ]
                             },
                             "local_membership_plans": {
                               "type": "array",
@@ -41495,7 +41963,10 @@
                                               },
                                               "subscriptionType": {
                                                 "type": "string",
-                                                "enum": ["local", "outdoor"]
+                                                "enum": [
+                                                  "local",
+                                                  "outdoor"
+                                                ]
                                               },
                                               "checkinTime": {
                                                 "type": "string",
@@ -42240,7 +42711,11 @@
                 },
                 "subscriptionStatus": {
                   "type": "string",
-                  "enum": ["active", "cancelled", "expired"]
+                  "enum": [
+                    "active",
+                    "cancelled",
+                    "expired"
+                  ]
                 },
                 "client_checkins": {
                   "type": "array",
@@ -42425,7 +42900,9 @@
       },
       "OutdoorSubscriptionRequest": {
         "type": "object",
-        "required": ["data"],
+        "required": [
+          "data"
+        ],
         "properties": {
           "data": {
             "type": "object",
@@ -42463,7 +42940,11 @@
               },
               "subscriptionStatus": {
                 "type": "string",
-                "enum": ["active", "cancelled", "expired"]
+                "enum": [
+                  "active",
+                  "cancelled",
+                  "expired"
+                ]
               },
               "client_checkins": {
                 "type": "array",
@@ -43869,7 +44350,12 @@
                   },
                   "verification_status": {
                     "type": "string",
-                    "enum": ["pending", "rejected", "approved", "in-review"]
+                    "enum": [
+                      "pending",
+                      "rejected",
+                      "approved",
+                      "in-review"
+                    ]
                   },
                   "rejection_reason": {
                     "type": "string"
@@ -43951,7 +44437,11 @@
                         },
                         "platform": {
                           "type": "string",
-                          "enum": ["web", "android", "ios"]
+                          "enum": [
+                            "web",
+                            "android",
+                            "ios"
+                          ]
                         },
                         "isActive": {
                           "type": "boolean"
@@ -44736,7 +45226,10 @@
                                 },
                                 "status": {
                                   "type": "string",
-                                  "enum": ["draft", "completed"]
+                                  "enum": [
+                                    "draft",
+                                    "completed"
+                                  ]
                                 },
                                 "clubName": {
                                   "type": "string"
@@ -45157,7 +45650,11 @@
                                 },
                                 "clubCategory": {
                                   "type": "string",
-                                  "enum": ["Basic", "Premium", "Luxury"]
+                                  "enum": [
+                                    "Basic",
+                                    "Premium",
+                                    "Luxury"
+                                  ]
                                 },
                                 "createdAt": {
                                   "type": "string",
@@ -45310,7 +45807,11 @@
                       },
                       "clubCategory": {
                         "type": "string",
-                        "enum": ["Basic", "Premium", "Luxury"]
+                        "enum": [
+                          "Basic",
+                          "Premium",
+                          "Luxury"
+                        ]
                       },
                       "local_membership_plans": {
                         "type": "array",
@@ -45509,7 +46010,10 @@
                                         },
                                         "subscriptionType": {
                                           "type": "string",
-                                          "enum": ["local", "outdoor"]
+                                          "enum": [
+                                            "local",
+                                            "outdoor"
+                                          ]
                                         },
                                         "checkinTime": {
                                           "type": "string",
@@ -46400,7 +46904,11 @@
           },
           "subscriptionStatus": {
             "type": "string",
-            "enum": ["active", "cancelled", "expired"]
+            "enum": [
+              "active",
+              "cancelled",
+              "expired"
+            ]
           },
           "client_checkins": {
             "type": "array",
@@ -46510,10 +47018,14 @@
       },
       "PendingClientDetailRequest": {
         "type": "object",
-        "required": ["data"],
+        "required": [
+          "data"
+        ],
         "properties": {
           "data": {
-            "required": ["status"],
+            "required": [
+              "status"
+            ],
             "type": "object",
             "properties": {
               "name": {
@@ -46579,7 +47091,10 @@
               },
               "status": {
                 "type": "string",
-                "enum": ["draft", "completed"]
+                "enum": [
+                  "draft",
+                  "completed"
+                ]
               },
               "date_of_birth": {
                 "type": "string",
@@ -46622,7 +47137,9 @@
       },
       "PendingClientDetail": {
         "type": "object",
-        "required": ["status"],
+        "required": [
+          "status"
+        ],
         "properties": {
           "id": {
             "oneOf": [
@@ -47939,7 +48456,12 @@
               },
               "verification_status": {
                 "type": "string",
-                "enum": ["pending", "rejected", "approved", "in-review"]
+                "enum": [
+                  "pending",
+                  "rejected",
+                  "approved",
+                  "in-review"
+                ]
               },
               "rejection_reason": {
                 "type": "string"
@@ -48021,7 +48543,11 @@
                     },
                     "platform": {
                       "type": "string",
-                      "enum": ["web", "android", "ios"]
+                      "enum": [
+                        "web",
+                        "android",
+                        "ios"
+                      ]
                     },
                     "isActive": {
                       "type": "boolean"
@@ -49234,7 +49760,10 @@
                                       },
                                       "status": {
                                         "type": "string",
-                                        "enum": ["draft", "completed"]
+                                        "enum": [
+                                          "draft",
+                                          "completed"
+                                        ]
                                       },
                                       "clubName": {
                                         "type": "string"
@@ -49655,7 +50184,11 @@
                                       },
                                       "clubCategory": {
                                         "type": "string",
-                                        "enum": ["Basic", "Premium", "Luxury"]
+                                        "enum": [
+                                          "Basic",
+                                          "Premium",
+                                          "Luxury"
+                                        ]
                                       },
                                       "createdAt": {
                                         "type": "string",
@@ -49808,7 +50341,11 @@
                             },
                             "clubCategory": {
                               "type": "string",
-                              "enum": ["Basic", "Premium", "Luxury"]
+                              "enum": [
+                                "Basic",
+                                "Premium",
+                                "Luxury"
+                              ]
                             },
                             "local_membership_plans": {
                               "type": "array",
@@ -50035,7 +50572,10 @@
                                   },
                                   "subscriptionType": {
                                     "type": "string",
-                                    "enum": ["local", "outdoor"]
+                                    "enum": [
+                                      "local",
+                                      "outdoor"
+                                    ]
                                   },
                                   "checkinTime": {
                                     "type": "string",
@@ -50831,7 +51371,10 @@
           },
           "status": {
             "type": "string",
-            "enum": ["draft", "completed"]
+            "enum": [
+              "draft",
+              "completed"
+            ]
           },
           "date_of_birth": {
             "type": "string",
@@ -51312,7 +51855,10 @@
                 },
                 "status": {
                   "type": "string",
-                  "enum": ["draft", "completed"]
+                  "enum": [
+                    "draft",
+                    "completed"
+                  ]
                 },
                 "date_of_birth": {
                   "type": "string",
@@ -51422,7 +51968,9 @@
       },
       "PendingClubOwnerRequest": {
         "type": "object",
-        "required": ["data"],
+        "required": [
+          "data"
+        ],
         "properties": {
           "data": {
             "type": "object",
@@ -51443,7 +51991,10 @@
               },
               "status": {
                 "type": "string",
-                "enum": ["draft", "completed"]
+                "enum": [
+                  "draft",
+                  "completed"
+                ]
               },
               "clubName": {
                 "type": "string"
@@ -51535,7 +52086,11 @@
               },
               "clubCategory": {
                 "type": "string",
-                "enum": ["Basic", "Premium", "Luxury"]
+                "enum": [
+                  "Basic",
+                  "Premium",
+                  "Luxury"
+                ]
               },
               "locale": {
                 "type": "string"
@@ -52212,7 +52767,12 @@
               },
               "verification_status": {
                 "type": "string",
-                "enum": ["pending", "rejected", "approved", "in-review"]
+                "enum": [
+                  "pending",
+                  "rejected",
+                  "approved",
+                  "in-review"
+                ]
               },
               "rejection_reason": {
                 "type": "string"
@@ -52294,7 +52854,11 @@
                     },
                     "platform": {
                       "type": "string",
-                      "enum": ["web", "android", "ios"]
+                      "enum": [
+                        "web",
+                        "android",
+                        "ios"
+                      ]
                     },
                     "isActive": {
                       "type": "boolean"
@@ -53802,7 +54366,10 @@
                                       },
                                       "status": {
                                         "type": "string",
-                                        "enum": ["draft", "completed"]
+                                        "enum": [
+                                          "draft",
+                                          "completed"
+                                        ]
                                       },
                                       "clubName": {
                                         "type": "string"
@@ -54223,7 +54790,11 @@
                                       },
                                       "clubCategory": {
                                         "type": "string",
-                                        "enum": ["Basic", "Premium", "Luxury"]
+                                        "enum": [
+                                          "Basic",
+                                          "Premium",
+                                          "Luxury"
+                                        ]
                                       },
                                       "createdAt": {
                                         "type": "string",
@@ -54376,7 +54947,11 @@
                             },
                             "clubCategory": {
                               "type": "string",
-                              "enum": ["Basic", "Premium", "Luxury"]
+                              "enum": [
+                                "Basic",
+                                "Premium",
+                                "Luxury"
+                              ]
                             },
                             "local_membership_plans": {
                               "type": "array",
@@ -54603,7 +55178,10 @@
                                   },
                                   "subscriptionType": {
                                     "type": "string",
-                                    "enum": ["local", "outdoor"]
+                                    "enum": [
+                                      "local",
+                                      "outdoor"
+                                    ]
                                   },
                                   "checkinTime": {
                                     "type": "string",
@@ -55399,7 +55977,10 @@
           },
           "status": {
             "type": "string",
-            "enum": ["draft", "completed"]
+            "enum": [
+              "draft",
+              "completed"
+            ]
           },
           "clubName": {
             "type": "string"
@@ -55820,7 +56401,11 @@
           },
           "clubCategory": {
             "type": "string",
-            "enum": ["Basic", "Premium", "Luxury"]
+            "enum": [
+              "Basic",
+              "Premium",
+              "Luxury"
+            ]
           },
           "createdAt": {
             "type": "string",
@@ -55909,7 +56494,9 @@
       },
       "PendingSignupRequest": {
         "type": "object",
-        "required": ["data"],
+        "required": [
+          "data"
+        ],
         "properties": {
           "data": {
             "type": "object",
@@ -56524,10 +57111,14 @@
       },
       "ResetPasswordSessionRequest": {
         "type": "object",
-        "required": ["data"],
+        "required": [
+          "data"
+        ],
         "properties": {
           "data": {
-            "required": ["token"],
+            "required": [
+              "token"
+            ],
             "type": "object",
             "properties": {
               "identifier": {
@@ -56601,7 +57192,9 @@
       },
       "ResetPasswordSession": {
         "type": "object",
-        "required": ["token"],
+        "required": [
+          "token"
+        ],
         "properties": {
           "id": {
             "oneOf": [

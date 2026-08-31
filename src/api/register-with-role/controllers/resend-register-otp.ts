@@ -2,6 +2,7 @@ import bcrypt from "bcryptjs";
 import axios from "axios";
 import { normalizeIdentifier } from "../../../utils/normalize-identifier";
 import { sendTwilioOtp } from "../../../services/twilio-sms";
+import { getOtpEmailTemplate } from "../../../utils/otpEmailTemplate";
 
 const generateOtp = () =>
   Math.floor(100000 + Math.random() * 900000).toString();
@@ -25,7 +26,9 @@ export default {
       identifier = normalizePhone(identifier);
 
       if (!signupToken)
-        return ctx.badRequest("Verification session expired. Please register again.");
+        return ctx.badRequest(
+          "Verification session expired. Please register again.",
+        );
 
       /* FIND SESSION */
       const pending = await strapi.db
@@ -39,7 +42,7 @@ export default {
       if (Date.now() > Number(pending.expiresAt)) {
         await strapi.entityService.delete(
           "api::pending-signup.pending-signup",
-          pending.id
+          pending.id,
         );
         return ctx.badRequest("Signup session expired. Please register again.");
       }
@@ -70,12 +73,16 @@ export default {
         await axios.post(
           "https://api.brevo.com/v3/smtp/email",
           {
-            sender: { name: "FitFob", email: "amit@thexyzstudio.com" },
+            sender: { name: "FitFob", email: "qaxyzstudio@gmail.com" },
             to: [{ email: identifier }],
             subject: "Your FitFob OTP",
-            htmlContent: `<h2>Your OTP is <b>${otp}</b></h2>`,
+            htmlContent: getOtpEmailTemplate(otp, {
+              title: "FitFob Verification Code",
+              subtext: "Here is your requested One-Time Password (OTP) to complete your registration:",
+              validityMinutes: 2,
+            }),
           },
-          { headers: { "api-key": process.env.BREVO_API_KEY } }
+          { headers: { "api-key": process.env.BREVO_API_KEY } },
         );
       } else {
         await sendTwilioOtp(identifier, otp);
@@ -85,7 +92,6 @@ export default {
         message: "OTP resent successfully",
         signupToken,
       });
-
     } catch (err: any) {
       strapi.log.error("RESEND OTP ERROR", err?.response?.data || err);
       ctx.internalServerError("Failed to resend OTP");
