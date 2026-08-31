@@ -4,6 +4,7 @@ import crypto from "crypto";
 import { normalizeIdentifier } from "../../../utils/normalize-identifier";
 import { sendTwilioOtp } from "../../../services/twilio-sms";
 import { cognitoForceChangePassword } from "../../../services/cognito-reset";
+import { getOtpEmailTemplate } from "../../../utils/otpEmailTemplate";
 
 /* post-response logger */
 const afterResponse = (ctx, fn: () => void) => {
@@ -59,7 +60,11 @@ export default {
             sender: { name: "FitFob", email: "qaxyzstudio@gmail.com" },
             to: [{ email }],
             subject: "FitFob Password Reset OTP",
-            htmlContent: `<h2>Your OTP is <b>${otp}</b><br/>Valid for 2 minutes</h2>`,
+            htmlContent: getOtpEmailTemplate(otp, {
+              title: "FitFob Password Reset OTP",
+              subtext: "We received a request to reset your password. Use the verification code below to complete your password reset:",
+              validityMinutes: 2,
+            }),
           },
           { headers: { "api-key": process.env.BREVO_API_KEY } },
         );
@@ -144,10 +149,14 @@ export default {
         await axios.post(
           "https://api.brevo.com/v3/smtp/email",
           {
-            sender: { name: "FitFob", email: "amit@thexyzstudio.com" },
+            sender: { name: "FitFob", email: "qaxyzstudio@gmail.com" },
             to: [{ email: identifier }],
             subject: "FitFob Password Reset OTP",
-            htmlContent: `<h2>Your OTP is <b>${otp}</b><br/>Valid for 2 minutes</h2>`,
+            htmlContent: getOtpEmailTemplate(otp, {
+              title: "FitFob Password Reset OTP",
+              subtext: "Here is your requested verification code to reset your password:",
+              validityMinutes: 2,
+            }),
           },
           {
             headers: {

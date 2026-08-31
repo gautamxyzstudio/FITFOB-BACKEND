@@ -4,6 +4,7 @@ import crypto from "crypto";
 import { normalizeIdentifier } from "../../../utils/normalize-identifier";
 import { checkCognitoUser } from "../../../services/cognito-user-check";
 import { sendTwilioOtp } from "../../../services/twilio-sms";
+import { getOtpEmailTemplate } from "../../../utils/otpEmailTemplate";
 
 /* OTP */
 const generateOtp = () =>
@@ -78,15 +79,14 @@ export default {
           await axios.post(
             "https://api.brevo.com/v3/smtp/email",
             {
-              sender: { name: "FitFob", email: "amit@thexyzstudio.com" },
+              sender: { name: "FitFob", email: "qaxyzstudio@gmail.com" },
               to: [{ email }],
-              subject: "Your FitFob OTP",
-              htmlContent: `
-                <h2>
-                  Your OTP is <b>${otp}</b><br/>
-                  Valid for 2 minutes
-                </h2>
-              `,
+              subject: "Your FitFob Registration OTP",
+              htmlContent: getOtpEmailTemplate(otp, {
+                title: "FitFob Registration Verification Code",
+                subtext: "Welcome to FitFob! Use the One-Time Password (OTP) below to complete your registration:",
+                validityMinutes: 2,
+              }),
             },
             { headers: { "api-key": process.env.BREVO_API_KEY } }
           );
