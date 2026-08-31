@@ -29,7 +29,11 @@ export default [
   {
     name: "strapi::cors",
     config: {
-      origin: ["http://localhost:1337", "https://localhost:5173","https://admin.fitfob.com"],
+      origin: [
+        "http://localhost:1337",
+        "http://localhost:5173",
+        "https://admin.fitfob.com",
+      ],
       credentials: true,
     },
   },
@@ -37,18 +41,18 @@ export default [
   "strapi::logger",
   "strapi::query",
   {
-  name: "strapi::body",
-  config: {
-    formLimit: "256mb",
-    jsonLimit: "256mb",
-    textLimit: "256mb",
-    formidable: {
-      maxFileSize: 250 * 1024 * 1024, // 250MB
-      multiples: true,                 // ⭐ THIS is the real fix
-      keepExtensions: true,
+    name: "strapi::body",
+    config: {
+      formLimit: "256mb",
+      jsonLimit: "256mb",
+      textLimit: "256mb",
+      formidable: {
+        maxFileSize: 250 * 1024 * 1024, // 250MB
+        multiples: true, // ⭐ THIS is the real fix
+        keepExtensions: true,
+      },
     },
   },
-},
   "strapi::session",
   "strapi::favicon",
   "strapi::public",
