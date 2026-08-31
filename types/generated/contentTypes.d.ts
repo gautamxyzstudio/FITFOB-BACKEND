@@ -734,7 +734,7 @@ export interface ApiLocalSubscriptionLocalSubscription
     singularName: 'local-subscription';
   };
   options: {
-    draftAndPublish: true;
+    draftAndPublish: false;
   };
   attributes: {
     client_checkins: Schema.Attribute.Relation<
@@ -763,11 +763,14 @@ export interface ApiLocalSubscriptionLocalSubscription
       'api::local-subscription.local-subscription'
     > &
       Schema.Attribute.Private;
+    membershipType: Schema.Attribute.Enumeration<['local', 'app']> &
+      Schema.Attribute.DefaultTo<'app'>;
     publishedAt: Schema.Attribute.DateTime;
     startDate: Schema.Attribute.DateTime;
     subscriptionStatus: Schema.Attribute.Enumeration<
       ['active', 'expired', 'completed', 'cancelled']
-    >;
+    > &
+      Schema.Attribute.DefaultTo<'active'>;
     updatedAt: Schema.Attribute.DateTime;
     updatedBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
       Schema.Attribute.Private;
@@ -875,6 +878,8 @@ export interface ApiOutdoorSubscriptionOutdoorSubscription
       'api::outdoor-subscription.outdoor-subscription'
     > &
       Schema.Attribute.Private;
+    membershipType: Schema.Attribute.Enumeration<['local', 'app']> &
+      Schema.Attribute.DefaultTo<'app'>;
     outdoor_membership_plan: Schema.Attribute.Relation<
       'manyToOne',
       'api::outdoor-membership-plan.outdoor-membership-plan'
@@ -883,7 +888,8 @@ export interface ApiOutdoorSubscriptionOutdoorSubscription
     remainingVisits: Schema.Attribute.Integer;
     subscriptionStatus: Schema.Attribute.Enumeration<
       ['active', 'cancelled', 'expired']
-    >;
+    > &
+      Schema.Attribute.DefaultTo<'active'>;
     totalVisitsAllowed: Schema.Attribute.Integer;
     updatedAt: Schema.Attribute.DateTime;
     updatedBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &

@@ -7,7 +7,7 @@
     "displayName": "local-subscription"
   },
   "options": {
-    "draftAndPublish": true
+    "draftAndPublish": false
   },
   "pluginOptions": {},
   "attributes": {
@@ -29,6 +29,14 @@
       "target": "api::local-membership-plan.local-membership-plan",
       "inversedBy": "local_subscriptions"
     },
+    "membershipType": {
+      "type": "enumeration",
+      "enum": [
+        "local",
+        "app"
+      ],
+      "default": "app"
+    },
     "startDate": {
       "type": "datetime"
     },
@@ -42,7 +50,8 @@
         "expired",
         "completed",
         "cancelled"
-      ]
+      ],
+      "default": "active"
     },
     "client_checkins": {
       "type": "relation",

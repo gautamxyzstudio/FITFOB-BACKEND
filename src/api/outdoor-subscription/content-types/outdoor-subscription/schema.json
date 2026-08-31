@@ -7,7 +7,7 @@
     "displayName": "outdoor-subscription"
   },
   "options": {
-    "draftAndPublish":false
+    "draftAndPublish": false
   },
   "pluginOptions": {},
   "attributes": {
@@ -22,6 +22,14 @@
       "relation": "manyToOne",
       "target": "api::outdoor-membership-plan.outdoor-membership-plan",
       "inversedBy": "outdoor_subscriptions"
+    },
+    "membershipType": {
+      "type": "enumeration",
+      "enum": [
+        "local",
+        "app"
+      ],
+      "default": "app"
     },
     "totalVisitsAllowed": {
       "type": "integer"
@@ -39,7 +47,8 @@
         "active",
         "cancelled",
         "expired"
-      ]
+      ],
+      "default": "active"
     },
     "client_checkins": {
       "type": "relation",
