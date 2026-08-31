@@ -19,7 +19,6 @@ const generateOtp = () =>
   Math.floor(100000 + Math.random() * 900000).toString();
 
 export default {
-
   /* =========================================================
       1) SEND RESET OTP
   ========================================================= */
@@ -41,7 +40,9 @@ export default {
 
       if (!user) {
         afterResponse(ctx, () => {
-          strapi.log.warn(`[RESET OTP] User not found but response hidden (${identifier})`);
+          strapi.log.warn(
+            `[RESET OTP] User not found but response hidden (${identifier})`,
+          );
         });
 
         return ctx.send({ message: "If account exists, OTP sent" });
@@ -55,12 +56,12 @@ export default {
         await axios.post(
           "https://api.brevo.com/v3/smtp/email",
           {
-            sender: { name: "FitFob", email: "amit@thexyzstudio.com" },
+            sender: { name: "FitFob", email: "qaxyzstudio@gmail.com" },
             to: [{ email }],
             subject: "FitFob Password Reset OTP",
             htmlContent: `<h2>Your OTP is <b>${otp}</b><br/>Valid for 2 minutes</h2>`,
           },
-          { headers: { "api-key": process.env.BREVO_API_KEY } }
+          { headers: { "api-key": process.env.BREVO_API_KEY } },
         );
       } else {
         await sendTwilioOtp(phone!, otp);
@@ -84,15 +85,15 @@ export default {
 
       afterResponse(ctx, () => {
         strapi.log.info(`[RESET OTP REQUEST] ${identifier}`);
-        strapi.log.info(`[OTP SEND - ${email ? "EMAIL" : "SMS"}] ${identifier}`);
+        strapi.log.info(
+          `[OTP SEND - ${email ? "EMAIL" : "SMS"}] ${identifier}`,
+        );
         strapi.log.info(`[OTP STORED] ${identifier}`);
       });
 
       return ctx.send({ message: "OTP sent successfully" });
-
-
-    } catch (err) {
-      strapi.log.error("[SEND OTP ERROR]", err);
+    } catch (err: any) {
+      strapi.log.error("[SEND OTP ERROR]", err?.response?.data || err);
       ctx.internalServerError("Unable to send OTP");
     }
   },
@@ -128,7 +129,9 @@ export default {
 
         if (now - last < 30000) {
           strapi.log.warn(`[RESEND BLOCKED - COOLDOWN] ${identifier}`);
-          return ctx.badRequest("Please wait 30 seconds before requesting again");
+          return ctx.badRequest(
+            "Please wait 30 seconds before requesting again",
+          );
         }
       }
 
@@ -138,7 +141,6 @@ export default {
 
       /* ---------- SEND OTP ---------- */
       if (identifier.includes("@")) {
-
         await axios.post(
           "https://api.brevo.com/v3/smtp/email",
           {
@@ -153,11 +155,9 @@ export default {
               "Content-Type": "application/json",
               Accept: "application/json",
             },
-          }
+          },
         );
-
       } else {
-
         await sendTwilioOtp(identifier, otp);
       }
 
@@ -185,10 +185,8 @@ export default {
       });
 
       return ctx.send({ message: "OTP resent successfully" });
-
-
-    } catch (err) {
-      strapi.log.error("[RESEND OTP ERROR]", err);
+    } catch (err: any) {
+      strapi.log.error("[RESEND OTP ERROR]", err?.response?.data || err);
       return ctx.internalServerError("Unable to resend OTP");
     }
   },
@@ -231,10 +229,12 @@ export default {
 
       const token = crypto.randomBytes(32).toString("hex");
 
-      await strapi.db.query("api::reset-password-session.reset-password-session")
+      await strapi.db
+        .query("api::reset-password-session.reset-password-session")
         .deleteMany({ where: { identifier } });
 
-      await strapi.db.query("api::reset-password-session.reset-password-session")
+      await strapi.db
+        .query("api::reset-password-session.reset-password-session")
         .create({
           data: {
             identifier,
@@ -251,7 +251,6 @@ export default {
       });
 
       return ctx.send({ verified: true, resetToken: token });
-
     } catch (err) {
       strapi.log.error("[VERIFY OTP ERROR]", err);
       ctx.internalServerError("Verification failed");
@@ -315,8 +314,13 @@ export default {
         await cognitoForceChangePassword(user.cognitoSub, password);
       } catch (cognitoErr) {
         // DO NOT TOUCH STRAPI PASSWORD
-        strapi.log.error(`[COGNITO PASSWORD CHANGE FAILED] ${identifier}`, cognitoErr);
-        return ctx.internalServerError("Unable to reset password. Please try again.");
+        strapi.log.error(
+          `[COGNITO PASSWORD CHANGE FAILED] ${identifier}`,
+          cognitoErr,
+        );
+        return ctx.internalServerError(
+          "Unable to reset password. Please try again.",
+        );
       }
 
       /* =====================================================
@@ -333,10 +337,12 @@ export default {
         // EXTREMELY IMPORTANT SAFETY LOG
         strapi.log.error(
           `[CRITICAL] Cognito password changed but Strapi update failed for ${identifier}`,
-          dbErr
+          dbErr,
         );
 
-        return ctx.internalServerError("Password partially updated. Contact support.");
+        return ctx.internalServerError(
+          "Password partially updated. Contact support.",
+        );
       }
 
       /* ---------------- INVALIDATE SESSION ---------------- */
@@ -356,11 +362,9 @@ export default {
       });
 
       return ctx.send({ message: "Password reset successful" });
-
     } catch (err) {
       strapi.log.error(`[RESET PASSWORD FATAL ERROR] ${identifier}`, err);
       return ctx.internalServerError("Password reset failed");
     }
-  }
-
+  },
 };

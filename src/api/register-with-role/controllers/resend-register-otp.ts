@@ -86,8 +86,8 @@ export default {
         signupToken,
       });
 
-    } catch (err) {
-      strapi.log.error("RESEND OTP ERROR", err);
+    } catch (err: any) {
+      strapi.log.error("RESEND OTP ERROR", err?.response?.data || err);
       ctx.internalServerError("Failed to resend OTP");
     }
   },

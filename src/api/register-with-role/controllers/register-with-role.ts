@@ -95,7 +95,8 @@ export default {
           await sendTwilioOtp(phone!, otp);
 
         }
-      } catch (err) {
+      } catch (err: any) {
+        strapi.log.error("[REGISTER OTP SEND ERROR]", err?.response?.data || err);
         return ctx.badRequest("Unable to send OTP. Check email/phone.");
       }
 

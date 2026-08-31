@@ -13,7 +13,6 @@ const POPULATE: any = {
 export default factories.createCoreController(
   "api::club-owner.club-owner",
   ({ strapi }) => ({
-
     /* =======================================================
        VERIFIED CLUB OWNERS
     ======================================================= */
@@ -22,7 +21,7 @@ export default factories.createCoreController(
         const { search } = ctx.query as any;
 
         const filters: any = {
-          user: { verification_status: 'approved' },
+          user: { verification_status: "approved" },
         };
 
         const data: any[] = await strapi.entityService.findMany(
@@ -30,8 +29,8 @@ export default factories.createCoreController(
           {
             populate: POPULATE,
             filters,
-            sort: { id: "desc" }, // ✅ sort by id ascending
-          }
+            sort: { id: "desc" },
+          },
         );
 
         let finalData = data;
@@ -41,38 +40,26 @@ export default factories.createCoreController(
           const searchValue = search.replace(/\s+/g, "").toLowerCase();
 
           finalData = data.filter((item: any) => {
-            const owner = item.ownerName
-              ?.replace(/\s+/g, "")
-              .toLowerCase();
+            const owner = item.ownerName?.replace(/\s+/g, "").toLowerCase();
+            const club = item.clubName?.replace(/\s+/g, "").toLowerCase();
 
-            const club = item.clubName
-              ?.replace(/\s+/g, "")
-              .toLowerCase();
-
-            return (
-              owner?.includes(searchValue) ||
-              club?.includes(searchValue)
-            );
+            return owner?.includes(searchValue) || club?.includes(searchValue);
           });
         }
 
-      finalData = finalData.map(item => {
-  const obj = JSON.parse(JSON.stringify(item)); // 🔥 important
+        finalData = finalData.map((item) => {
+          const obj = JSON.parse(JSON.stringify(item));
 
-  return {
-    ...obj,
-    isRead: (obj.read_by_admins || []).length > 0
-  };
-});
+          return {
+            ...obj,
+            isRead: (obj.read_by_admins || []).length > 0,
+          };
+        });
 
-        ctx.body = {
-          success: true,
-          total: finalData.length,
-          data: finalData,
-        };
+        ctx.body = finalData;
       } catch (err) {
-        console.error(err);
-        ctx.throw(500, "Failed to fetch unverified club owners");
+        strapi.log.error("FETCH VERIFIED CLUB OWNERS ERROR:", err);
+        return ctx.internalServerError("Failed to fetch verified club owners");
       }
     },
 
@@ -84,7 +71,7 @@ export default factories.createCoreController(
         const { search } = ctx.query as any;
 
         const filters: any = {
-          user: { verification_status: 'pending' },
+          user: { verification_status: "pending" },
         };
 
         const data: any[] = await strapi.entityService.findMany(
@@ -92,8 +79,8 @@ export default factories.createCoreController(
           {
             populate: POPULATE,
             filters,
-            sort: { id: "desc" }, // ✅ sort by id ascending
-          }
+            sort: { id: "desc" },
+          },
         );
 
         let finalData = data;
@@ -103,115 +90,136 @@ export default factories.createCoreController(
           const searchValue = search.replace(/\s+/g, "").toLowerCase();
 
           finalData = data.filter((item: any) => {
-            const owner = item.ownerName
-              ?.replace(/\s+/g, "")
-              .toLowerCase();
+            const owner = item.ownerName?.replace(/\s+/g, "").toLowerCase();
+            const club = item.clubName?.replace(/\s+/g, "").toLowerCase();
 
-            const club = item.clubName
-              ?.replace(/\s+/g, "")
-              .toLowerCase();
-
-            return (
-              owner?.includes(searchValue) ||
-              club?.includes(searchValue)
-            );
+            return owner?.includes(searchValue) || club?.includes(searchValue);
           });
         }
 
-       finalData = finalData.map(item => {
-  const obj = JSON.parse(JSON.stringify(item)); // 🔥 important
+        finalData = finalData.map((item) => {
+          const obj = JSON.parse(JSON.stringify(item));
 
-  return {
-    ...obj,
-    isRead: (obj.read_by_admins || []).length > 0
-  };
-});
+          return {
+            ...obj,
+            isRead: (obj.read_by_admins || []).length > 0,
+          };
+        });
 
-        ctx.body = {
-          success: true,
-          total: finalData.length,
-          data: finalData,
-        };
+        ctx.body = finalData;
       } catch (err) {
-        console.error(err);
-        ctx.throw(500, "Failed to fetch unverified club owners");
+        strapi.log.error("FETCH UNVERIFIED CLUB OWNERS ERROR:", err);
+        return ctx.internalServerError("Failed to fetch unverified club owners");
       }
     },
+
     /* =======================================================
        GET SINGLE CLUB OWNER 
     ======================================================= */
     async findOne(ctx: Context) {
-      const { id } = ctx.params;
+      try {
+        const { id } = ctx.params;
 
-      const entity: any = await strapi.entityService.findOne(
-        "api::club-owner.club-owner",
-        id,
-        { populate: POPULATE }
-      );
+        if (!id) {
+          return ctx.badRequest("Club owner ID is required");
+        }
 
-      if (!entity || !entity.user) {
-        return ctx.notFound("Club owner not found");
+        const entity: any = await strapi.entityService.findOne(
+          "api::club-owner.club-owner",
+          id,
+          { populate: POPULATE },
+        );
+
+        if (!entity || !entity.user) {
+          return ctx.notFound("Club owner not found");
+        }
+
+        ctx.body = entity;
+      } catch (err) {
+        strapi.log.error("GET CLUB OWNER ERROR:", err);
+        return ctx.internalServerError("Failed to fetch club owner");
       }
-
-      ctx.body = {
-        data: entity,
-      };
     },
 
     /* =======================================================
        UPDATE CLUB OWNER
     ======================================================= */
     async update(ctx: Context) {
-      const { id } = ctx.params;
-      const { data } = ctx.request.body as any;
+      try {
+        const { id } = ctx.params;
+        const body = (ctx.request.body as any) ?? {};
+        const data = body.data ?? body;
 
-      await strapi.entityService.update(
-        "api::club-owner.club-owner",
-        id,
-        { data }
-      );
+        if (!id) {
+          return ctx.badRequest("Club owner ID is required");
+        }
 
-      const entity: any = await strapi.entityService.findOne(
-        "api::club-owner.club-owner",
-        id,
-        { populate: POPULATE }
-      );
+        if (!data || Object.keys(data).length === 0) {
+          return ctx.badRequest("Update data is required");
+        }
 
-      ctx.body = {
-        data: entity,
-      };
+        const existing = await strapi.entityService.findOne(
+          "api::club-owner.club-owner",
+          id,
+        );
+
+        if (!existing) {
+          return ctx.notFound("Club owner not found");
+        }
+
+        await strapi.entityService.update("api::club-owner.club-owner", id, {
+          data,
+        });
+
+        const entity: any = await strapi.entityService.findOne(
+          "api::club-owner.club-owner",
+          id,
+          { populate: POPULATE },
+        );
+
+        ctx.body = entity;
+      } catch (err) {
+        strapi.log.error("UPDATE CLUB OWNER ERROR:", err);
+        return ctx.internalServerError("Failed to update club owner");
+      }
     },
 
     /* =======================================================
        DELETE CLUB OWNER
     ======================================================= */
     async delete(ctx: Context) {
-      const { id } = ctx.params;
+      try {
+        const { id } = ctx.params;
 
-      const entity: any = await strapi.entityService.findOne(
-        "api::club-owner.club-owner",
-        id,
-        { populate: POPULATE }
-      );
+        if (!id) {
+          return ctx.badRequest("Club owner ID is required");
+        }
 
-      if (!entity) return ctx.notFound("Club owner not found");
+        const entity: any = await strapi.entityService.findOne(
+          "api::club-owner.club-owner",
+          id,
+          { populate: POPULATE },
+        );
 
-      await strapi.entityService.delete(
-        "api::club-owner.club-owner",
-        id
-      );
+        if (!entity) return ctx.notFound("Club owner not found");
 
-      ctx.body = {
-        success: true,
-        deleted: entity,
-      };
+        await strapi.entityService.delete("api::club-owner.club-owner", id);
+
+        ctx.body = {
+          success: true,
+          deleted: entity,
+        };
+      } catch (err) {
+        strapi.log.error("DELETE CLUB OWNER ERROR:", err);
+        return ctx.internalServerError("Failed to delete club owner");
+      }
     },
 
-
-    async getMyClubOwner(ctx) {
-
+    /* =======================================================
+       GET LOGGED-IN CLUB OWNER
+    ======================================================= */
+    async getMyClubOwner(ctx: Context) {
       try {
-
         /* GET USER FROM JWT TOKEN */
         const user = ctx.state.user;
 
@@ -228,8 +236,8 @@ export default factories.createCoreController(
               user: true,
               logo: true,
               clubPhotos: true,
-              club_owner_documents: true
-            }
+              club_owner_documents: true,
+            },
           });
 
         if (!clubOwner) {
@@ -237,25 +245,26 @@ export default factories.createCoreController(
         }
 
         ctx.body = clubOwner;
-
       } catch (error) {
-        strapi.log.error(error);
+        strapi.log.error("GET MY CLUB OWNER ERROR:", error);
         return ctx.internalServerError("Something went wrong");
       }
-
     },
 
     /* =======================================================
-    MARK CLUB OWNER REQUEST AS READ BY ADMIN
-   ======================================================= */
-
-    async markClubRead(ctx: any) {
+       MARK CLUB OWNER REQUEST AS READ BY ADMIN
+    ======================================================= */
+    async markClubRead(ctx: Context) {
       try {
         const admin = ctx.state.user;
         const { id } = ctx.params;
 
         if (!admin) {
-          return ctx.unauthorized("Admin not found");
+          return ctx.unauthorized("Admin authentication required");
+        }
+
+        if (!id) {
+          return ctx.badRequest("Club ID is required");
         }
 
         const club = await strapi.db
@@ -269,29 +278,27 @@ export default factories.createCoreController(
           return ctx.notFound("Club request not found");
         }
 
-        let readers = club.read_by_admins || [];
+        let readers = Array.isArray(club.read_by_admins) ? [...club.read_by_admins] : [];
 
         if (!readers.includes(admin.id)) {
           readers.push(admin.id);
 
-          await strapi.db
-            .query("api::club-owner.club-owner")
-            .update({
-              where: { id },
-              data: {
-                read_by_admins: readers,
-              },
-            });
+          await strapi.db.query("api::club-owner.club-owner").update({
+            where: { id },
+            data: {
+              read_by_admins: readers,
+            },
+          });
         }
 
-        ctx.send({
+        return ctx.send({
+          success: true,
           message: "Club request marked as read",
         });
       } catch (error) {
         strapi.log.error("CLUB READ ERROR:", error);
-        ctx.internalServerError("Something went wrong");
+        return ctx.internalServerError("Something went wrong");
       }
-    }
-
-  })
+    },
+  }),
 );

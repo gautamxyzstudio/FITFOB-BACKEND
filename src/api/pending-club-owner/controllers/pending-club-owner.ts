@@ -11,7 +11,9 @@ const UPLOAD_FOLDER_ID = 2;
 function getBody(ctx: Context) {
   let body: any = ctx.request.body || {};
   if (body.data && typeof body.data === "string") {
-    try { body = JSON.parse(body.data); } catch { }
+    try {
+      body = JSON.parse(body.data);
+    } catch {}
   }
   return body;
 }
@@ -55,12 +57,10 @@ async function getEditableDraft(ctx: Context) {
 
 /* ---------------- SUBMISSION VALIDATION ---------------- */
 async function validateBeforeSubmission(draft: any) {
-
   if (!draft.clubName || !draft.ownerName)
     return "Please complete owner details";
 
-  if (!draft.latitude || !draft.longitude)
-    return "Please set map location";
+  if (!draft.latitude || !draft.longitude) return "Please set map location";
 
   if (!draft.clubAddress || !draft.city || !draft.state || !draft.pincode)
     return "Please complete address details";
@@ -94,77 +94,127 @@ async function uploadToFolder(file: any) {
   return uploadedFiles;
 }
 
-export default {
+/* ---------------- CREATE CLUB OWNER FROM PENDING DRAFT ---------------- */
+export async function createClubOwnerFromPending(userId: number) {
+  const draft: any = await strapi.db.query(PENDING_UID).findOne({
+    where: { user: userId },
+    populate: ["logo", "clubPhotos", "club_owner_documents"],
+  });
 
+  if (!draft) return null;
+
+  const existingClub = await strapi.db.query(CLUB_UID).findOne({
+    where: { user: userId },
+  });
+
+  if (existingClub) return existingClub;
+
+  const logoId = draft.logo?.id ?? null;
+  const photoIds = draft.clubPhotos?.map((p: any) => p.id) ?? [];
+  const newClubId = await generateClubId();
+
+  const clubOwner = await strapi.entityService.create(CLUB_UID, {
+    data: {
+      user: userId,
+      clubId: newClubId,
+      ownerName: draft.ownerName,
+      phoneNumber: draft.phoneNumber,
+      email: draft.email,
+      clubName: draft.clubName,
+      openingTime: draft.openingTime,
+      closingTime: draft.closingTime,
+      weekday: draft.weekday,
+      weekend: draft.weekend,
+      clubCategory: draft.clubCategory,
+      facilities: draft.facilities,
+      services: draft.services,
+      latitude: draft.latitude,
+      longitude: draft.longitude,
+      clubAddress: draft.clubAddress,
+      pincode: draft.pincode,
+      city: draft.city,
+      state: draft.state,
+      logo: logoId,
+      clubPhotos: photoIds,
+      publishedAt: new Date(),
+    },
+  });
+
+  const myDocs = await strapi.entityService.findMany(GOV_DOC_UID, {
+    filters: { pending_club_owner: { id: draft.id } },
+  });
+
+  for (const doc of myDocs) {
+    await strapi.entityService.update(GOV_DOC_UID, doc.id, {
+      data: { club_owner: clubOwner.id, pending_club_owner: null },
+    });
+  }
+
+  const docIds = myDocs.map((d: any) => ({ id: d.id }));
+
+  await strapi.entityService.update(CLUB_UID, clubOwner.id, {
+    data: { club_owner_documents: { connect: docIds } as any },
+  });
+
+  /* ---------- DELETE PENDING ONBOARDING ---------- */
+  await strapi.entityService.delete(PENDING_UID, draft.id);
+
+  return clubOwner;
+}
+
+export default {
   /* ===================================================== */
   async me(ctx: Context) {
-  try {
-    const user = ctx.state.user;
+    try {
+      const user = ctx.state.user;
 
-    if (!user) {
-      return ctx.unauthorized("Login required");
-    }
+      if (!user) {
+        return ctx.unauthorized("Login required");
+      }
 
-    /* ================= CHECK CLUB OWNER ================= */
+      /* ================= CHECK PENDING CLUB OWNER ================= */
 
-    const existingClub = await strapi.db.query(CLUB_UID).findOne({
-      where: {
-        user: user.id,
-      },
-    });
-
-    /* ================= CLUB OWNER EXISTS ================= */
-
-    if (existingClub) {
-      return ctx.badRequest("Club owner detail already exists");
-    }
-
-    /* ================= CHECK PENDING CLUB OWNER ================= */
-
-    const draft: any = await strapi.db.query(PENDING_UID).findOne({
-      where: {
-        user: user.id,
-      },
-      populate: {
-        user: true,
-        logo: true,
-        clubPhotos: true,
-        club_owner_documents: {
-          populate: {
-            File: true,
+      const draft: any = await strapi.db.query(PENDING_UID).findOne({
+        where: {
+          user: user.id,
+        },
+        populate: {
+          user: true,
+          logo: true,
+          clubPhotos: true,
+          club_owner_documents: {
+            populate: {
+              File: true,
+            },
           },
         },
-      },
-    });
-
-    /* ================= PENDING CLUB OWNER EXISTS ================= */
-
-    if (draft) {
-      return ctx.send({
-        currentStep: draft.currentStep,
-        status: draft.status,
-        details: draft,
       });
+
+      /* ================= PENDING CLUB OWNER EXISTS ================= */
+
+      if (draft) {
+        return ctx.send({
+          currentStep: draft.currentStep,
+          status: user.verification_status,
+          details: draft,
+        });
+      }
+
+      /* ================= DOES NOT EXIST ================= */
+
+      return ctx.send({
+        currentStep: 1,
+        status: "draft",
+      });
+    } catch (error) {
+      strapi.log.error("Error fetching club owner onboarding details:", error);
+
+      return ctx.internalServerError(
+        "Failed to fetch club owner onboarding details",
+      );
     }
+  },
 
-    /* ================= NEITHER EXISTS ================= */
-
-    return ctx.send({
-      currentStep: 1,
-      status: "draft",
-    });
-
-  } catch (error) {
-    strapi.log.error(
-      "Error fetching club owner onboarding details:",
-      error
-    );
-
-    return ctx.internalServerError(
-      "Failed to fetch club owner onboarding details"
-    );
-  }
-},
   /* ===================================================== */
   async clubOwnerDetails(ctx: Context) {
     const draft: any = await getEditableDraft(ctx);
@@ -288,10 +338,12 @@ export default {
 
     /* ---------- REPLACE OR CREATE ---------- */
     if (existingDoc.length > 0) {
-
       // remove old file from server
       if (existingDoc[0].File) {
-        await strapi.plugin("upload").service("upload").remove(existingDoc[0].File);
+        await strapi
+          .plugin("upload")
+          .service("upload")
+          .remove(existingDoc[0].File);
       }
 
       // update existing DB record
@@ -302,9 +354,7 @@ export default {
       });
 
       ctx.send({ message: "Document replaced" });
-
     } else {
-
       // create first time
       await strapi.entityService.create(GOV_DOC_UID, {
         data: {
@@ -319,36 +369,35 @@ export default {
   },
 
   async getMyDocuments(ctx: Context) {
+    const user = ctx.state.user;
+    if (!user) {
+      console.log("❌ No user found in ctx.state");
+      return ctx.unauthorized();
+    }
 
-  const user = ctx.state.user;
-  if (!user) {
-    console.log("❌ No user found in ctx.state");
-    return ctx.unauthorized();
-  }
+    // get draft
+    const draft: any = await getDraft(user.id);
+    if (!draft) {
+      console.log("No draft found");
+      return ctx.send({ data: [] });
+    }
 
-  // get draft
-  const draft: any = await getDraft(user.id);
-  if (!draft) {
-    console.log("No draft found");
-    return ctx.send({ data: [] });
-  }
+    // fetch documents
+    const docs: any = await strapi.entityService.findMany(GOV_DOC_UID, {
+      filters: { pending_club_owner: { id: draft.id } },
+      populate: ["File"],
+      sort: { createdAt: "desc" },
+    });
 
-  // fetch documents
-  const docs: any = await strapi.entityService.findMany(GOV_DOC_UID, {
-    filters: { pending_club_owner: { id: draft.id } },
-    populate: ["File"],
-    sort: { createdAt: "desc" },
-  });
+    const response = docs.map((d: any) => ({
+      documentId: d.documentId,
+      name: d.documentName,
+      uploadedAt: d.createdAt,
+      fileUrl: d.File ? `${strapi.config.server.url}${d.File.url}` : null,
+    }));
 
-  const response = docs.map((d: any) => ({
-    documentId: d.documentId,
-    name: d.documentName,
-    uploadedAt: d.createdAt,
-    fileUrl: d.File ? `${strapi.config.server.url}${d.File.url}` : null,
-  }));
-
-  ctx.send({ data: response });
-},
+    ctx.send({ data: response });
+  },
 
   /* ===================================================== */
   async confirmGovernmentDocs(ctx: Context) {
@@ -373,72 +422,36 @@ export default {
     const user = ctx.state.user;
     const files: any = ctx.request.files;
 
-    if (!files?.clubPhotos)
-      return ctx.badRequest("Please upload club photos");
+    if (!files?.clubPhotos) return ctx.badRequest("Please upload club photos");
 
     const uploadedPhotos = await uploadToFolder(files.clubPhotos);
     const photoIds = uploadedPhotos.map((f: any) => f.id);
 
-    const updatedDraft: any = await strapi.entityService.findOne(
-      PENDING_UID,
-      draft.id,
-      { populate: ["logo"] }
-    );
-
-    const logoId = updatedDraft.logo?.id ?? null;
-
-    const newClubId = await generateClubId();
-    const clubOwner = await strapi.entityService.create(CLUB_UID, {
+    await strapi.entityService.update(PENDING_UID, draft.id, {
       data: {
-        user: user.id,
-        clubId: newClubId,
-        ownerName: updatedDraft.ownerName,
-        phoneNumber: updatedDraft.phoneNumber,
-        email: updatedDraft.email,
-        clubName: updatedDraft.clubName,
-        openingTime: updatedDraft.openingTime,
-        closingTime: updatedDraft.closingTime,
-        weekday: updatedDraft.weekday,
-        weekend: updatedDraft.weekend,
-        clubCategory: updatedDraft.clubCategory,
-        facilities: updatedDraft.facilities,
-        services: updatedDraft.services,
-        latitude: updatedDraft.latitude,
-        longitude: updatedDraft.longitude,
-        clubAddress: updatedDraft.clubAddress,
-        pincode: updatedDraft.pincode,
-        city: updatedDraft.city,
-        state: updatedDraft.state,
-        logo: logoId,
         clubPhotos: photoIds,
-        publishedAt: new Date(),
+        status: "completed",
+        currentStep: 6,
       },
     });
 
-    const myDocs = await strapi.entityService.findMany(GOV_DOC_UID, {
-      filters: { pending_club_owner: { id: draft.id } },
-    });
+    const fullUser = await strapi.db
+      .query("plugin::users-permissions.user")
+      .findOne({ where: { id: user.id } });
 
-    for (const doc of myDocs) {
-      await strapi.entityService.update(GOV_DOC_UID, doc.id, {
-        data: { club_owner: clubOwner.id, pending_club_owner: null },
+    if (fullUser?.verification_status === "approved") {
+      const clubOwner = await createClubOwnerFromPending(user.id);
+      return ctx.send({
+        success: true,
+        message: "Club Owner profile created successfully",
+        clubOwner,
       });
     }
 
-    const docIds = myDocs.map((d: any) => ({ id: d.id }));
-
-    await strapi.entityService.update(CLUB_UID, clubOwner.id, {
-      data: { club_owner_documents: { connect: docIds } as any },
-    });
-
-    /* ---------- DELETE PENDING ONBOARDING ---------- */
-    await strapi.entityService.delete(PENDING_UID, draft.id);
-
     ctx.send({
       success: true,
-      message: "Club Owner profile created successfully",
+      message:
+        "Club Owner onboarding details submitted. Awaiting verification approval.",
     });
-  }
-
+  },
 };
-

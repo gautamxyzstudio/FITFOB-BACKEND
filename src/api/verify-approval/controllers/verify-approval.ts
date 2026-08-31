@@ -1,3 +1,5 @@
+import { createClubOwnerFromPending } from "../../pending-club-owner/controllers/pending-club-owner";
+
 export default {
 
   /* ---------- APPROVE USER ---------- */
@@ -33,6 +35,9 @@ export default {
           rejected_by: null,
         },
       });
+
+      /* ---------- CREATE CLUB OWNER DETAILS FROM PENDING DRAFT ---------- */
+      await createClubOwnerFromPending(user.id);
 
       const updatedUser = await strapi.db
         .query("plugin::users-permissions.user")
