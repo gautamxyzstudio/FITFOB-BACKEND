@@ -7,7 +7,7 @@
     "displayName": "reset-password-session"
   },
   "options": {
-    "draftAndPublish": true
+    "draftAndPublish": false
   },
   "pluginOptions": {},
   "attributes": {
