@@ -439,7 +439,7 @@ export interface ApiClientCheckinClientCheckin
     singularName: 'client-checkin';
   };
   options: {
-    draftAndPublish: true;
+    draftAndPublish: false;
   };
   attributes: {
     checkinTime: Schema.Attribute.DateTime;
@@ -693,7 +693,7 @@ export interface ApiLocalMembershipPlanLocalMembershipPlan
     singularName: 'local-membership-plan';
   };
   options: {
-    draftAndPublish: true;
+    draftAndPublish: false;
   };
   attributes: {
     club_owner: Schema.Attribute.Relation<
@@ -818,7 +818,7 @@ export interface ApiOutdoorMembershipPlanOutdoorMembershipPlan
     singularName: 'outdoor-membership-plan';
   };
   options: {
-    draftAndPublish: true;
+    draftAndPublish: false;
   };
   attributes: {
     createdAt: Schema.Attribute.DateTime;
@@ -855,7 +855,7 @@ export interface ApiOutdoorSubscriptionOutdoorSubscription
     singularName: 'outdoor-subscription';
   };
   options: {
-    draftAndPublish: true;
+    draftAndPublish: false;
   };
   attributes: {
     client_checkins: Schema.Attribute.Relation<
@@ -1047,7 +1047,7 @@ export interface ApiResetPasswordSessionResetPasswordSession
     singularName: 'reset-password-session';
   };
   options: {
-    draftAndPublish: true;
+    draftAndPublish: false;
   };
   attributes: {
     createdAt: Schema.Attribute.DateTime;
