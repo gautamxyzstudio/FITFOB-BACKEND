@@ -109,7 +109,9 @@ export default factories.createCoreController(
         ctx.body = finalData;
       } catch (err) {
         strapi.log.error("FETCH UNVERIFIED CLUB OWNERS ERROR:", err);
-        return ctx.internalServerError("Failed to fetch unverified club owners");
+        return ctx.internalServerError(
+          "Failed to fetch unverified club owners",
+        );
       }
     },
 
@@ -278,7 +280,9 @@ export default factories.createCoreController(
           return ctx.notFound("Club request not found");
         }
 
-        let readers = Array.isArray(club.read_by_admins) ? [...club.read_by_admins] : [];
+        let readers = Array.isArray(club.read_by_admins)
+          ? [...club.read_by_admins]
+          : [];
 
         if (!readers.includes(admin.id)) {
           readers.push(admin.id);

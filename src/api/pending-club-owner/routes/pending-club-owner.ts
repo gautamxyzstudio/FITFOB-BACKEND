@@ -1,6 +1,5 @@
 export default {
   routes: [
-
     /* START / RESUME ONBOARDING */
     {
       method: "GET",
@@ -47,7 +46,7 @@ export default {
       handler: "pending-club-owner.uploadGovernmentDoc",
       config: { auth: {} },
     },
-    
+
     /* GET MY DOCUMENTS*/
     {
       method: "GET",
@@ -73,8 +72,6 @@ export default {
           multipart: true,
         },
       },
-
     },
-
   ],
 };

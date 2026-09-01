@@ -454,4 +454,96 @@ export default {
         "Club Owner onboarding details submitted. Awaiting verification approval.",
     });
   },
+
+  async unverified(ctx: Context) {
+    try {
+      const { search } = ctx.query as any;
+
+      const filters: any = {
+        user: { verification_status: "pending" },
+      };
+
+      const data: any[] = await strapi.entityService.findMany(
+        "api::pending-club-owner.pending-club-owner",
+        {
+          populate: {
+            logo: true,
+            user: true,
+            club_owner_documents: {
+              populate: ["File"],
+            },
+            clubPhotos: true,
+          },
+
+          filters,
+          sort: { id: "desc" },
+        },
+      );
+
+      let finalData = data;
+
+      // 🔍 Global search (ownerName + clubName)
+      if (search?.trim()) {
+        const searchValue = search.replace(/\s+/g, "").toLowerCase();
+
+        finalData = data.filter((item: any) => {
+          const owner = item.ownerName?.replace(/\s+/g, "").toLowerCase();
+          const club = item.clubName?.replace(/\s+/g, "").toLowerCase();
+
+          return owner?.includes(searchValue) || club?.includes(searchValue);
+        });
+      }
+
+      finalData = finalData.map((item) => {
+        const obj = JSON.parse(JSON.stringify(item));
+
+        return {
+          ...obj,
+          isRead: (obj.read_by_admins || []).length > 0,
+        };
+      });
+
+      ctx.body = finalData;
+    } catch (err) {
+      strapi.log.error("FETCH UNVERIFIED CLUB OWNERS ERROR:", err);
+      return ctx.internalServerError("Failed to fetch unverified club owners");
+    }
+  },
+
+  /* =======================================================
+         GET SINGLE PENDING CLUB OWNER 
+      ======================================================= */
+  async findOne(ctx: Context) {
+    try {
+      const { id } = ctx.params;
+
+      if (!id || isNaN(Number(id))) {
+        return ctx.badRequest("Valid numeric pending club owner ID is required");
+      }
+
+      const entity: any = await strapi.entityService.findOne(
+        "api::pending-club-owner.pending-club-owner",
+        id,
+        {
+          populate: {
+            logo: true,
+            user: true,
+            club_owner_documents: {
+              populate: ["File"],
+            },
+            clubPhotos: true,
+          },
+        },
+      );
+
+      if (!entity || !entity.user) {
+        return ctx.notFound("Club owner not found");
+      }
+
+      ctx.body = entity;
+    } catch (err) {
+      strapi.log.error("GET CLUB OWNER ERROR:", err);
+      return ctx.internalServerError("Failed to fetch club owner");
+    }
+  },
 };
