@@ -29,11 +29,20 @@ export default [
   {
     name: "strapi::cors",
     config: {
-      origin: [
-        "http://localhost:1337",
-        "http://localhost:5173",
-        "https://admin.fitfob.com",
-      ],
+      origin: process.env.CORS_ORIGIN
+        ? process.env.CORS_ORIGIN.split(",").map((url) => url.trim())
+        : [
+            "http://localhost:1337",
+            "http://localhost:5173",
+            "http://localhost:3000",
+            "https://admin.fitfob.com",
+            "http://admin.fitfob.com",
+            "https://fitfob.com",
+            "https://www.fitfob.com",
+          ],
+      methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "HEAD", "OPTIONS"],
+      headers: ["*"],
+      keepHeadersOnError: true,
       credentials: true,
     },
   },
