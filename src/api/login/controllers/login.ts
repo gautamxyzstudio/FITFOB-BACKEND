@@ -7,8 +7,7 @@ import { cognitoLogin } from "../../../services/cognito-auth";
 import { v4 as uuidv4 } from "uuid";
 
 // email detector
-const isEmail = (value: string) =>
-  /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
+const isEmail = (value: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
 
 // phone formatter
 const formatPhone = (value: string): string => {
@@ -49,11 +48,10 @@ export default {
           {
             filters: { email: identifier },
             populate: ["role"],
-          }
+          },
         );
 
         user = users[0];
-
       } else {
         strapi.log.info(`[LOGIN] Searching phone: ${identifier}`);
 
@@ -62,7 +60,7 @@ export default {
           {
             filters: { phoneNumber: identifier },
             populate: ["role"],
-          }
+          },
         );
 
         user = users[0];
@@ -91,15 +89,13 @@ export default {
       ====================================================== */
 
       if (user.role?.name === "Admin") {
-
         // ---------- FIRST TIME LOGIN (NO MFA YET) ----------
         if (!user.mfa_secret) {
-
           // create secret for authenticator
           const secret = speakeasy.generateSecret({
             length: 20,
             name: `FitFob (${user.email})`,
-            issuer: "FitFob"
+            issuer: "FitFob",
           });
 
           // store temporary secret (NOT ACTIVE YET)
@@ -107,8 +103,8 @@ export default {
             "plugin::users-permissions.user",
             user.id,
             {
-              data: { mfa_temp_secret: secret.base32 }
-            }
+              data: { mfa_temp_secret: secret.base32 },
+            },
           );
 
           // generate QR code
@@ -117,7 +113,7 @@ export default {
           // tell frontend to scan
           return ctx.send({
             mfaSetup: true,
-            qr
+            qr,
           });
         }
 
@@ -130,17 +126,16 @@ export default {
           {
             data: {
               mfa_temp_token: tempToken,
-              mfa_identifier: identifier
-            }
-          }
+              mfa_identifier: identifier,
+            },
+          },
         );
 
         return ctx.send({
           mfaRequired: true,
-          tempToken
+          tempToken,
         });
       }
-
 
       /* ======================================================
          NORMAL USERS → CONTINUE OLD FLOW 
@@ -161,8 +156,7 @@ export default {
                GET USER ROLE
             ====================================================== */
 
-      const roleName =
-        user.role?.name?.toLowerCase();
+      const roleName = user.role?.name?.toLowerCase();
 
       let clientDetail: any = null;
       let clubOwnerDetail: any = null;
@@ -197,15 +191,11 @@ export default {
         const detail = userWithClientDetail?.client_detail;
 
         if (detail) {
-
           const getUniqueSubscriptions = (subscriptions: any[] = []) => {
             const uniqueMap = new Map<string, any>();
 
             for (const subscription of subscriptions) {
-
-              const key =
-                subscription.documentId ??
-                String(subscription.id);
+              const key = subscription.documentId ?? String(subscription.id);
 
               const existing = uniqueMap.get(key);
 
@@ -214,10 +204,7 @@ export default {
                 continue;
               }
 
-              if (
-                !existing.publishedAt &&
-                subscription.publishedAt
-              ) {
+              if (!existing.publishedAt && subscription.publishedAt) {
                 uniqueMap.set(key, subscription);
               }
             }
@@ -225,96 +212,60 @@ export default {
             return Array.from(uniqueMap.values());
           };
 
-          const localSubscriptions =
-            getUniqueSubscriptions(
-              detail.local_subscriptions
-            );
+          const localSubscriptions = getUniqueSubscriptions(
+            detail.local_subscriptions,
+          );
 
-          const outdoorSubscriptions =
-            getUniqueSubscriptions(
-              detail.outdoor_subscriptions
-            );
+          const outdoorSubscriptions = getUniqueSubscriptions(
+            detail.outdoor_subscriptions,
+          );
 
           clientDetail = {
-            email:
-              detail.email ??
-              user.email,
+            email: detail.email ?? user.email,
 
-            phone:
-              detail.phoneNumber ??
-              user.phoneNumber,
+            phone: detail.phoneNumber ?? user.phoneNumber,
 
-            selfieUrl:
-              detail.selfieUpload?.url ??
-              null,
+            selfieUrl: detail.selfieUpload?.url ?? null,
 
-            clientId:
-              detail.clientId,
+            clientId: detail.clientId,
 
-            name:
-              detail.name ??
-              null,
+            name: detail.name ?? null,
 
-            outdoor_subscriptions:
-              outdoorSubscriptions,
+            outdoor_subscriptions: outdoorSubscriptions,
 
-            local_subscriptions:
-              localSubscriptions,
+            local_subscriptions: localSubscriptions,
           };
         }
-      }
-
-      /* ======================================================
+      } else if (roleName === "clubowner") {
+        /* ======================================================
          CLUB OWNER ROLE → GET CLUB OWNER DETAIL
       ====================================================== */
+        const userWithClubOwnerDetail: any = await strapi.db
+          .query("plugin::users-permissions.user")
+          .findOne({
+            where: {
+              id: user.id,
+            },
 
-      else if (roleName === "clubowner") {
-        const userWithClubOwnerDetail: any =
-          await strapi.db
-            .query(
-              "plugin::users-permissions.user"
-            )
-            .findOne({
-              where: {
-                id: user.id,
-              },
-
-              populate: {
-                club_owner: {
-                  populate: {
-                    logo: true,
-                  },
+            populate: {
+              club_owner: {
+                populate: {
+                  logo: true,
                 },
               },
-            });
+            },
+          });
 
-        const detail =
-          userWithClubOwnerDetail?.club_owner;
+        const detail = userWithClubOwnerDetail?.club_owner;
 
         if (detail) {
           clubOwnerDetail = {
-            clubId:
-              detail.clubId,
-
-            ownerName:
-              detail.ownerName ??
-              null,
-
-            clubName:
-              detail.clubName ??
-              null,
-
-            logoUrl:
-              detail.logo?.url ??
-              null,
-
-            phoneNumber:
-              detail.phoneNumber ??
-              user.phoneNumber,
-
-            email:
-              detail.email ??
-              user.email,
+            clubId: detail.clubId,
+            ownerName: detail.ownerName ?? null,
+            clubName: detail.clubName ?? null,
+            logoUrl: detail.logo?.url ?? null,
+            phoneNumber: detail.phoneNumber ?? user.phoneNumber,
+            email: detail.email ?? user.email,
           };
         }
       }
@@ -348,9 +299,7 @@ export default {
             clubOwnerDetail,
           }),
         },
-
       };
-
     } catch (err) {
       strapi.log.error("CUSTOM LOGIN ERROR");
       strapi.log.error(err);

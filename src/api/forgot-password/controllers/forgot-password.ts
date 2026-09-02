@@ -40,13 +40,8 @@ export default {
         });
 
       if (!user) {
-        afterResponse(ctx, () => {
-          strapi.log.warn(
-            `[RESET OTP] User not found but response hidden (${identifier})`,
-          );
-        });
-
-        return ctx.send({ message: "If account exists, OTP sent" });
+        strapi.log.warn(`[RESET OTP] User not found (${identifier})`);
+        return ctx.badRequest("User not found, please sign up");
       }
 
       const otp = generateOtp();
@@ -119,6 +114,21 @@ export default {
 
       /* ---------- NORMALIZE ---------- */
       identifier = normalizeIdentifier(identifier);
+
+      /* ---------- CHECK USER ---------- */
+      const email = identifier.includes("@") ? identifier : null;
+      const phone = email ? null : identifier;
+
+      const user = await strapi.db
+        .query("plugin::users-permissions.user")
+        .findOne({
+          where: email ? { email } : { phoneNumber: phone },
+        });
+
+      if (!user) {
+        strapi.log.warn(`[RESEND OTP] User not found (${identifier})`);
+        return ctx.badRequest("User not found, please sign up");
+      }
 
       /* ---------- CHECK OLD OTP ---------- */
       const existing = await strapi.db
