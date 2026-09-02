@@ -1,7 +1,6 @@
 import { createClubOwnerFromPending } from "../../pending-club-owner/controllers/pending-club-owner";
 
 export default {
-
   /* ---------- APPROVE USER ---------- */
   async verificationApproved(ctx: any) {
     try {
@@ -62,8 +61,6 @@ export default {
       strapi.log.error("APPROVE ERROR:", err);
       return ctx.internalServerError("Failed to approve user");
     }
-
-
   },
 
   /* ---------- REJECT USER ---------- */
@@ -130,7 +127,47 @@ export default {
       strapi.log.error("REJECT ERROR:", err);
       return ctx.internalServerError("Failed to reject user");
     }
+  },
 
+  /* ---------- GET VERIFICATION STATUS (LOGGED-IN USER VIA JWT) ---------- */
+  async getVerificationStatus(ctx: any) {
+    try {
+      const user = ctx.state.user;
 
+      if (!user) {
+        return ctx.unauthorized("Authentication required");
+      }
+
+      const fullUser = await strapi.db
+        .query("plugin::users-permissions.user")
+        .findOne({
+          where: { id: user.id },
+          populate: {
+            approved_by: {
+              select: ["id", "username", "email"],
+            },
+            rejected_by: {
+              select: ["id", "username", "email"],
+            },
+          },
+        });
+
+      if (!fullUser) {
+        return ctx.notFound("User not found");
+      }
+
+      ctx.body = {
+        userId: fullUser.id,
+        email: fullUser.email,
+        username: fullUser.username,
+        verification_status: fullUser.verification_status || "pending",
+        rejection_reason: fullUser.rejection_reason || null,
+        approved_by: fullUser.approved_by || null,
+        rejected_by: fullUser.rejected_by || null,
+      };
+    } catch (err: any) {
+      strapi.log.error("GET VERIFICATION STATUS ERROR:", err);
+      return ctx.internalServerError("Failed to fetch verification status");
+    }
   },
 };

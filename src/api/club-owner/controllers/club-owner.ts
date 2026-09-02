@@ -27,19 +27,43 @@ export default factories.createCoreController(
         const data: any[] = await strapi.entityService.findMany(
           "api::club-owner.club-owner",
           {
-            populate: POPULATE,
+            populate: {
+              user: true,
+              logo: true,
+            },
             filters,
             sort: { id: "desc" },
           },
         );
 
-        let finalData = data;
+        const dataWithCurrentStep = data.map((item: any) => {
+          return {
+            id: item.id,
+            documentId: item.documentId,
+            ownerName: item.ownerName,
+            clubName: item.clubName,
+            clubId: item.clubId,
+            phoneNumber: item.phoneNumber,
+            logo: item.logo.formats.thumbnail.url,
+            createdAt: item.createdAt,
+            clubAddress: item.clubAddress,
+            city: item.city,
+            state: item.state,
+            user: {
+              email: item.user.email,
+              verification_status: item.user.verification_status,
+            },
+            pincode: item.pincode,
+          };
+        });
+
+        let finalData = dataWithCurrentStep;
 
         // 🔍 Global search (ownerName + clubName)
         if (search?.trim()) {
           const searchValue = search.replace(/\s+/g, "").toLowerCase();
 
-          finalData = data.filter((item: any) => {
+          finalData = dataWithCurrentStep.filter((item: any) => {
             const owner = item.ownerName?.replace(/\s+/g, "").toLowerCase();
             const club = item.clubName?.replace(/\s+/g, "").toLowerCase();
 
@@ -47,14 +71,14 @@ export default factories.createCoreController(
           });
         }
 
-        finalData = finalData.map((item) => {
-          const obj = JSON.parse(JSON.stringify(item));
+        // finalData = finalData.map((item) => {
+        //   const obj = JSON.parse(JSON.stringify(item));
 
-          return {
-            ...obj,
-            isRead: (obj.read_by_admins || []).length > 0,
-          };
-        });
+        //   return {
+        //     ...obj,
+        //     isRead: (obj.read_by_admins || []).length > 0,
+        //   };
+        // });
 
         ctx.body = finalData;
       } catch (err) {

@@ -14,5 +14,14 @@ export default {
       handler: "pending-club-owner.findOne",
       config: { auth: {} },
     },
+    // Update Pending Club Owner
+    {
+      method: "PUT",
+      path: "/pending-club-owner/:id",
+      handler: "pending-club-owner.update",
+      config: {
+        auth: {},
+      },
+    },
   ],
 };

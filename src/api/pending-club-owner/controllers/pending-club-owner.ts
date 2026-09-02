@@ -109,8 +109,13 @@ export async function createClubOwnerFromPending(userId: number) {
 
   if (existingClub) return existingClub;
 
+  const myDocs: any = await strapi.entityService.findMany(GOV_DOC_UID, {
+    filters: { pending_club_owner: { id: draft.id } },
+  });
+
   const logoId = draft.logo?.id ?? null;
   const photoIds = draft.clubPhotos?.map((p: any) => p.id) ?? [];
+  const docIds = (myDocs || []).map((d: any) => d.id);
   const newClubId = await generateClubId();
 
   const clubOwner = await strapi.entityService.create(CLUB_UID, {
@@ -136,25 +141,16 @@ export async function createClubOwnerFromPending(userId: number) {
       state: draft.state,
       logo: logoId,
       clubPhotos: photoIds,
+      club_owner_documents: docIds,
       publishedAt: new Date(),
     },
   });
 
-  const myDocs = await strapi.entityService.findMany(GOV_DOC_UID, {
-    filters: { pending_club_owner: { id: draft.id } },
-  });
-
   for (const doc of myDocs) {
     await strapi.entityService.update(GOV_DOC_UID, doc.id, {
-      data: { club_owner: clubOwner.id, pending_club_owner: null },
+      data: { pending_club_owner: null },
     });
   }
-
-  const docIds = myDocs.map((d: any) => ({ id: d.id }));
-
-  await strapi.entityService.update(CLUB_UID, clubOwner.id, {
-    data: { club_owner_documents: { connect: docIds } as any },
-  });
 
   /* ---------- DELETE PENDING ONBOARDING ---------- */
   await strapi.entityService.delete(PENDING_UID, draft.id);
@@ -469,24 +465,38 @@ export default {
           populate: {
             logo: true,
             user: true,
-            club_owner_documents: {
-              populate: ["File"],
-            },
-            clubPhotos: true,
           },
 
           filters,
           sort: { id: "desc" },
         },
       );
+      const dataWithCurrentStep = data.map((item: any) => {
+        return {
+          id: item.id,
+          documentId: item.documentId,
+          currentStep: item.currentStep,
+          ownerName: item.ownerName,
+          clubName: item.clubName,
+          logo: item.logo.formats.thumbnail.url,
+          createdAt: item.createdAt,
+          clubAddress: item.clubAddress,
+          city: item.city,
+          state: item.state,
+          user: {
+            verification_status: item.user.verification_status,
+          },
+          pincode: item.pincode,
+        };
+      });
 
-      let finalData = data;
+      let finalData = dataWithCurrentStep;
 
       // 🔍 Global search (ownerName + clubName)
       if (search?.trim()) {
         const searchValue = search.replace(/\s+/g, "").toLowerCase();
 
-        finalData = data.filter((item: any) => {
+        finalData = dataWithCurrentStep.filter((item: any) => {
           const owner = item.ownerName?.replace(/\s+/g, "").toLowerCase();
           const club = item.clubName?.replace(/\s+/g, "").toLowerCase();
 
@@ -494,14 +504,14 @@ export default {
         });
       }
 
-      finalData = finalData.map((item) => {
-        const obj = JSON.parse(JSON.stringify(item));
+      // finalData = finalData.map((item) => {
+      //   const obj = JSON.parse(JSON.stringify(item));
 
-        return {
-          ...obj,
-          isRead: (obj.read_by_admins || []).length > 0,
-        };
-      });
+      //   return {
+      //     ...obj,
+      //     isRead: (obj.read_by_admins || []).length > 0,
+      //   };
+      // });
 
       ctx.body = finalData;
     } catch (err) {
@@ -518,7 +528,9 @@ export default {
       const { id } = ctx.params;
 
       if (!id || isNaN(Number(id))) {
-        return ctx.badRequest("Valid numeric pending club owner ID is required");
+        return ctx.badRequest(
+          "Valid numeric pending club owner ID is required",
+        );
       }
 
       const entity: any = await strapi.entityService.findOne(
@@ -544,6 +556,59 @@ export default {
     } catch (err) {
       strapi.log.error("GET CLUB OWNER ERROR:", err);
       return ctx.internalServerError("Failed to fetch club owner");
+    }
+  },
+  /* =======================================================
+         UPDATE CLUB OWNER
+      ======================================================= */
+  async update(ctx: Context) {
+    try {
+      const { id } = ctx.params;
+      const body = (ctx.request.body as any) ?? {};
+      const data = body.data ?? body;
+
+      if (!id) {
+        return ctx.badRequest("Pending Club owner ID is required");
+      }
+
+      if (!data || Object.keys(data).length === 0) {
+        return ctx.badRequest("Update data is required");
+      }
+
+      const existing = await strapi.entityService.findOne(
+        "api::pending-club-owner.pending-club-owner",
+        id,
+      );
+
+      if (!existing) {
+        return ctx.notFound("Pending club owner not found");
+      }
+
+      await strapi.entityService.update(
+        "api::pending-club-owner.pending-club-owner",
+        id,
+        { data },
+      );
+
+      const entity: any = await strapi.entityService.findOne(
+        "api::pending-club-owner.pending-club-owner",
+        id,
+        {
+          populate: {
+            logo: true,
+            user: true,
+            club_owner_documents: {
+              populate: ["File"],
+            },
+            clubPhotos: true,
+          },
+        },
+      );
+
+      ctx.body = entity;
+    } catch (err) {
+      strapi.log.error("UPDATE CLUB OWNER ERROR:", err);
+      return ctx.internalServerError("Failed to update club owner");
     }
   },
 };
