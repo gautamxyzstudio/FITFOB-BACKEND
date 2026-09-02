@@ -7,6 +7,20 @@ export default {
       handler: "pending-club-owner.me",
       config: { auth: {} },
     },
+    /* UNVERIFIED CLUB OWNERS */
+    {
+      method: "GET",
+      path: "/pending-club-owner/unverified",
+      handler: "pending-club-owner.unverified",
+      config: { auth: {} },
+    },
+    /* GET MY DOCUMENTS */
+    {
+      method: "GET",
+      path: "/pending-club-owner/documents",
+      handler: "pending-club-owner.getMyDocuments",
+      config: { auth: {} },
+    },
     /* STEP 1 — CLUB + OWNER + LOGO */
     {
       method: "POST",
@@ -39,19 +53,10 @@ export default {
     },
 
     /* STEP 5 — CLUB OWNER GOVERNMENT ID'S */
-
     {
       method: "POST",
       path: "/pending-club-owner/upload-government-doc",
       handler: "pending-club-owner.uploadGovernmentDoc",
-      config: { auth: {} },
-    },
-
-    /* GET MY DOCUMENTS*/
-    {
-      method: "GET",
-      path: "/pending-club-owner/documents",
-      handler: "pending-club-owner.getMyDocuments",
       config: { auth: {} },
     },
     {
@@ -72,6 +77,22 @@ export default {
           multipart: true,
         },
       },
+    },
+
+    /* GET SINGLE PENDING CLUB OWNER BY ID (MUST BE AFTER SPECIFIC PATHS LIKE /me) */
+    {
+      method: "GET",
+      path: "/pending-club-owner/:id",
+      handler: "pending-club-owner.findOne",
+      config: { auth: {} },
+    },
+
+    /* UPDATE PENDING CLUB OWNER BY ID */
+    {
+      method: "PUT",
+      path: "/pending-club-owner/:id",
+      handler: "pending-club-owner.update",
+      config: { auth: {} },
     },
   ],
 };
