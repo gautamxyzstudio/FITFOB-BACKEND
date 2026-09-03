@@ -3,20 +3,20 @@ import { factories } from "@strapi/strapi";
 const OUTDOOR_PLAN_UID =
   "api::outdoor-membership-plan.outdoor-membership-plan" as any;
 
-/* ---------- FAST ROLE HELPER (AVOIDS REDUNDANT DB QUERIES) ---------- */
+/* ---------- ROLE HELPER ---------- */
 async function getUserRole(user: any): Promise<string> {
   if (!user) return "";
+  if (user._cachedRole) return user._cachedRole;
 
-  // 1. Fast memory check if role is already on ctx.state.user
   if (user.role?.name || user.role?.type) {
-    return (
+    const role =
       user.role.name?.toLowerCase().replace(/[\s_-]+/g, "") ||
       user.role.type?.toLowerCase().replace(/[\s_-]+/g, "") ||
-      ""
-    );
+      "";
+    user._cachedRole = role;
+    return role;
   }
 
-  // 2. Lean DB query with minimal selects
   const fullUser: any = await strapi.db
     .query("plugin::users-permissions.user")
     .findOne({
@@ -29,11 +29,43 @@ async function getUserRole(user: any): Promise<string> {
       },
     });
 
-  return (
+  const role =
     fullUser?.role?.name?.toLowerCase().replace(/[\s_-]+/g, "") ||
     fullUser?.role?.type?.toLowerCase().replace(/[\s_-]+/g, "") ||
-    ""
-  );
+    "";
+  user._cachedRole = role;
+  return role;
+}
+
+/* ---------- VALIDATE VALID UPTO HELPER ---------- */
+function validateAndNormalizeValidUpto(validUpto: any): {
+  isValid: boolean;
+  value?: string;
+  error?: string;
+} {
+  if (
+    validUpto === undefined ||
+    validUpto === null ||
+    String(validUpto).trim() === ""
+  ) {
+    return { isValid: true, value: "unlimited" };
+  }
+
+  const str = String(validUpto).trim();
+  if (str.toLowerCase() === "unlimited") {
+    return { isValid: true, value: "unlimited" };
+  }
+
+  const parsed = new Date(str);
+  if (isNaN(parsed.getTime())) {
+    return {
+      isValid: false,
+      error:
+        "validUpto must be 'unlimited' or a valid date string (e.g. YYYY-MM-DD or ISO 8601)",
+    };
+  }
+
+  return { isValid: true, value: str };
 }
 
 export default factories.createCoreController(
@@ -67,6 +99,7 @@ export default factories.createCoreController(
           visitAllowed,
           description,
           isActive = true,
+          validUpto,
         } = payload;
 
         /* ---------- VALIDATION ---------- */
@@ -75,6 +108,12 @@ export default factories.createCoreController(
             "planName is required and must be a non-empty string",
           );
         }
+
+        const validUptoCheck = validateAndNormalizeValidUpto(validUpto);
+        if (!validUptoCheck.isValid) {
+          return ctx.badRequest(validUptoCheck.error);
+        }
+        const normalizedValidUpto = validUptoCheck.value;
 
         if (
           price === undefined ||
@@ -99,7 +138,7 @@ export default factories.createCoreController(
           );
         }
 
-        // Check if plan with the exact same name already exists
+        // Check duplicate plan name
         const existingPlan = await strapi.db.query(OUTDOOR_PLAN_UID).findOne({
           where: {
             planName: planName.trim(),
@@ -114,18 +153,39 @@ export default factories.createCoreController(
         }
 
         /* ---------- CREATE PLAN ---------- */
-        const createdPlan = await strapi.entityService.create(
-          OUTDOOR_PLAN_UID,
-          {
+        let createdPlan: any = null;
+
+        if ((strapi as any).documents) {
+          try {
+            createdPlan = await (strapi as any)
+              .documents(OUTDOOR_PLAN_UID)
+              .create({
+                data: {
+                  planName: planName.trim(),
+                  price: Number(price),
+                  visitAllowed: parseInt(visitAllowed, 10),
+                  description: description?.trim() || null,
+                  isActive: Boolean(isActive),
+                  validUpto: normalizedValidUpto,
+                },
+              });
+          } catch (docErr) {
+            strapi.log.warn("documents.create fallback in create:", docErr);
+          }
+        }
+
+        if (!createdPlan) {
+          createdPlan = await strapi.entityService.create(OUTDOOR_PLAN_UID, {
             data: {
               planName: planName.trim(),
               price: Number(price),
               visitAllowed: parseInt(visitAllowed, 10),
               description: description?.trim() || null,
               isActive: Boolean(isActive),
+              validUpto: normalizedValidUpto,
             },
-          },
-        );
+          });
+        }
 
         return ctx.send(
           {
@@ -143,7 +203,7 @@ export default factories.createCoreController(
     },
 
     /* =======================================================
-       FIND ALL / FILTER OUTDOOR MEMBERSHIP PLANS (OPTIMIZED DB QUERY)
+       FIND ALL / FILTER OUTDOOR MEMBERSHIP PLANS
     ======================================================= */
     async find(ctx) {
       try {
@@ -163,7 +223,7 @@ export default factories.createCoreController(
           ];
         }
 
-        const data = await strapi.db.query(OUTDOOR_PLAN_UID).findMany({
+        const data: any[] = await strapi.db.query(OUTDOOR_PLAN_UID).findMany({
           where,
           orderBy: { id: "desc" },
         });
@@ -191,13 +251,10 @@ export default factories.createCoreController(
           return ctx.badRequest("Plan ID is required");
         }
 
-        const isNumeric =
-          !isNaN(Number(id)) && /^\d+$/.test(String(id).trim());
+        const documentId = String(id).trim();
 
         const entity: any = await strapi.db.query(OUTDOOR_PLAN_UID).findOne({
-          where: isNumeric
-            ? { $or: [{ documentId: String(id) }, { id: Number(id) }] }
-            : { documentId: String(id) },
+          where: { documentId },
         });
 
         if (!entity) {
@@ -235,14 +292,11 @@ export default factories.createCoreController(
           );
         }
 
-        const isNumeric =
-          !isNaN(Number(id)) && /^\d+$/.test(String(id).trim());
+        const documentId = String(id).trim();
 
         const existing = await strapi.db.query(OUTDOOR_PLAN_UID).findOne({
-          where: isNumeric
-            ? { $or: [{ documentId: String(id) }, { id: Number(id) }] }
-            : { documentId: String(id) },
-          select: ["id"],
+          where: { documentId },
+          select: ["id", "documentId"],
         });
 
         if (!existing) {
@@ -252,9 +306,17 @@ export default factories.createCoreController(
         const body = ctx.request.body;
         const payload = body?.data ? body.data : body || {};
 
-        const { planName, price, visitAllowed, description, isActive } =
+        const { planName, price, visitAllowed, description, isActive, validUpto } =
           payload;
         const updateData: any = {};
+
+        if (validUpto !== undefined) {
+          const validUptoCheck = validateAndNormalizeValidUpto(validUpto);
+          if (!validUptoCheck.isValid) {
+            return ctx.badRequest(validUptoCheck.error);
+          }
+          updateData.validUpto = validUptoCheck.value;
+        }
 
         if (planName !== undefined) {
           if (typeof planName !== "string" || !planName.trim()) {
@@ -289,13 +351,28 @@ export default factories.createCoreController(
           updateData.isActive = Boolean(isActive);
         }
 
-        const updated = await strapi.entityService.update(
-          OUTDOOR_PLAN_UID,
-          existing.id,
-          {
-            data: updateData,
-          },
-        );
+        let updated: any = null;
+
+        if ((strapi as any).documents && existing.documentId) {
+          try {
+            updated = await (strapi as any).documents(OUTDOOR_PLAN_UID).update({
+              documentId: existing.documentId,
+              data: updateData,
+            });
+          } catch (docErr) {
+            strapi.log.warn("documents.update fallback in update:", docErr);
+          }
+        }
+
+        if (!updated) {
+          updated = await strapi.entityService.update(
+            OUTDOOR_PLAN_UID,
+            existing.id,
+            {
+              data: updateData,
+            },
+          );
+        }
 
         return ctx.send({
           message: "Outdoor membership plan updated successfully",
@@ -329,21 +406,24 @@ export default factories.createCoreController(
           );
         }
 
-        const isNumeric =
-          !isNaN(Number(id)) && /^\d+$/.test(String(id).trim());
+        const documentId = String(id).trim();
 
         const existing = await strapi.db.query(OUTDOOR_PLAN_UID).findOne({
-          where: isNumeric
-            ? { $or: [{ documentId: String(id) }, { id: Number(id) }] }
-            : { documentId: String(id) },
-          select: ["id"],
+          where: { documentId },
+          select: ["id", "documentId"],
         });
 
         if (!existing) {
           return ctx.notFound("Outdoor membership plan not found");
         }
 
-        await strapi.entityService.delete(OUTDOOR_PLAN_UID, existing.id);
+        if ((strapi as any).documents && existing.documentId) {
+          await (strapi as any).documents(OUTDOOR_PLAN_UID).delete({
+            documentId: existing.documentId,
+          });
+        } else {
+          await strapi.entityService.delete(OUTDOOR_PLAN_UID, existing.id);
+        }
 
         return ctx.send({
           message: "Outdoor membership plan deleted successfully",
@@ -377,14 +457,11 @@ export default factories.createCoreController(
           );
         }
 
-        const isNumeric =
-          !isNaN(Number(id)) && /^\d+$/.test(String(id).trim());
+        const documentId = String(id).trim();
 
         const existing: any = await strapi.db.query(OUTDOOR_PLAN_UID).findOne({
-          where: isNumeric
-            ? { $or: [{ documentId: String(id) }, { id: Number(id) }] }
-            : { documentId: String(id) },
-          select: ["id", "isActive"],
+          where: { documentId },
+          select: ["id", "documentId", "isActive"],
         });
 
         if (!existing) {
@@ -399,15 +476,32 @@ export default factories.createCoreController(
             ? Boolean(payload.isActive)
             : !existing.isActive;
 
-        const updated = await strapi.entityService.update(
-          OUTDOOR_PLAN_UID,
-          existing.id,
-          {
-            data: {
-              isActive: newActiveStatus,
+        let updated: any = null;
+
+        if ((strapi as any).documents && existing.documentId) {
+          try {
+            updated = await (strapi as any).documents(OUTDOOR_PLAN_UID).update({
+              documentId: existing.documentId,
+              data: {
+                isActive: newActiveStatus,
+              },
+            });
+          } catch (docErr) {
+            strapi.log.warn("documents.update fallback in toggleStatus:", docErr);
+          }
+        }
+
+        if (!updated) {
+          updated = await strapi.entityService.update(
+            OUTDOOR_PLAN_UID,
+            existing.id,
+            {
+              data: {
+                isActive: newActiveStatus,
+              },
             },
-          },
-        );
+          );
+        }
 
         return ctx.send({
           message: `Outdoor membership plan ${

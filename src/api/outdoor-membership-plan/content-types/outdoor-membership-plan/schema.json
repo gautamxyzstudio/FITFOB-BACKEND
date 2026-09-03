@@ -27,6 +27,10 @@
       "type": "boolean",
       "default": true
     },
+    "validUpto": {
+      "type": "string",
+      "default": "unlimited"
+    },
     "outdoor_subscriptions": {
       "type": "relation",
       "relation": "oneToMany",

@@ -14,7 +14,7 @@
       "name": "Apache 2.0",
       "url": "https://www.apache.org/licenses/LICENSE-2.0.html"
     },
-    "x-generation-date": "2026-09-02T10:48:48.333Z"
+    "x-generation-date": "2026-09-03T11:17:29.851Z"
   },
   "x-strapi-config": {
     "plugins": [
@@ -5169,6 +5169,148 @@
         "operationId": "get/pending-club-owner/me"
       }
     },
+    "/pending-club-owner/unverified": {
+      "get": {
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PendingClubOwnerResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Pending-club-owner"
+        ],
+        "parameters": [],
+        "operationId": "get/pending-club-owner/unverified"
+      }
+    },
+    "/pending-club-owner/documents": {
+      "get": {
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PendingClubOwnerResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Pending-club-owner"
+        ],
+        "parameters": [],
+        "operationId": "get/pending-club-owner/documents"
+      }
+    },
     "/pending-club-owner/club-owner-details": {
       "post": {
         "responses": {
@@ -5574,77 +5716,6 @@
         }
       }
     },
-    "/pending-club-owner/documents": {
-      "get": {
-        "responses": {
-          "200": {
-            "description": "OK",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/PendingClubOwnerResponse"
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "Bad Request",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "Unauthorized",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          },
-          "403": {
-            "description": "Forbidden",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "Not Found",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          },
-          "500": {
-            "description": "Internal Server Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          }
-        },
-        "tags": [
-          "Pending-club-owner"
-        ],
-        "parameters": [],
-        "operationId": "get/pending-club-owner/documents"
-      }
-    },
     "/pending-club-owner/confirm-government-docs": {
       "post": {
         "responses": {
@@ -5795,6 +5866,178 @@
         ],
         "parameters": [],
         "operationId": "post/pending-club-owner/upload-club-photos",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PendingClubOwnerRequest"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/pending-club-owner/{id}": {
+      "get": {
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PendingClubOwnerResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Pending-club-owner"
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "",
+            "deprecated": false,
+            "required": true,
+            "schema": {
+              "type": "number"
+            }
+          }
+        ],
+        "operationId": "get/pending-club-owner/{id}"
+      },
+      "put": {
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PendingClubOwnerResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Pending-club-owner"
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "",
+            "deprecated": false,
+            "required": true,
+            "schema": {
+              "type": "number"
+            }
+          }
+        ],
+        "operationId": "put/pending-club-owner/{id}",
         "requestBody": {
           "required": true,
           "content": {
@@ -11240,6 +11483,9 @@
                             "isActive": {
                               "type": "boolean"
                             },
+                            "validUpto": {
+                              "type": "string"
+                            },
                             "local_subscriptions": {
                               "type": "array",
                               "items": {
@@ -11484,6 +11730,9 @@
                                                 },
                                                 "isActive": {
                                                   "type": "boolean"
+                                                },
+                                                "validUpto": {
+                                                  "type": "string"
                                                 },
                                                 "outdoor_subscriptions": {
                                                   "type": "array",
@@ -15852,6 +16101,9 @@
                                   "isActive": {
                                     "type": "boolean"
                                   },
+                                  "validUpto": {
+                                    "type": "string"
+                                  },
                                   "local_subscriptions": {
                                     "type": "array",
                                     "items": {
@@ -16117,6 +16369,9 @@
                                           },
                                           "isActive": {
                                             "type": "boolean"
+                                          },
+                                          "validUpto": {
+                                            "type": "string"
                                           },
                                           "outdoor_subscriptions": {
                                             "type": "array",
@@ -20508,6 +20763,9 @@
                                   "isActive": {
                                     "type": "boolean"
                                   },
+                                  "validUpto": {
+                                    "type": "string"
+                                  },
                                   "local_subscriptions": {
                                     "type": "array",
                                     "items": {
@@ -20773,6 +21031,9 @@
                                           },
                                           "isActive": {
                                             "type": "boolean"
+                                          },
+                                          "validUpto": {
+                                            "type": "string"
                                           },
                                           "outdoor_subscriptions": {
                                             "type": "array",
@@ -23996,6 +24257,9 @@
                                 "isActive": {
                                   "type": "boolean"
                                 },
+                                "validUpto": {
+                                  "type": "string"
+                                },
                                 "local_subscriptions": {
                                   "type": "array",
                                   "items": {
@@ -24263,6 +24527,9 @@
                                           },
                                           "isActive": {
                                             "type": "boolean"
+                                          },
+                                          "validUpto": {
+                                            "type": "string"
                                           },
                                           "outdoor_subscriptions": {
                                             "type": "array",
@@ -28911,6 +29178,9 @@
                                   "isActive": {
                                     "type": "boolean"
                                   },
+                                  "validUpto": {
+                                    "type": "string"
+                                  },
                                   "local_subscriptions": {
                                     "type": "array",
                                     "items": {
@@ -29176,6 +29446,9 @@
                                           },
                                           "isActive": {
                                             "type": "boolean"
+                                          },
+                                          "validUpto": {
+                                            "type": "string"
                                           },
                                           "outdoor_subscriptions": {
                                             "type": "array",
@@ -30035,6 +30308,9 @@
               },
               "isActive": {
                 "type": "boolean"
+              },
+              "validUpto": {
+                "type": "string"
               },
               "local_subscriptions": {
                 "type": "array",
@@ -32167,6 +32443,9 @@
                                 "isActive": {
                                   "type": "boolean"
                                 },
+                                "validUpto": {
+                                  "type": "string"
+                                },
                                 "local_subscriptions": {
                                   "type": "array",
                                   "items": {
@@ -32434,6 +32713,9 @@
                                           },
                                           "isActive": {
                                             "type": "boolean"
+                                          },
+                                          "validUpto": {
+                                            "type": "string"
                                           },
                                           "outdoor_subscriptions": {
                                             "type": "array",
@@ -33999,6 +34281,9 @@
           },
           "isActive": {
             "type": "boolean"
+          },
+          "validUpto": {
+            "type": "string"
           },
           "local_subscriptions": {
             "type": "array",
@@ -37091,6 +37376,9 @@
                             "isActive": {
                               "type": "boolean"
                             },
+                            "validUpto": {
+                              "type": "string"
+                            },
                             "local_subscriptions": {
                               "type": "array",
                               "items": {
@@ -37335,6 +37623,9 @@
                                                 },
                                                 "isActive": {
                                                   "type": "boolean"
+                                                },
+                                                "validUpto": {
+                                                  "type": "string"
                                                 },
                                                 "outdoor_subscriptions": {
                                                   "type": "array",
@@ -38977,6 +39268,9 @@
               "isActive": {
                 "type": "boolean"
               },
+              "validUpto": {
+                "type": "string"
+              },
               "outdoor_subscriptions": {
                 "type": "array",
                 "items": {
@@ -39078,6 +39372,9 @@
           },
           "isActive": {
             "type": "boolean"
+          },
+          "validUpto": {
+            "type": "string"
           },
           "outdoor_subscriptions": {
             "type": "array",
@@ -41930,6 +42227,9 @@
                                   "isActive": {
                                     "type": "boolean"
                                   },
+                                  "validUpto": {
+                                    "type": "string"
+                                  },
                                   "local_subscriptions": {
                                     "type": "array",
                                     "items": {
@@ -42723,6 +43023,9 @@
                     },
                     "isActive": {
                       "type": "boolean"
+                    },
+                    "validUpto": {
+                      "type": "string"
                     },
                     "outdoor_subscriptions": {
                       "type": "array",
@@ -45998,6 +46301,9 @@
                             "isActive": {
                               "type": "boolean"
                             },
+                            "validUpto": {
+                              "type": "string"
+                            },
                             "local_subscriptions": {
                               "type": "array",
                               "items": {
@@ -46242,6 +46548,9 @@
                                                 },
                                                 "isActive": {
                                                   "type": "boolean"
+                                                },
+                                                "validUpto": {
+                                                  "type": "string"
                                                 },
                                                 "outdoor_subscriptions": {
                                                   "type": "array",
@@ -50553,6 +50862,9 @@
                                   "isActive": {
                                     "type": "boolean"
                                   },
+                                  "validUpto": {
+                                    "type": "string"
+                                  },
                                   "local_subscriptions": {
                                     "type": "array",
                                     "items": {
@@ -50818,6 +51130,9 @@
                                           },
                                           "isActive": {
                                             "type": "boolean"
+                                          },
+                                          "validUpto": {
+                                            "type": "string"
                                           },
                                           "outdoor_subscriptions": {
                                             "type": "array",
@@ -55173,6 +55488,9 @@
                                   "isActive": {
                                     "type": "boolean"
                                   },
+                                  "validUpto": {
+                                    "type": "string"
+                                  },
                                   "local_subscriptions": {
                                     "type": "array",
                                     "items": {
@@ -55438,6 +55756,9 @@
                                           },
                                           "isActive": {
                                             "type": "boolean"
+                                          },
+                                          "validUpto": {
+                                            "type": "string"
                                           },
                                           "outdoor_subscriptions": {
                                             "type": "array",

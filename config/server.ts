@@ -1,8 +1,14 @@
 import path from "path";
+import cronTasks from "../src/cron/cron";
 
 export default {
   app: {
     keys: ["fitfobKey1", "fitfobKey2", "fitfobKey3", "fitfobKey4"],
+  },
+
+  cron: {
+    enabled: true,
+    tasks: cronTasks,
   },
 
   dirs: {

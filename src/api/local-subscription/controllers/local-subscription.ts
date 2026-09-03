@@ -5,16 +5,18 @@ const LOCAL_PLAN_UID = "api::local-membership-plan.local-membership-plan" as any
 const CLIENT_UID = "api::client-detail.client-detail" as any;
 const CLUB_OWNER_UID = "api::club-owner.club-owner" as any;
 
-/* ---------- FAST ROLE HELPER ---------- */
+/* ---------- ROLE HELPER ---------- */
 async function getUserRole(user: any): Promise<string> {
   if (!user) return "";
+  if (user._cachedRole) return user._cachedRole;
 
   if (user.role?.name || user.role?.type) {
-    return (
+    const role =
       user.role.name?.toLowerCase().replace(/[\s_-]+/g, "") ||
       user.role.type?.toLowerCase().replace(/[\s_-]+/g, "") ||
-      ""
-    );
+      "";
+    user._cachedRole = role;
+    return role;
   }
 
   const fullUser: any = await strapi.db
@@ -29,142 +31,161 @@ async function getUserRole(user: any): Promise<string> {
       },
     });
 
-  return (
+  const role =
     fullUser?.role?.name?.toLowerCase().replace(/[\s_-]+/g, "") ||
     fullUser?.role?.type?.toLowerCase().replace(/[\s_-]+/g, "") ||
-    ""
+    "";
+  user._cachedRole = role;
+  return role;
+}
+
+/* ---------- HELPER: EXTRACT LOGO URL ---------- */
+function extractLogoUrl(logo: any): string | null {
+  if (!logo) return null;
+  if (typeof logo === "string") return logo;
+  return (
+    logo.url ||
+    logo.formats?.thumbnail?.url ||
+    logo.formats?.small?.url ||
+    null
   );
 }
 
+/* ---------- HELPER: FORMAT CLUB OWNER ---------- */
+function formatClubOwner(owner: any): any {
+  if (!owner) return null;
+  return {
+    id: owner.id,
+    documentId: owner.documentId,
+    clubId: owner.clubId,
+    ownerName: owner.ownerName,
+    clubName: owner.clubName,
+    phoneNumber: owner.phoneNumber,
+    email: owner.email,
+    clubAddress: owner.clubAddress,
+    city: owner.city,
+    state: owner.state,
+    pincode: owner.pincode,
+    logo: extractLogoUrl(owner.logo),
+  };
+}
+
 /* ---------- HELPER: GET CLIENT DETAIL FOR AUTH USER ---------- */
-async function getClientDetailForUser(userId: number | string) {
-  if (!userId) return null;
+async function getClientDetailForUser(user: any) {
+  if (!user) return null;
+  const userObj = typeof user === "object" ? user : null;
+  const userId = userObj ? userObj.id : user;
 
-  const isNumeric =
-    typeof userId === "number" ||
-    (!isNaN(Number(userId)) && /^\d+$/.test(String(userId).trim()));
+  if (userObj?._cachedClientDetail) {
+    return userObj._cachedClientDetail;
+  }
 
-  const userWhere = isNumeric
-    ? { $or: [{ id: Number(userId) }, { documentId: String(userId) }] }
-    : { documentId: String(userId) };
+  // 1. Direct lookup by user foreign key (fast indexed query)
+  let client: any = await strapi.db.query(CLIENT_UID).findOne({
+    where: { user: userId },
+    select: [
+      "id",
+      "documentId",
+      "clientId",
+      "name",
+      "phoneNumber",
+      "email",
+    ],
+  });
 
-  // 1. Try finding via users-permissions user
-  const userWithDetail: any = await strapi.db
-    .query("plugin::users-permissions.user")
-    .findOne({
-      where: userWhere,
-      populate: {
-        client_detail: true,
-      },
-    });
+  // 2. Fallback via user table
+  if (!client) {
+    const userWithDetail: any = await strapi.db
+      .query("plugin::users-permissions.user")
+      .findOne({
+        where: { id: userId },
+        select: ["id"],
+        populate: {
+          client_detail: {
+            select: [
+              "id",
+              "documentId",
+              "clientId",
+              "name",
+              "phoneNumber",
+              "email",
+            ],
+          },
+        },
+      });
 
-  let client = userWithDetail?.client_detail;
+    client = userWithDetail?.client_detail || null;
+  }
 
-  // 2. If client not found or missing documentId, query client_detail directly
-  if (!client || !client.documentId) {
-    const directConditions: any[] = [];
-    if (isNumeric) {
-      directConditions.push({ user: Number(userId) });
-      directConditions.push({ user: { id: Number(userId) } });
-    }
-    directConditions.push({ user: { documentId: String(userId) } });
-
-    if (client?.id) {
-      directConditions.push({ id: client.id });
-    }
-
-    const directClient: any = await strapi.db.query(CLIENT_UID).findOne({
-      where: {
-        $or: directConditions,
-      },
-    });
-
-    if (directClient) {
-      client = directClient;
-    }
+  if (userObj && client) {
+    userObj._cachedClientDetail = client;
   }
 
   return client || null;
 }
 
 /* ---------- HELPER: GET CLUB OWNER FOR AUTH USER ---------- */
-async function getClubOwnerForUser(userId: number | string) {
-  if (!userId) return null;
+async function getClubOwnerForUser(user: any) {
+  if (!user) return null;
+  const userObj = typeof user === "object" ? user : null;
+  const userId = userObj ? userObj.id : user;
 
-  const isNumeric =
-    typeof userId === "number" ||
-    (!isNaN(Number(userId)) && /^\d+$/.test(String(userId).trim()));
+  if (userObj?._cachedClubOwner) {
+    return userObj._cachedClubOwner;
+  }
 
-  const userWhere = isNumeric
-    ? { $or: [{ id: Number(userId) }, { documentId: String(userId) }] }
-    : { documentId: String(userId) };
+  // 1. Direct query to club-owner by user relation (no logo populated)
+  let owner: any = await strapi.db.query(CLUB_OWNER_UID).findOne({
+    where: { user: userId },
+    select: ["id", "documentId", "clubId", "clubName", "ownerName"],
+  });
 
-  const userWithDetail: any = await strapi.db
-    .query("plugin::users-permissions.user")
-    .findOne({
-      where: userWhere,
-      populate: {
-        club_owner: {
-          populate: {
-            logo: true,
+  // 2. Fallback via user table
+  if (!owner) {
+    const userWithDetail: any = await strapi.db
+      .query("plugin::users-permissions.user")
+      .findOne({
+        where: { id: userId },
+        select: ["id"],
+        populate: {
+          club_owner: {
+            select: ["id", "documentId", "clubId", "clubName", "ownerName"],
           },
         },
-      },
-    });
+      });
 
-  let owner = userWithDetail?.club_owner;
+    owner = userWithDetail?.club_owner || null;
+  }
 
-  if (!owner || !owner.documentId) {
-    const directConditions: any[] = [];
-    if (isNumeric) {
-      directConditions.push({ user: Number(userId) });
-      directConditions.push({ user: { id: Number(userId) } });
-    }
-    directConditions.push({ user: { documentId: String(userId) } });
-
-    if (owner?.id) {
-      directConditions.push({ id: owner.id });
-    }
-
-    const directClubOwner: any = await strapi.db.query(CLUB_OWNER_UID).findOne({
-      where: {
-        $or: directConditions,
-      },
-      populate: {
-        logo: true,
-      },
-    });
-
-    if (directClubOwner) {
-      owner = directClubOwner;
-    }
+  if (userObj && owner) {
+    userObj._cachedClubOwner = owner;
   }
 
   return owner || null;
 }
 
-/* ---------- HELPER: RESOLVE CLIENT DETAIL BY VARIOUS IDENTIFIERS ---------- */
+/* ---------- HELPER: RESOLVE CLIENT DETAIL ---------- */
 async function resolveClientDetail(identifier: string | number) {
   if (!identifier) return null;
-
   const rawStr = String(identifier).trim();
-  const isNumeric = !isNaN(Number(rawStr)) && /^\d+$/.test(rawStr);
-
-  const whereConditions: any[] = [
-    { documentId: rawStr },
-    { clientId: rawStr },
-    { phoneNumber: rawStr },
-    { email: rawStr },
-  ];
-
-  if (isNumeric) {
-    whereConditions.push({ id: Number(rawStr) });
-  }
 
   const client = await strapi.db.query(CLIENT_UID).findOne({
     where: {
-      $or: whereConditions,
+      $or: [
+        { documentId: rawStr },
+        { clientId: rawStr },
+        { phoneNumber: rawStr },
+        { email: rawStr },
+      ],
     },
+    select: [
+      "id",
+      "documentId",
+      "clientId",
+      "name",
+      "phoneNumber",
+      "email",
+    ],
   });
 
   return client || null;
@@ -173,26 +194,21 @@ async function resolveClientDetail(identifier: string | number) {
 /* ---------- HELPER: RESOLVE CLUB OWNER ---------- */
 async function resolveClubOwner(identifier: string | number) {
   if (!identifier) return null;
-
   const rawStr = String(identifier).trim();
-  const isNumeric = !isNaN(Number(rawStr)) && /^\d+$/.test(rawStr);
-
-  const whereConditions: any[] = [
-    { documentId: rawStr },
-    { clubId: rawStr },
-  ];
-
-  if (isNumeric) {
-    whereConditions.push({ id: Number(rawStr) });
-  }
 
   const owner = await strapi.db.query(CLUB_OWNER_UID).findOne({
     where: {
-      $or: whereConditions,
+      $or: [{ documentId: rawStr }, { clubId: rawStr }],
     },
-    populate: {
-      logo: true,
-    },
+    select: [
+      "id",
+      "documentId",
+      "clubId",
+      "clubName",
+      "ownerName",
+      "phoneNumber",
+      "email",
+    ],
   });
 
   return owner || null;
@@ -201,31 +217,24 @@ async function resolveClubOwner(identifier: string | number) {
 /* ---------- HELPER: RESOLVE LOCAL PLAN ---------- */
 async function resolveLocalPlan(identifier: string | number) {
   if (!identifier) return null;
-
   const rawStr = String(identifier).trim();
-  const isNumeric = !isNaN(Number(rawStr)) && /^\d+$/.test(rawStr);
 
   const plan: any = await strapi.db.query(LOCAL_PLAN_UID).findOne({
-    where: isNumeric
-      ? { $or: [{ documentId: rawStr }, { id: Number(rawStr) }] }
-      : { documentId: rawStr },
+    where: { documentId: rawStr },
     populate: {
       club_owner: {
-        populate: ["logo"],
+        select: ["id", "documentId", "clubId", "clubName", "ownerName"],
       },
     },
   });
 
   if (!plan) return null;
 
-  // Guarantee owner documentId is resolved from plan
-  if (plan.club_owner) {
-    if (!plan.club_owner.documentId) {
-      const ownerIdentifier = plan.club_owner.id || plan.club_owner;
-      const fullOwner = await resolveClubOwner(ownerIdentifier);
-      if (fullOwner) {
-        plan.club_owner = fullOwner;
-      }
+  if (plan.club_owner && !plan.club_owner.documentId) {
+    const ownerIdentifier = plan.club_owner.id || plan.club_owner;
+    const fullOwner = await resolveClubOwner(ownerIdentifier);
+    if (fullOwner) {
+      plan.club_owner = fullOwner;
     }
   }
 
@@ -250,7 +259,6 @@ export default factories.createCoreController(
     ======================================================= */
     async buy(ctx) {
       try {
-        // 1. Get authenticated user from token
         const user = ctx.state.user;
         if (!user) {
           return ctx.unauthorized("Authentication required");
@@ -263,9 +271,8 @@ export default factories.createCoreController(
           );
         }
 
-        // Get client documentId from token (ctx.state.user)
-        const clientRecord = await getClientDetailForUser(user.id || user.documentId);
-        if (!clientRecord) {
+        const clientRecord = await getClientDetailForUser(user);
+        if (!clientRecord || !clientRecord.documentId) {
           return ctx.badRequest(
             "Client profile not found for this account. Please complete client profile registration first.",
           );
@@ -274,12 +281,6 @@ export default factories.createCoreController(
         const clientDocId = clientRecord.documentId;
         const clientId = clientRecord.id;
 
-        if (!clientDocId && !clientId) {
-          return ctx.badRequest(
-            "Unable to determine client documentId from authentication token.",
-          );
-        }
-
         const body = ctx.request.body;
         const payload = body?.data ? body.data : body || {};
 
@@ -287,11 +288,11 @@ export default factories.createCoreController(
 
         if (!local_membership_plan) {
           return ctx.badRequest(
-            "local_membership_plan is required (provide plan documentId or numeric id)",
+            "local_membership_plan is required (provide plan documentId)",
           );
         }
 
-        // 2. Resolve plan and get owner documentId from plan
+        // Resolve plan
         const plan = await resolveLocalPlan(local_membership_plan);
         if (!plan) {
           return ctx.notFound("Local membership plan not found");
@@ -309,7 +310,6 @@ export default factories.createCoreController(
           );
         }
 
-        // Get owner documentId and ID from plan
         let ownerRecord = plan.club_owner;
         if (!ownerRecord.documentId) {
           const ownerIdentifier = ownerRecord.id || ownerRecord;
@@ -328,16 +328,16 @@ export default factories.createCoreController(
         const monthDuration = Number(plan.monthDuration) || 1;
         const endDate = calculateEndDate(startDate, monthDuration);
 
-        /* ---------- CREATE APP SUBSCRIPTION ---------- */
+        /* ---------- CREATE APP SUBSCRIPTION (NO LOGO POPULATED) ---------- */
         let createdSub: any = null;
 
         if ((strapi as any).documents) {
           try {
             createdSub = await (strapi as any).documents(LOCAL_SUB_UID).create({
               data: {
-                client_detail: clientDocId || clientId,
-                club_owner: clubOwnerDocId || clubOwnerId,
-                local_membership_plan: planDocId || planId,
+                client_detail: clientDocId,
+                club_owner: clubOwnerDocId,
+                local_membership_plan: planDocId,
                 membershipType: "app",
                 startDate: startDate.toISOString(),
                 endDate,
@@ -345,10 +345,25 @@ export default factories.createCoreController(
               },
               populate: {
                 club_owner: {
-                  populate: ["logo"],
+                  select: [
+                    "id",
+                    "documentId",
+                    "clubId",
+                    "clubName",
+                    "ownerName",
+                  ],
                 },
                 local_membership_plan: true,
-                client_detail: true,
+                client_detail: {
+                  select: [
+                    "id",
+                    "documentId",
+                    "clientId",
+                    "name",
+                    "phoneNumber",
+                    "email",
+                  ],
+                },
               },
             });
           } catch (docErr) {
@@ -368,33 +383,7 @@ export default factories.createCoreController(
               subscriptionStatus: "active",
             },
             populate: {
-              club_owner: {
-                populate: ["logo"],
-              },
-              local_membership_plan: true,
-              client_detail: true,
-            },
-          });
-        }
-
-        // Relational guarantee
-        if ((!createdSub?.club_owner || !createdSub?.client_detail) && (createdSub?.id || createdSub?.documentId)) {
-          const whereClause = createdSub.id ? { id: createdSub.id } : { documentId: createdSub.documentId };
-          await strapi.db.query(LOCAL_SUB_UID).update({
-            where: whereClause,
-            data: {
-              client_detail: clientId,
-              club_owner: clubOwnerId,
-              local_membership_plan: planId,
-            },
-          });
-
-          createdSub = await strapi.db.query(LOCAL_SUB_UID).findOne({
-            where: whereClause,
-            populate: {
-              club_owner: {
-                populate: ["logo"],
-              },
+              club_owner: true,
               local_membership_plan: true,
               client_detail: true,
             },
@@ -452,21 +441,19 @@ export default factories.createCoreController(
 
         if (!client_detail) {
           return ctx.badRequest(
-            "client_detail is required (provide documentId, clientId, phone, email, or id)",
+            "client_detail is required (provide documentId, clientId, phone, or email)",
           );
         }
 
         if (!local_membership_plan) {
           return ctx.badRequest(
-            "local_membership_plan is required (provide plan documentId or id)",
+            "local_membership_plan is required (provide plan documentId)",
           );
         }
 
         const clientRecord = await resolveClientDetail(client_detail);
         if (!clientRecord) {
-          return ctx.notFound(
-            `Client matching '${client_detail}' not found.`,
-          );
+          return ctx.notFound(`Client matching '${client_detail}' not found.`);
         }
 
         const plan = await resolveLocalPlan(local_membership_plan);
@@ -478,18 +465,18 @@ export default factories.createCoreController(
         let targetClubOwnerDocId: string;
 
         if (roleName === "clubowner") {
-          // 1. ClubOwner: Extract owner documentId / id directly from JWT token
-          const ownerRecord = await getClubOwnerForUser(user.id);
-          if (!ownerRecord) {
-            return ctx.badRequest("Club owner profile not found for this account.");
+          const ownerRecord = await getClubOwnerForUser(user);
+          if (!ownerRecord || !ownerRecord.documentId) {
+            return ctx.badRequest(
+              "Club owner profile not found for this account.",
+            );
           }
 
-          const planOwnerId = plan.club_owner?.id || plan.club_owner;
           const planOwnerDocId = plan.club_owner?.documentId;
 
-          // Enforce ownership: club owner can only create memberships of his/her own gym
+          // Enforce ownership: club owner can only assign memberships of their own gym
           if (
-            Number(planOwnerId) !== Number(ownerRecord.id) &&
+            planOwnerDocId &&
             String(planOwnerDocId) !== String(ownerRecord.documentId)
           ) {
             return ctx.forbidden(
@@ -500,7 +487,6 @@ export default factories.createCoreController(
           targetClubOwnerId = ownerRecord.id;
           targetClubOwnerDocId = ownerRecord.documentId;
         } else {
-          // 2. Admin / SuperAdmin: Can pass owner documentId / id in payload or use plan's club_owner
           const providedOwner = club_owner || ownerId;
 
           if (providedOwner) {
@@ -509,12 +495,8 @@ export default factories.createCoreController(
               return ctx.notFound(`Club owner '${providedOwner}' not found.`);
             }
 
-            const planOwnerId = plan.club_owner?.id || plan.club_owner;
             const planOwnerDocId = plan.club_owner?.documentId;
-
             if (
-              planOwnerId &&
-              Number(planOwnerId) !== Number(resolvedOwner.id) &&
               planOwnerDocId &&
               String(planOwnerDocId) !== String(resolvedOwner.documentId)
             ) {
@@ -545,16 +527,16 @@ export default factories.createCoreController(
         const planId = plan.id;
         const planDocId = plan.documentId;
 
-        /* ---------- CREATE LOCAL SUBSCRIPTION ---------- */
+        /* ---------- CREATE LOCAL SUBSCRIPTION (NO LOGO POPULATED) ---------- */
         let createdSub: any = null;
 
         if ((strapi as any).documents) {
           try {
             createdSub = await (strapi as any).documents(LOCAL_SUB_UID).create({
               data: {
-                client_detail: clientDocId || clientId,
-                club_owner: targetClubOwnerDocId || targetClubOwnerId,
-                local_membership_plan: planDocId || planId,
+                client_detail: clientDocId,
+                club_owner: targetClubOwnerDocId,
+                local_membership_plan: planDocId,
                 membershipType: "local",
                 startDate: startDate.toISOString(),
                 endDate,
@@ -562,10 +544,25 @@ export default factories.createCoreController(
               },
               populate: {
                 club_owner: {
-                  populate: ["logo"],
+                  select: [
+                    "id",
+                    "documentId",
+                    "clubId",
+                    "clubName",
+                    "ownerName",
+                  ],
                 },
                 local_membership_plan: true,
-                client_detail: true,
+                client_detail: {
+                  select: [
+                    "id",
+                    "documentId",
+                    "clientId",
+                    "name",
+                    "phoneNumber",
+                    "email",
+                  ],
+                },
               },
             });
           } catch (docErr) {
@@ -585,32 +582,7 @@ export default factories.createCoreController(
               subscriptionStatus: "active",
             },
             populate: {
-              club_owner: {
-                populate: ["logo"],
-              },
-              local_membership_plan: true,
-              client_detail: true,
-            },
-          });
-        }
-
-        // Relational guarantee
-        if ((!createdSub?.club_owner || !createdSub?.client_detail) && createdSub?.id) {
-          await strapi.db.query(LOCAL_SUB_UID).update({
-            where: { id: createdSub.id },
-            data: {
-              client_detail: clientId,
-              club_owner: targetClubOwnerId,
-              local_membership_plan: planId,
-            },
-          });
-
-          createdSub = await strapi.db.query(LOCAL_SUB_UID).findOne({
-            where: { id: createdSub.id },
-            populate: {
-              club_owner: {
-                populate: ["logo"],
-              },
+              club_owner: true,
               local_membership_plan: true,
               client_detail: true,
             },
@@ -648,56 +620,93 @@ export default factories.createCoreController(
         const roleName = await getUserRole(user);
         const { membershipType, subscriptionStatus } = ctx.query as any;
 
-        const filters: any = {};
+        const where: any = {};
         if (membershipType) {
-          filters.membershipType = membershipType;
+          where.membershipType = membershipType;
         }
         if (subscriptionStatus) {
-          filters.subscriptionStatus = subscriptionStatus;
+          where.subscriptionStatus = subscriptionStatus;
         }
 
         if (roleName === "client") {
-          const clientRecord = await getClientDetailForUser(user.id);
-          if (!clientRecord) {
+          const clientRecord = await getClientDetailForUser(user);
+          if (!clientRecord || !clientRecord.documentId) {
             return ctx.notFound("Client profile not found for this account");
           }
 
-          filters.client_detail = { id: clientRecord.id };
+          where.client_detail = { documentId: clientRecord.documentId };
 
-          const data = await strapi.entityService.findMany(LOCAL_SUB_UID, {
-            filters,
+          const rawData: any[] = await strapi.db.query(LOCAL_SUB_UID).findMany({
+            where,
             populate: {
               club_owner: {
-                populate: ["logo"],
+                select: [
+                  "id",
+                  "documentId",
+                  "clubId",
+                  "clubName",
+                  "ownerName",
+                  "phoneNumber",
+                  "email",
+                  "clubAddress",
+                  "city",
+                  "state",
+                  "pincode",
+                ],
+                populate: {
+                  logo: {
+                    select: ["url", "formats"],
+                  },
+                },
               },
               local_membership_plan: true,
             },
-            sort: { id: "desc" },
+            orderBy: { id: "desc" },
           });
 
-          const list = Array.isArray(data) ? data : data ? [data] : [];
+          const list = (Array.isArray(rawData) ? rawData : []).map(
+            (item: any) => ({
+              ...item,
+              club_owner: item.club_owner
+                ? formatClubOwner(item.club_owner)
+                : null,
+            }),
+          );
+
           return ctx.send({
             total: list.length,
             data: list,
           });
         } else if (roleName === "clubowner") {
-          const ownerRecord = await getClubOwnerForUser(user.id);
-          if (!ownerRecord) {
-            return ctx.notFound("Club owner profile not found for this account");
+          const ownerRecord = await getClubOwnerForUser(user);
+          if (!ownerRecord || !ownerRecord.documentId) {
+            return ctx.notFound(
+              "Club owner profile not found for this account",
+            );
           }
 
-          filters.club_owner = { id: ownerRecord.id };
+          where.club_owner = { documentId: ownerRecord.documentId };
 
-          const data = await strapi.entityService.findMany(LOCAL_SUB_UID, {
-            filters,
+          const rawData: any[] = await strapi.db.query(LOCAL_SUB_UID).findMany({
+            where,
             populate: {
-              client_detail: true,
+              client_detail: {
+                select: [
+                  "id",
+                  "documentId",
+                  "clientId",
+                  "name",
+                  "phoneNumber",
+                  "email",
+                ],
+              },
               local_membership_plan: true,
             },
-            sort: { id: "desc" },
+            orderBy: { id: "desc" },
           });
 
-          const list = Array.isArray(data) ? data : data ? [data] : [];
+          const list = Array.isArray(rawData) ? rawData : [];
+
           return ctx.send({
             total: list.length,
             data: list,
@@ -728,56 +737,84 @@ export default factories.createCoreController(
           club_owner,
         } = ctx.query as any;
 
-        const filters: any = {};
+        const where: any = {};
 
         if (membershipType) {
-          filters.membershipType = membershipType;
+          where.membershipType = membershipType;
         }
         if (subscriptionStatus) {
-          filters.subscriptionStatus = subscriptionStatus;
+          where.subscriptionStatus = subscriptionStatus;
         }
 
         // Role-based visibility enforcement
         if (roleName === "client") {
-          const clientRecord = await getClientDetailForUser(user.id);
-          if (clientRecord) {
-            filters.client_detail = { id: clientRecord.id };
+          const clientRecord = await getClientDetailForUser(user);
+          if (clientRecord?.documentId) {
+            where.client_detail = { documentId: clientRecord.documentId };
           }
         } else if (roleName === "clubowner") {
-          const ownerRecord = await getClubOwnerForUser(user.id);
-          if (ownerRecord) {
-            filters.club_owner = { id: ownerRecord.id };
+          const ownerRecord = await getClubOwnerForUser(user);
+          if (ownerRecord?.documentId) {
+            where.club_owner = { documentId: ownerRecord.documentId };
           }
         } else {
-          // Admin / SuperAdmin can filter by query params
+          // Admin / SuperAdmin filters
           if (client_detail) {
-            const resolved = await resolveClientDetail(client_detail);
-            if (resolved) {
-              filters.client_detail = { id: resolved.id };
-            }
+            const rawClient = String(client_detail).trim();
+            where.client_detail = { documentId: rawClient };
           }
           if (club_owner) {
             const rawOwner = String(club_owner).trim();
-            const isNum = !isNaN(Number(rawOwner)) && /^\d+$/.test(rawOwner);
-            filters.club_owner = isNum
-              ? { id: Number(rawOwner) }
-              : { documentId: rawOwner };
+            where.club_owner = { documentId: rawOwner };
           }
         }
 
-        const data: any = await strapi.entityService.findMany(LOCAL_SUB_UID, {
-          filters,
+        const rawData: any[] = await strapi.db.query(LOCAL_SUB_UID).findMany({
+          where,
           populate: {
             club_owner: {
-              populate: ["logo"],
+              select: [
+                "id",
+                "documentId",
+                "clubId",
+                "clubName",
+                "ownerName",
+                "phoneNumber",
+                "email",
+                "clubAddress",
+                "city",
+                "state",
+                "pincode",
+              ],
+              populate: {
+                logo: {
+                  select: ["url", "formats"],
+                },
+              },
             },
-            client_detail: true,
+            client_detail: {
+              select: [
+                "id",
+                "documentId",
+                "clientId",
+                "name",
+                "phoneNumber",
+                "email",
+              ],
+            },
             local_membership_plan: true,
           },
-          sort: { id: "desc" },
+          orderBy: { id: "desc" },
         });
 
-        const list = Array.isArray(data) ? data : data ? [data] : [];
+        const list = (Array.isArray(rawData) ? rawData : []).map(
+          (item: any) => ({
+            ...item,
+            club_owner: item.club_owner
+              ? formatClubOwner(item.club_owner)
+              : null,
+          }),
+        );
 
         return ctx.send({
           total: list.length,
@@ -800,23 +837,51 @@ export default factories.createCoreController(
           return await (this as any).getMySubscriptions(ctx);
         }
 
-        const isNumeric = !isNaN(Number(id)) && /^\d+$/.test(String(id).trim());
+        const documentId = String(id).trim();
 
         const entity: any = await strapi.db.query(LOCAL_SUB_UID).findOne({
-          where: isNumeric
-            ? { $or: [{ documentId: String(id) }, { id: Number(id) }] }
-            : { documentId: String(id) },
+          where: { documentId },
           populate: {
             club_owner: {
-              populate: ["logo"],
+              select: [
+                "id",
+                "documentId",
+                "clubId",
+                "clubName",
+                "ownerName",
+                "phoneNumber",
+                "email",
+                "clubAddress",
+                "city",
+                "state",
+                "pincode",
+              ],
+              populate: {
+                logo: {
+                  select: ["url", "formats"],
+                },
+              },
             },
-            client_detail: true,
+            client_detail: {
+              select: [
+                "id",
+                "documentId",
+                "clientId",
+                "name",
+                "phoneNumber",
+                "email",
+              ],
+            },
             local_membership_plan: true,
           },
         });
 
         if (!entity) {
           return ctx.notFound("Local subscription not found");
+        }
+
+        if (entity.club_owner) {
+          entity.club_owner = formatClubOwner(entity.club_owner);
         }
 
         return ctx.send({
@@ -841,13 +906,16 @@ export default factories.createCoreController(
         }
 
         const roleName = await getUserRole(user);
-        const isNumeric = !isNaN(Number(id)) && /^\d+$/.test(String(id).trim());
+        const documentId = String(id).trim();
 
         const existing: any = await strapi.db.query(LOCAL_SUB_UID).findOne({
-          where: isNumeric
-            ? { $or: [{ documentId: String(id) }, { id: Number(id) }] }
-            : { documentId: String(id) },
-          populate: { club_owner: true, client_detail: true },
+          where: { documentId },
+          select: ["id", "documentId", "subscriptionStatus", "endDate"],
+          populate: {
+            club_owner: {
+              select: ["id", "documentId"],
+            },
+          },
         });
 
         if (!existing) {
@@ -855,11 +923,10 @@ export default factories.createCoreController(
         }
 
         if (roleName === "clubowner") {
-          const ownerRecord = await getClubOwnerForUser(user.id);
+          const ownerRecord = await getClubOwnerForUser(user);
           if (
             !ownerRecord ||
-            (existing.club_owner?.id !== ownerRecord.id &&
-              existing.club_owner?.documentId !== ownerRecord.documentId)
+            existing.club_owner?.documentId !== ownerRecord.documentId
           ) {
             return ctx.forbidden(
               "Access denied. You can only manage subscriptions of your own club.",
@@ -885,20 +952,28 @@ export default factories.createCoreController(
           updateData.endDate = endDate;
         }
 
-        const updated = await strapi.entityService.update(
-          LOCAL_SUB_UID,
-          existing.id,
-          {
-            data: updateData,
-            populate: {
-              club_owner: {
-                populate: ["logo"],
-              },
-              client_detail: true,
-              local_membership_plan: true,
+        let updated: any = null;
+
+        if ((strapi as any).documents && existing.documentId) {
+          try {
+            updated = await (strapi as any).documents(LOCAL_SUB_UID).update({
+              documentId: existing.documentId,
+              data: updateData,
+            });
+          } catch (docErr) {
+            strapi.log.warn("documents.update fallback in update:", docErr);
+          }
+        }
+
+        if (!updated) {
+          updated = await strapi.entityService.update(
+            LOCAL_SUB_UID,
+            existing.id,
+            {
+              data: updateData,
             },
-          },
-        );
+          );
+        }
 
         return ctx.send({
           message: "Local subscription updated successfully",
@@ -923,13 +998,16 @@ export default factories.createCoreController(
         }
 
         const roleName = await getUserRole(user);
-        const isNumeric = !isNaN(Number(id)) && /^\d+$/.test(String(id).trim());
+        const documentId = String(id).trim();
 
         const existing: any = await strapi.db.query(LOCAL_SUB_UID).findOne({
-          where: isNumeric
-            ? { $or: [{ documentId: String(id) }, { id: Number(id) }] }
-            : { documentId: String(id) },
-          populate: { club_owner: true },
+          where: { documentId },
+          select: ["id", "documentId"],
+          populate: {
+            club_owner: {
+              select: ["id", "documentId"],
+            },
+          },
         });
 
         if (!existing) {
@@ -937,11 +1015,10 @@ export default factories.createCoreController(
         }
 
         if (roleName === "clubowner") {
-          const ownerRecord = await getClubOwnerForUser(user.id);
+          const ownerRecord = await getClubOwnerForUser(user);
           if (
             !ownerRecord ||
-            (existing.club_owner?.id !== ownerRecord.id &&
-              existing.club_owner?.documentId !== ownerRecord.documentId)
+            existing.club_owner?.documentId !== ownerRecord.documentId
           ) {
             return ctx.forbidden(
               "Access denied. You can only delete subscriptions of your own club.",
@@ -953,7 +1030,13 @@ export default factories.createCoreController(
           );
         }
 
-        await strapi.entityService.delete(LOCAL_SUB_UID, existing.id);
+        if ((strapi as any).documents && existing.documentId) {
+          await (strapi as any).documents(LOCAL_SUB_UID).delete({
+            documentId: existing.documentId,
+          });
+        } else {
+          await strapi.entityService.delete(LOCAL_SUB_UID, existing.id);
+        }
 
         return ctx.send({
           message: "Local subscription deleted successfully",

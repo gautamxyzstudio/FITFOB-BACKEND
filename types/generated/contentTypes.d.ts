@@ -722,6 +722,8 @@ export interface ApiLocalMembershipPlanLocalMembershipPlan
     updatedAt: Schema.Attribute.DateTime;
     updatedBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
       Schema.Attribute.Private;
+    validUpto: Schema.Attribute.String &
+      Schema.Attribute.DefaultTo<'unlimited'>;
   };
 }
 
@@ -845,6 +847,8 @@ export interface ApiOutdoorMembershipPlanOutdoorMembershipPlan
     updatedAt: Schema.Attribute.DateTime;
     updatedBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
       Schema.Attribute.Private;
+    validUpto: Schema.Attribute.String &
+      Schema.Attribute.DefaultTo<'unlimited'>;
     visitAllowed: Schema.Attribute.Integer;
   };
 }
