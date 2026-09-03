@@ -65,7 +65,22 @@ async function getClientDetailForUser(userId: number) {
 }
 
 /* ---------- HELPER: RESOLVE CLIENT DETAIL BY VARIOUS IDENTIFIERS ---------- */
-async function resolveClientDetail(identifier: string | number) {
+async function resolveClientDetail(identifier: string | number | any) {
+  if (!identifier) return null;
+
+  if (typeof identifier === "object" && identifier !== null) {
+    if (Array.isArray(identifier) && identifier.length > 0) {
+      identifier = identifier[0];
+    }
+    if (typeof identifier === "object") {
+      identifier =
+        identifier.documentId ||
+        identifier.id ||
+        identifier.clientId ||
+        (Array.isArray(identifier.connect) ? identifier.connect[0] : null);
+    }
+  }
+
   if (!identifier) return null;
 
   const rawStr = String(identifier).trim();
@@ -82,17 +97,35 @@ async function resolveClientDetail(identifier: string | number) {
     whereConditions.push({ id: Number(rawStr) });
   }
 
-  const client = await strapi.db.query(CLIENT_UID).findOne({
+  let client = await strapi.db.query(CLIENT_UID).findOne({
     where: {
       $or: whereConditions,
     },
   });
 
+  if (!client && isNumeric) {
+    client = await getClientDetailForUser(Number(rawStr));
+  }
+
   return client || null;
 }
 
 /* ---------- HELPER: RESOLVE OUTDOOR PLAN ---------- */
-async function resolveOutdoorPlan(identifier: string | number) {
+async function resolveOutdoorPlan(identifier: string | number | any) {
+  if (!identifier) return null;
+
+  if (typeof identifier === "object" && identifier !== null) {
+    if (Array.isArray(identifier) && identifier.length > 0) {
+      identifier = identifier[0];
+    }
+    if (typeof identifier === "object") {
+      identifier =
+        identifier.documentId ||
+        identifier.id ||
+        (Array.isArray(identifier.connect) ? identifier.connect[0] : null);
+    }
+  }
+
   if (!identifier) return null;
 
   const rawStr = String(identifier).trim();
@@ -165,6 +198,91 @@ export default factories.createCoreController(
         const clientDocId = clientRecord.documentId;
         const planId = plan.id;
         const planDocId = plan.documentId;
+
+        /* ---------- CHECK EXISTING ACTIVE SUBSCRIPTION (SAME PLAN) ---------- */
+        let existingSub: any = null;
+
+        if ((strapi as any).documents && clientDocId && planDocId) {
+          try {
+            existingSub = await (strapi as any).documents(OUTDOOR_SUB_UID).findFirst({
+              filters: {
+                $and: [
+                  {
+                    client_detail: {
+                      $or: [
+                        { documentId: clientDocId },
+                        { id: clientId },
+                      ],
+                    },
+                  },
+                  {
+                    outdoor_membership_plan: {
+                      $or: [
+                        { documentId: planDocId },
+                        { id: planId },
+                      ],
+                    },
+                  },
+                  {
+                    subscriptionStatus: "active",
+                  },
+                ],
+              },
+            });
+          } catch (_) {}
+        }
+
+        if (!existingSub) {
+          existingSub = await strapi.db.query(OUTDOOR_SUB_UID).findOne({
+            where: {
+              $and: [
+                {
+                  $or: [
+                    { client_detail: clientId },
+                    { client_detail: { id: clientId } },
+                    { client_detail: { documentId: clientDocId } },
+                  ],
+                },
+                {
+                  $or: [
+                    { outdoor_membership_plan: planId },
+                    { outdoor_membership_plan: { id: planId } },
+                    { outdoor_membership_plan: { documentId: planDocId } },
+                  ],
+                },
+                { subscriptionStatus: "active" },
+              ],
+            },
+            orderBy: { id: "desc" },
+          });
+        }
+
+        if (existingSub) {
+          const isVisitsExhausted =
+            existingSub.remainingVisits !== undefined &&
+            existingSub.remainingVisits !== null &&
+            Number(existingSub.remainingVisits) <= 0;
+
+          if (isVisitsExhausted) {
+            try {
+              if ((strapi as any).documents && existingSub.documentId) {
+                await (strapi as any).documents(OUTDOOR_SUB_UID).update({
+                  documentId: existingSub.documentId,
+                  data: { subscriptionStatus: "expired" },
+                });
+              } else {
+                await strapi.db.query(OUTDOOR_SUB_UID).update({
+                  where: { id: existingSub.id },
+                  data: { subscriptionStatus: "expired" },
+                });
+              }
+            } catch (_) {}
+          } else {
+            return ctx.badRequest(
+              "You already have an active subscription for this membership plan.",
+            );
+          }
+        }
 
         /* ---------- CREATE APP OUTDOOR SUBSCRIPTION ---------- */
         let createdSub: any = null;
@@ -264,28 +382,42 @@ export default factories.createCoreController(
         const body = ctx.request.body;
         const payload = body?.data ? body.data : body || {};
 
-        const { client_detail, outdoor_membership_plan } = payload;
+        const rawClient =
+          payload.client_detail ||
+          payload.client ||
+          payload.clientId ||
+          payload.client_id ||
+          payload.clientDetail ||
+          payload.user;
 
-        if (!client_detail) {
+        const rawPlan =
+          payload.outdoor_membership_plan ||
+          payload.plan ||
+          payload.planId ||
+          payload.plan_id ||
+          payload.outdoorPlan ||
+          payload.membership_plan;
+
+        if (!rawClient) {
           return ctx.badRequest(
             "client_detail is required (provide documentId, clientId, phone, email, or id)",
           );
         }
 
-        if (!outdoor_membership_plan) {
+        if (!rawPlan) {
           return ctx.badRequest(
             "outdoor_membership_plan is required (provide plan documentId or id)",
           );
         }
 
-        const clientRecord = await resolveClientDetail(client_detail);
+        const clientRecord = await resolveClientDetail(rawClient);
         if (!clientRecord) {
           return ctx.notFound(
-            `Client matching '${client_detail}' not found.`,
+            `Client matching '${JSON.stringify(rawClient)}' not found.`,
           );
         }
 
-        const plan = await resolveOutdoorPlan(outdoor_membership_plan);
+        const plan = await resolveOutdoorPlan(rawPlan);
         if (!plan) {
           return ctx.notFound("Outdoor membership plan not found");
         }
@@ -295,6 +427,91 @@ export default factories.createCoreController(
         const clientDocId = clientRecord.documentId;
         const planId = plan.id;
         const planDocId = plan.documentId;
+
+        /* ---------- CHECK EXISTING ACTIVE SUBSCRIPTION (SAME PLAN) ---------- */
+        let existingSub: any = null;
+
+        if ((strapi as any).documents && clientDocId && planDocId) {
+          try {
+            existingSub = await (strapi as any).documents(OUTDOOR_SUB_UID).findFirst({
+              filters: {
+                $and: [
+                  {
+                    client_detail: {
+                      $or: [
+                        { documentId: clientDocId },
+                        { id: clientId },
+                      ],
+                    },
+                  },
+                  {
+                    outdoor_membership_plan: {
+                      $or: [
+                        { documentId: planDocId },
+                        { id: planId },
+                      ],
+                    },
+                  },
+                  {
+                    subscriptionStatus: "active",
+                  },
+                ],
+              },
+            });
+          } catch (_) {}
+        }
+
+        if (!existingSub) {
+          existingSub = await strapi.db.query(OUTDOOR_SUB_UID).findOne({
+            where: {
+              $and: [
+                {
+                  $or: [
+                    { client_detail: clientId },
+                    { client_detail: { id: clientId } },
+                    { client_detail: { documentId: clientDocId } },
+                  ],
+                },
+                {
+                  $or: [
+                    { outdoor_membership_plan: planId },
+                    { outdoor_membership_plan: { id: planId } },
+                    { outdoor_membership_plan: { documentId: planDocId } },
+                  ],
+                },
+                { subscriptionStatus: "active" },
+              ],
+            },
+            orderBy: { id: "desc" },
+          });
+        }
+
+        if (existingSub) {
+          const isVisitsExhausted =
+            existingSub.remainingVisits !== undefined &&
+            existingSub.remainingVisits !== null &&
+            Number(existingSub.remainingVisits) <= 0;
+
+          if (isVisitsExhausted) {
+            try {
+              if ((strapi as any).documents && existingSub.documentId) {
+                await (strapi as any).documents(OUTDOOR_SUB_UID).update({
+                  documentId: existingSub.documentId,
+                  data: { subscriptionStatus: "expired" },
+                });
+              } else {
+                await strapi.db.query(OUTDOOR_SUB_UID).update({
+                  where: { id: existingSub.id },
+                  data: { subscriptionStatus: "expired" },
+                });
+              }
+            } catch (_) {}
+          } else {
+            return ctx.badRequest(
+              "An active subscription for this membership plan already exists for this user.",
+            );
+          }
+        }
 
         /* ---------- CREATE LOCAL OUTDOOR SUBSCRIPTION ---------- */
         let createdSub: any = null;
