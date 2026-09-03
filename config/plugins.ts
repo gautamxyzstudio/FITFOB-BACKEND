@@ -13,11 +13,10 @@ export default ({ env }) => ({
             secretAccessKey: env("AWS_SECRET_ACCESS_KEY"),
           },
           region: env("AWS_REGION"),
-        },
-
-        // ⭐ DO NOT SEND ACL TO S3
-        params: {
-          Bucket: env("AWS_BUCKET"),
+          // ⭐ DO NOT SEND ACL TO S3
+          params: {
+            Bucket: env("AWS_BUCKET"),
+          },
         },
       },
 

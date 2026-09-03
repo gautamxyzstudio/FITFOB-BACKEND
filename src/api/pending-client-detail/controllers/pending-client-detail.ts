@@ -14,7 +14,7 @@ const UPLOAD_FOLDER_ID = 2;
 async function prepareAndOptimizeImage(
   rawFile: any,
   maxWidth = 1600,
-  quality = 85
+  quality = 85,
 ): Promise<Buffer> {
   const filePath = rawFile.filepath || rawFile.path;
   if (!filePath) {
@@ -51,7 +51,9 @@ async function prepareAndOptimizeImage(
 function getBody(ctx: Context) {
   let body: any = ctx.request.body || {};
   if (body.data && typeof body.data === "string") {
-    try { body = JSON.parse(body.data); } catch { }
+    try {
+      body = JSON.parse(body.data);
+    } catch {}
   }
   return body;
 }
@@ -108,23 +110,18 @@ async function getEditableDraft(ctx: Context) {
 
 /* ---------- FINAL VALIDATION BEFORE CLIENT CREATION ---------- */
 async function validateBeforeClientCreation(draft: any) {
-  if (!draft.name || !draft.gender)
-    return "Please complete basic information";
+  if (!draft.name || !draft.gender) return "Please complete basic information";
 
-  if (!draft.date_of_birth)
-    return "Please complete body information";
+  if (!draft.date_of_birth) return "Please complete body information";
 
-  if (!draft.latitude || !draft.longitude)
-    return "Please set your location";
+  if (!draft.latitude || !draft.longitude) return "Please set your location";
 
-  if (!draft.selfieUpload)
-    return "Please upload selfie";
+  if (!draft.selfieUpload) return "Please upload selfie";
 
   return null;
 }
 
 export default {
-
   /* ================= START / RESUME ================= */
   async me(ctx: Context) {
     try {
@@ -183,15 +180,11 @@ export default {
         currentStep: 1,
         status: "draft",
       });
-
     } catch (error) {
-      strapi.log.error(
-        "Error fetching client onboarding details:",
-        error
-      );
+      strapi.log.error("Error fetching client onboarding details:", error);
 
       return ctx.internalServerError(
-        "Failed to fetch client onboarding details"
+        "Failed to fetch client onboarding details",
       );
     }
   },
@@ -225,8 +218,7 @@ export default {
 
     const body = getBody(ctx);
 
-    if (!body.date_of_birth)
-      return ctx.badRequest("date_of_birth is required");
+    if (!body.date_of_birth) return ctx.badRequest("date_of_birth is required");
 
     const dob = new Date(body.date_of_birth);
     const today = new Date();
@@ -410,7 +402,7 @@ export default {
         draft.id,
         {
           populate: ["selfieUpload", "governmentId", "user"],
-        }
+        },
       );
 
       if (!pendingClient) {
@@ -420,7 +412,6 @@ export default {
       if (!pendingClient.documentVerified) {
         return ctx.badRequest("Government ID is not verified.");
       }
-
 
       // 3. Validate images
       if (!pendingClient.selfieUpload || !pendingClient.governmentId) {
@@ -437,9 +428,7 @@ export default {
         ? selfieUrl
         : `${baseUrl}${selfieUrl}`;
 
-      const fullIdUrl = idUrl.startsWith("http")
-        ? idUrl
-        : `${baseUrl}${idUrl}`;
+      const fullIdUrl = idUrl.startsWith("http") ? idUrl : `${baseUrl}${idUrl}`;
 
       // 4. Convert to buffer
       const [selfieRes, idRes] = await Promise.all([
@@ -451,20 +440,49 @@ export default {
         }),
       ]);
 
-      const selfieBuffer = Buffer.from(selfieRes.data);
-      const idBuffer = Buffer.from(idRes.data);
+      let selfieBuffer: Buffer = Buffer.from(selfieRes.data as any);
+      let idBuffer: Buffer = Buffer.from(idRes.data as any);
+
+      // Ensure buffers are optimized (< 1MB) for AWS Rekognition
+      if (selfieBuffer.length > 1024 * 1024) {
+        try {
+          selfieBuffer = await sharp(selfieBuffer)
+            .rotate()
+            .resize({
+              width: 1200,
+              height: 1200,
+              fit: "inside",
+              withoutEnlargement: true,
+            })
+            .jpeg({ quality: 85 })
+            .toBuffer();
+        } catch (_) {}
+      }
+
+      if (idBuffer.length > 1024 * 1024) {
+        try {
+          idBuffer = await sharp(idBuffer)
+            .rotate()
+            .resize({
+              width: 1600,
+              height: 1600,
+              fit: "inside",
+              withoutEnlargement: true,
+            })
+            .jpeg({ quality: 85 })
+            .toBuffer();
+        } catch (_) {}
+      }
 
       // 5. AWS compare
       const result = await compareFaces(selfieBuffer, idBuffer);
 
       // check existing
-      const existingClient = await strapi.db
-        .query(CLIENT_UID)
-        .findOne({
-          where: {
-            user: pendingClient.user.id,
-          },
-        });
+      const existingClient = await strapi.db.query(CLIENT_UID).findOne({
+        where: {
+          user: pendingClient.user.id,
+        },
+      });
 
       if (existingClient) {
         return ctx.badRequest("Client already exists.");
@@ -473,9 +491,7 @@ export default {
       // 🔥 6. Decide status
       const approved = result.similarity >= 90;
 
-      const verificationStatus = approved
-        ? "approved"
-        : "in-review";
+      const verificationStatus = approved ? "approved" : "in-review";
 
       await strapi.entityService.update(
         "plugin::users-permissions.user",
@@ -484,7 +500,7 @@ export default {
           data: {
             verification_status: verificationStatus,
           },
-        }
+        },
       );
 
       if (verificationStatus === "in-review") {
@@ -492,14 +508,13 @@ export default {
           success: true,
           status: "in-review",
           similarity: result.similarity,
-          message:
-            "Your verification has been submitted for manual review.",
+          message: "Your verification has been submitted for manual review.",
         });
       }
 
       const { clientId } = await generateClientAssets();
 
-      // CLIENT CREATION LOGIC 
+      // CLIENT CREATION LOGIC
       const client = await strapi.entityService.create(CLIENT_UID, {
         data: {
           user: pendingClient.user.id,
@@ -534,14 +549,11 @@ export default {
             governmentId: true,
             user: true,
           },
-        }
+        },
       );
 
       /* 🧹 DELETE THE PENDING DRAFT AFTER SUCCESSFUL CREATION */
-      await strapi.entityService.delete(
-        PENDING_UID,
-        pendingClient.id
-      );
+      await strapi.entityService.delete(PENDING_UID, pendingClient.id);
 
       return ctx.send({
         success: true,
@@ -553,12 +565,9 @@ export default {
             : "Your verification has been submitted for manual review.",
         client: fullClient,
       });
-
     } catch (error) {
       console.error("VERIFY ERROR:", error);
       return ctx.internalServerError("Verification failed");
     }
   },
-
 };
-
