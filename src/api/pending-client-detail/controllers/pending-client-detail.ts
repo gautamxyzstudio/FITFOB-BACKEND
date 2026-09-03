@@ -1,4 +1,6 @@
 import { Context } from "koa";
+import fs from "fs";
+import sharp from "sharp";
 import { generateClientAssets } from "../../../utils/generateClientId";
 import axios from "axios";
 import { compareFaces } from "../../../utils/awsRekognition";
@@ -7,6 +9,43 @@ const PENDING_UID = "api::pending-client-detail.pending-client-detail";
 const CLIENT_UID = "api::client-detail.client-detail";
 
 const UPLOAD_FOLDER_ID = 2;
+
+/* ---------- OPTIMIZE IMAGE & UPDATE TEMP FILE ---------- */
+async function prepareAndOptimizeImage(
+  rawFile: any,
+  maxWidth = 1600,
+  quality = 85
+): Promise<Buffer> {
+  const filePath = rawFile.filepath || rawFile.path;
+  if (!filePath) {
+    throw new Error("Temporary file path not found");
+  }
+
+  const originalBuffer = await fs.promises.readFile(filePath);
+
+  try {
+    const optimizedBuffer = await sharp(originalBuffer)
+      .rotate() // auto-orient based on EXIF
+      .resize({
+        width: maxWidth,
+        height: maxWidth,
+        fit: "inside",
+        withoutEnlargement: true,
+      })
+      .jpeg({ quality, mozjpeg: true })
+      .toBuffer();
+
+    // Overwrite temp file so Strapi uploads the lightweight optimized image
+    await fs.promises.writeFile(filePath, optimizedBuffer);
+    rawFile.size = optimizedBuffer.length;
+    rawFile.mimetype = "image/jpeg";
+
+    return optimizedBuffer;
+  } catch (err) {
+    strapi.log.warn("Image optimization fallback to original buffer:", err);
+    return originalBuffer;
+  }
+}
 
 /* ---------- SAFE BODY PARSER ---------- */
 function getBody(ctx: Context) {
@@ -237,15 +276,18 @@ export default {
     if (!files || !files.selfieUpload)
       return ctx.badRequest("Please upload selfie");
 
-    // replace old selfie
-    if (draft.selfieUpload?.id) {
-      await strapi.plugin("upload").service("upload").remove(draft.selfieUpload);
-    }
-
     const uploadService = strapi.plugin("upload").service("upload");
     const rawFile = Array.isArray(files.selfieUpload)
       ? files.selfieUpload[0]
       : files.selfieUpload;
+
+    // Optimize image before uploading to S3 (max 1200px, quality 85)
+    await prepareAndOptimizeImage(rawFile, 1200, 85);
+
+    // replace old selfie
+    if (draft.selfieUpload?.id) {
+      await uploadService.remove(draft.selfieUpload);
+    }
 
     const uploaded = await uploadService.upload({
       data: { fileInfo: { folder: UPLOAD_FOLDER_ID } },
@@ -285,44 +327,16 @@ export default {
       ? files.governmentId[0]
       : files.governmentId;
 
-    // Upload file
-    const uploaded = await uploadService.upload({
-      data: {
-        fileInfo: {
-          folder: UPLOAD_FOLDER_ID,
-        },
-      },
-      files: rawFile,
-    });
-
-    const idFile = uploaded[0];
-
     try {
       /* ==========================================
-         DOWNLOAD FILE
+         1. OPTIMIZE IMAGE & VALIDATE DOCUMENT (AWS TEXTRACT)
+         Read directly from local disk (no redundant S3 download!)
       ========================================== */
+      const buffer = await prepareAndOptimizeImage(rawFile, 1600, 85);
 
-      const fileUrl = idFile.url.startsWith("http")
-        ? idFile.url
-        : `${strapi.config.get("server.url")}${idFile.url}`;
-
-      const response = await axios.get<ArrayBuffer>(fileUrl, {
-        responseType: "arraybuffer",
-      });
-
-      const buffer = Buffer.from(response.data);
-
-      /* ==========================================
-         VALIDATE DOCUMENT (AWS)
-      ========================================== */
-
-      // You'll implement this service next
       const documentResult = await validateGovernmentDocument(buffer);
 
       if (!documentResult.valid) {
-        // Delete uploaded media
-        await uploadService.remove(idFile);
-
         // Clear draft
         await strapi.entityService.update(PENDING_UID, draft.id, {
           data: {
@@ -336,9 +350,30 @@ export default {
       }
 
       /* ==========================================
-         SAVE TO PENDING DRAFT
+         2. UPLOAD OPTIMIZED FILE TO S3
+         Only uploaded once document is validated!
       ========================================== */
+      // Remove old government ID if previously uploaded
+      if (draft.governmentId?.id) {
+        try {
+          await uploadService.remove(draft.governmentId);
+        } catch (_) {}
+      }
 
+      const uploaded = await uploadService.upload({
+        data: {
+          fileInfo: {
+            folder: UPLOAD_FOLDER_ID,
+          },
+        },
+        files: rawFile,
+      });
+
+      const idFile = uploaded[0];
+
+      /* ==========================================
+         3. SAVE TO PENDING DRAFT
+      ========================================== */
       await strapi.entityService.update(PENDING_UID, draft.id, {
         data: {
           governmentId: idFile.id,
@@ -355,12 +390,6 @@ export default {
       });
     } catch (error) {
       console.error("Government ID validation error:", error);
-
-      // Cleanup uploaded media if AWS fails
-      try {
-        await uploadService.remove(idFile);
-      } catch (_) { }
-
       return ctx.internalServerError("Unable to validate government ID.");
     }
   },
