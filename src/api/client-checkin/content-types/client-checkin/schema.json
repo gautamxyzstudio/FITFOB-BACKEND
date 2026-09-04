@@ -33,6 +33,9 @@
     "checkinTime": {
       "type": "datetime"
     },
+    "checkoutTime": {
+      "type": "datetime"
+    },
     "local_subscription": {
       "type": "relation",
       "relation": "manyToOne",

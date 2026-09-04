@@ -42,6 +42,26 @@ export default {
       .confirmOutdoor(clientId, user.id);
 
     ctx.send(result);
+  },
+
+  async checkout(ctx: Context) {
+    const user = ctx.state.user;
+
+    if (!user) {
+      return ctx.unauthorized("Authentication required");
+    }
+
+    const { clientId } = ctx.request.body;
+
+    if (!clientId) {
+      return ctx.badRequest("clientId required");
+    }
+
+    const result = await strapi
+      .service("api::client-checkin.custom-client-checkin")
+      .checkout(clientId, user.id);
+
+    ctx.send(result);
   }
 
 };

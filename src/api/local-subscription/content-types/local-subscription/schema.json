@@ -48,7 +48,6 @@
       "enum": [
         "active",
         "expired",
-        "completed",
         "cancelled"
       ],
       "default": "active"

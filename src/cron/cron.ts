@@ -2,6 +2,7 @@ const LOCAL_PLAN_UID =
   "api::local-membership-plan.local-membership-plan" as any;
 const OUTDOOR_PLAN_UID =
   "api::outdoor-membership-plan.outdoor-membership-plan" as any;
+const CHECKIN_UID = "api::client-checkin.client-checkin" as any;
 
 /**
  * Parses validUpto string and returns true if current time has passed expiry.
@@ -64,7 +65,9 @@ export async function checkAndDeactivateExpiredPlans(strapi: any) {
           localDeactivated++;
         } catch (err) {
           strapi.log.error(
-            `Failed to deactivate expired local plan ${plan.documentId || plan.id}:`,
+            `Failed to deactivate expired local plan ${
+              plan.documentId || plan.id
+            }:`,
             err,
           );
         }
@@ -97,7 +100,9 @@ export async function checkAndDeactivateExpiredPlans(strapi: any) {
           outdoorDeactivated++;
         } catch (err) {
           strapi.log.error(
-            `Failed to deactivate expired outdoor plan ${plan.documentId || plan.id}:`,
+            `Failed to deactivate expired outdoor plan ${
+              plan.documentId || plan.id
+            }:`,
             err,
           );
         }
@@ -121,6 +126,83 @@ export async function checkAndDeactivateExpiredPlans(strapi: any) {
   }
 }
 
+/**
+ * Automatically checks out clients who have not checked out after 2 hours of check-in.
+ * For example, if checkin time is 4:00 PM and user has still not checked out,
+ * at 6:00 PM the checkoutTime will be set to 6:00 PM (checkinTime + 2 hours).
+ */
+
+export async function autoCheckoutOverdueCheckins(strapi: any) {
+  try {
+    const now = new Date();
+
+    const twoHoursAgo = new Date(
+      now.getTime() - 2 * 60 * 60 * 1000,
+    );
+
+    strapi.log.info(
+      `[CRON AUTO-CHECKOUT] Checking check-ins before ${twoHoursAgo.toISOString()}`,
+    );
+
+    const overdueCheckins = await strapi.db.connection(
+      "client_checkins",
+    )
+      .select(
+        "id",
+        "document_id",
+        "checkin_time",
+        "checkout_time",
+      )
+      .where("checkin_time", "<=", twoHoursAgo)
+      .whereNull("checkout_time");
+
+    if (!overdueCheckins.length) {
+      return {
+        checkedOutCount: 0,
+      };
+    }
+
+    let checkedOutCount = 0;
+
+    for (const checkin of overdueCheckins) {
+      try {
+        const autoCheckoutTime = new Date(
+          new Date(checkin.checkin_time).getTime() +
+            2 * 60 * 60 * 1000,
+        );
+
+        await strapi.db.connection("client_checkins")
+          .where("id", checkin.id)
+          .update({
+            checkout_time: autoCheckoutTime,
+          });
+
+        checkedOutCount++;
+      } catch (error) {
+        strapi.log.error(
+          `[CRON AUTO-CHECKOUT] Failed`,
+          error,
+        );
+      }
+    }
+
+    strapi.log.info(
+      `[CRON AUTO-CHECKOUT] Automatically checked out ${checkedOutCount} check-in(s).`,
+    );
+
+    return {
+      checkedOutCount,
+    };
+  } catch (error) {
+    strapi.log.error(
+      "[CRON AUTO-CHECKOUT] Error:",
+      error,
+    );
+
+    throw error;
+  }
+}
+
 export default {
   /**
    * Cron job runs everyday at 4:50 AM to deactivate expired membership plans.
@@ -131,6 +213,19 @@ export default {
     },
     options: {
       rule: "50 4 * * *",
+    },
+  },
+
+  /**
+   * Cron job runs every 2 minutes to automatically check out clients
+   * who have not checked out after 2 hours of check-in.
+   */
+  autoCheckoutOverdueCheckins: {
+    task: async ({ strapi }: { strapi: any }) => {
+      await autoCheckoutOverdueCheckins(strapi);
+    },
+    options: {
+      rule: "*/2 * * * *",
     },
   },
 };

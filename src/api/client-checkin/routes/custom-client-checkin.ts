@@ -15,6 +15,14 @@ export default {
       config: {
         auth: {}
       }
+    },
+    {
+      method: "POST",
+      path: "/client/checkout",
+      handler: "custom-client-checkin.checkout",
+      config: {
+        auth: {}
+      }
     }
   ]
 };

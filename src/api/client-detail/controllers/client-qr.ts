@@ -1,6 +1,7 @@
 import QRCode from "qrcode";
 import sharp from "sharp";
 import { Context } from "koa";
+import { generateClientAssets } from "../../../utils/generateClientId";
 
 export default {
   async getQR(ctx: Context) {
@@ -11,14 +12,36 @@ export default {
         return ctx.unauthorized("Login required");
       }
 
-      const client = await strapi.db
+      let client: any = await strapi.db
         .query("api::client-detail.client-detail")
         .findOne({
           where: { user: user.id },
         });
 
       if (!client) {
-        return ctx.badRequest("Client profile not found");
+        const userWithDetail: any = await strapi.db
+          .query("plugin::users-permissions.user")
+          .findOne({
+            where: { id: user.id },
+            populate: { client_detail: true },
+          });
+
+        client = userWithDetail?.client_detail || null;
+      }
+
+      if (!client) {
+        return ctx.notFound("Client profile not found");
+      }
+
+      if (!client.clientId) {
+        const { clientId } = await generateClientAssets();
+        client.clientId = clientId;
+        try {
+          await strapi.db.query("api::client-detail.client-detail").update({
+            where: { id: client.id },
+            data: { clientId },
+          });
+        } catch (_) {}
       }
 
       /* ============================================

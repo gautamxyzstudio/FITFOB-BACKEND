@@ -2,7 +2,7 @@ export default {
   routes: [
     {
       method: "GET",
-      path: "/client/qr",
+      path: "/client-details/me/qr",
       handler: "client-qr.getQR",
       config: {
         auth: {},
