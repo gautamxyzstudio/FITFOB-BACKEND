@@ -23,6 +23,15 @@ export default {
       config: {
         auth: {}
       }
-    }
+    },
+    {
+      method: "POST",
+      path: "/client-checkin/manual-checkin",
+      handler: "custom-client-checkin.manualCheckin",
+      config: {
+        policies: [],
+        middlewares: [],
+      },
+    },
   ]
 };

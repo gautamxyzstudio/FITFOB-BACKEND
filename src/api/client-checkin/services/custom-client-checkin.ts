@@ -399,4 +399,12 @@ export default () => ({
       subscriptionType: activeCheckin.subscriptionType,
     };
   },
+
+  /* ====================================== */
+  /* MANUAL CHECK-IN */
+  /* ====================================== */
+
+  async manualCheckin(clientId: string, clubOwnerUserId: number) {
+    return await this.scan(clientId, clubOwnerUserId);
+  },
 });
