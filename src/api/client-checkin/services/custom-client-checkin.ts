@@ -16,7 +16,12 @@ export default () => ({
   async getClient(clientId: string) {
     const client = await strapi.db
       .query("api::client-detail.client-detail")
-      .findOne({ where: { clientId } });
+      .findOne({
+        where: { clientId },
+        populate: {
+          selfieUpload: true,
+        },
+      });
 
     if (!client) throw new Error("Client not found");
 
@@ -110,6 +115,9 @@ export default () => ({
 
     await this.checkRecentCheckin(client.id);
 
+    const clientName = client.name ?? null;
+    const selfieUrl = client.selfieUpload?.url ?? null;
+
     /* ---------------- LOCAL SUBSCRIPTION ---------------- */
 
     let localSub = await strapi.db
@@ -153,6 +161,8 @@ export default () => ({
         return {
           status: "success",
           type: "local",
+          clientName,
+          selfieUrl,
         };
       }
     }
@@ -218,6 +228,8 @@ export default () => ({
           status: "choose",
           message: "Local membership cancelled. Use outdoor membership?",
           remainingVisits: outdoorSub.remainingVisits,
+          clientName,
+          selfieUrl,
         };
       }
 
@@ -226,6 +238,8 @@ export default () => ({
           status: "choose",
           message: "Local membership expired. Use outdoor membership?",
           remainingVisits: outdoorSub.remainingVisits,
+          clientName,
+          selfieUrl,
         };
       }
     }
@@ -327,6 +341,8 @@ export default () => ({
         status: "success",
         type: "outdoor",
         remainingVisits: newRemainingVisits,
+        clientName: client.name ?? null,
+        selfieUrl: client.selfieUpload?.url ?? null,
       };
     });
   },
@@ -393,6 +409,7 @@ export default () => ({
       message: "Checked out successfully",
       clientId: client.clientId,
       clientName: client.name,
+      selfieUrl: client.selfieUpload?.url ?? null,
       checkinTime: activeCheckin.checkinTime,
       checkoutTime: now,
       durationMinutes,
