@@ -545,10 +545,11 @@ export default factories.createCoreController(
         }
 
         const roleName = await getUserRole(user);
+        const isAdmin = roleName === "admin" || roleName === "superadmin";
+
         if (
           roleName !== "clubowner" &&
-          roleName !== "admin" &&
-          roleName !== "superadmin"
+          !isAdmin
         ) {
           return ctx.forbidden(
             "Access denied. Only ClubOwner, Admin, or SuperAdmin can create offline memberships.",
@@ -795,28 +796,30 @@ export default factories.createCoreController(
           createdSub.club_owner = formatClubOwner(createdSub.club_owner);
         }
 
-        // 📝 Log Activity
-        try {
-          const activityLogService: any = strapi.service(
-            "api::club-owner-activity-log.club-owner-activity-log",
-          );
-          if (activityLogService?.logActivity) {
-            activityLogService.logActivity({
-              clubOwnerId: targetClubOwnerDocId || targetClubOwnerId,
-              category: "subscriptions",
-              actionType: "CREATE",
-              entityName: "Local Subscription",
-              entityId: createdSub?.documentId || createdSub?.id,
-              description: `Assigned offline membership to client '${
-                clientRecord?.name || clientRecord?.clientId || "Client"
-              }' for plan '${plan?.planName || "Membership"}'`,
-            });
+        // 📝 Log Activity (only for club owners, NOT admin or superadmin)
+        if (!isAdmin && roleName === "clubowner") {
+          try {
+            const activityLogService: any = strapi.service(
+              "api::club-owner-activity-log.club-owner-activity-log",
+            );
+            if (activityLogService?.logActivity) {
+              await activityLogService.logActivity({
+                clubOwnerId: targetClubOwnerDocId || targetClubOwnerId,
+                category: "subscriptions",
+                actionType: "CREATE",
+                entityName: "Local Subscription",
+                entityId: createdSub?.documentId || createdSub?.id,
+                description: `Assigned offline membership to client '${
+                  clientRecord?.name || clientRecord?.clientId || "Client"
+                }' for plan '${plan?.planName || "Membership"}'`,
+              });
+            }
+          } catch (logErr) {
+            strapi.log.warn(
+              "[ActivityLog] Failed to log subscription creation:",
+              logErr,
+            );
           }
-        } catch (logErr) {
-          strapi.log.warn(
-            "[ActivityLog] Failed to log subscription creation:",
-            logErr,
-          );
         }
 
         return ctx.send(
@@ -1136,6 +1139,7 @@ export default factories.createCoreController(
         }
 
         const roleName = await getUserRole(user);
+        const isAdmin = roleName === "admin" || roleName === "superadmin";
         const documentId = String(id).trim();
 
         const existing: any = await strapi.db.query(LOCAL_SUB_UID).findOne({
@@ -1168,7 +1172,7 @@ export default factories.createCoreController(
               "Access denied. You can only manage subscriptions of your own club.",
             );
           }
-        } else if (roleName !== "admin" && roleName !== "superadmin") {
+        } else if (!isAdmin) {
           return ctx.forbidden(
             "Access denied. Only ClubOwner, Admin, or SuperAdmin can modify subscriptions.",
           );
@@ -1211,63 +1215,65 @@ export default factories.createCoreController(
           );
         }
 
-        // 📝 Log Activity (with detailed list of modified fields)
-        try {
-          const activityLogService: any = strapi.service(
-            "api::club-owner-activity-log.club-owner-activity-log",
-          );
-          if (activityLogService?.logActivity) {
-            const ownerIdentifier =
-              existing.club_owner?.documentId ||
-              existing.club_owner?.id ||
-              existing.club_owner;
+        // 📝 Log Activity (only for club owners, NOT admin or superadmin)
+        if (!isAdmin && roleName === "clubowner") {
+          try {
+            const activityLogService: any = strapi.service(
+              "api::club-owner-activity-log.club-owner-activity-log",
+            );
+            if (activityLogService?.logActivity) {
+              const ownerIdentifier =
+                existing.club_owner?.documentId ||
+                existing.club_owner?.id ||
+                existing.club_owner;
 
-            const changedDetails: string[] = [];
+              const changedDetails: string[] = [];
 
-            if (
-              updateData.subscriptionStatus !== undefined &&
-              updateData.subscriptionStatus !== existing.subscriptionStatus
-            ) {
-              changedDetails.push(
-                `status: '${existing.subscriptionStatus ?? ""}' -> '${updateData.subscriptionStatus}'`,
-              );
+              if (
+                updateData.subscriptionStatus !== undefined &&
+                updateData.subscriptionStatus !== existing.subscriptionStatus
+              ) {
+                changedDetails.push(
+                  `status: '${existing.subscriptionStatus ?? ""}' -> '${updateData.subscriptionStatus}'`,
+                );
+              }
+
+              if (
+                updateData.endDate !== undefined &&
+                String(updateData.endDate) !== String(existing.endDate)
+              ) {
+                changedDetails.push(
+                  `endDate: '${existing.endDate ?? ""}' -> '${updateData.endDate}'`,
+                );
+              }
+
+              const clientName =
+                existing.client_detail?.name ||
+                existing.client_detail?.clientId ||
+                "Client";
+              const planName =
+                existing.local_membership_plan?.planName || "Membership";
+
+              const changeSummary =
+                changedDetails.length > 0
+                  ? ` (Changed: ${changedDetails.join(", ")})`
+                  : "";
+
+              await activityLogService.logActivity({
+                clubOwnerId: ownerIdentifier,
+                category: "subscriptions",
+                actionType: "UPDATE",
+                entityName: "Local Subscription",
+                entityId: existing.documentId || existing.id,
+                description: `Updated subscription of client '${clientName}' for plan '${planName}'${changeSummary}`,
+              });
             }
-
-            if (
-              updateData.endDate !== undefined &&
-              String(updateData.endDate) !== String(existing.endDate)
-            ) {
-              changedDetails.push(
-                `endDate: '${existing.endDate ?? ""}' -> '${updateData.endDate}'`,
-              );
-            }
-
-            const clientName =
-              existing.client_detail?.name ||
-              existing.client_detail?.clientId ||
-              "Client";
-            const planName =
-              existing.local_membership_plan?.planName || "Membership";
-
-            const changeSummary =
-              changedDetails.length > 0
-                ? ` (Changed: ${changedDetails.join(", ")})`
-                : "";
-
-            activityLogService.logActivity({
-              clubOwnerId: ownerIdentifier,
-              category: "subscriptions",
-              actionType: "UPDATE",
-              entityName: "Local Subscription",
-              entityId: existing.documentId || existing.id,
-              description: `Updated subscription of client '${clientName}' for plan '${planName}'${changeSummary}`,
-            });
+          } catch (logErr) {
+            strapi.log.warn(
+              "[ActivityLog] Failed to log subscription update:",
+              logErr,
+            );
           }
-        } catch (logErr) {
-          strapi.log.warn(
-            "[ActivityLog] Failed to log subscription update:",
-            logErr,
-          );
         }
 
         return ctx.send({
@@ -1293,6 +1299,7 @@ export default factories.createCoreController(
         }
 
         const roleName = await getUserRole(user);
+        const isAdmin = roleName === "admin" || roleName === "superadmin";
         const documentId = String(id).trim();
 
         const existing: any = await strapi.db.query(LOCAL_SUB_UID).findOne({
@@ -1325,7 +1332,7 @@ export default factories.createCoreController(
               "Access denied. You can only delete subscriptions of your own club.",
             );
           }
-        } else if (roleName !== "admin" && roleName !== "superadmin") {
+        } else if (!isAdmin) {
           return ctx.forbidden(
             "Access denied. Only ClubOwner, Admin, or SuperAdmin can delete subscriptions.",
           );
@@ -1339,38 +1346,40 @@ export default factories.createCoreController(
           await strapi.entityService.delete(LOCAL_SUB_UID, existing.id);
         }
 
-        // 📝 Log Activity
-        try {
-          const activityLogService: any = strapi.service(
-            "api::club-owner-activity-log.club-owner-activity-log",
-          );
-          if (activityLogService?.logActivity) {
-            const ownerIdentifier =
-              existing.club_owner?.documentId ||
-              existing.club_owner?.id ||
-              existing.club_owner;
+        // 📝 Log Activity (only for club owners, NOT admin or superadmin)
+        if (!isAdmin && roleName === "clubowner") {
+          try {
+            const activityLogService: any = strapi.service(
+              "api::club-owner-activity-log.club-owner-activity-log",
+            );
+            if (activityLogService?.logActivity) {
+              const ownerIdentifier =
+                existing.club_owner?.documentId ||
+                existing.club_owner?.id ||
+                existing.club_owner;
 
-            const clientName =
-              existing.client_detail?.name ||
-              existing.client_detail?.clientId ||
-              "Client";
-            const planName =
-              existing.local_membership_plan?.planName || "Membership";
+              const clientName =
+                existing.client_detail?.name ||
+                existing.client_detail?.clientId ||
+                "Client";
+              const planName =
+                existing.local_membership_plan?.planName || "Membership";
 
-            activityLogService.logActivity({
-              clubOwnerId: ownerIdentifier,
-              category: "subscriptions",
-              actionType: "DELETE",
-              entityName: "Local Subscription",
-              entityId: existing.documentId || existing.id,
-              description: `Deleted subscription of client '${clientName}' for plan '${planName}'`,
-            });
+              await activityLogService.logActivity({
+                clubOwnerId: ownerIdentifier,
+                category: "subscriptions",
+                actionType: "DELETE",
+                entityName: "Local Subscription",
+                entityId: existing.documentId || existing.id,
+                description: `Deleted subscription of client '${clientName}' for plan '${planName}'`,
+              });
+            }
+          } catch (logErr) {
+            strapi.log.warn(
+              "[ActivityLog] Failed to log subscription deletion:",
+              logErr,
+            );
           }
-        } catch (logErr) {
-          strapi.log.warn(
-            "[ActivityLog] Failed to log subscription deletion:",
-            logErr,
-          );
         }
 
         return ctx.send({

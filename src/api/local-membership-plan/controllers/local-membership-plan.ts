@@ -368,7 +368,7 @@ export default factories.createCoreController(
             "api::club-owner-activity-log.club-owner-activity-log",
           );
           if (activityLogService?.logActivity) {
-            activityLogService.logActivity({
+            await activityLogService.logActivity({
               clubOwnerId: ownerDocId || ownerId,
               category: "membership_plans",
               actionType: "CREATE",
@@ -552,28 +552,6 @@ export default factories.createCoreController(
               club_owner: true,
             },
           });
-        }
-
-        // 📝 Log Activity
-        try {
-          const activityLogService: any = strapi.service(
-            "api::club-owner-activity-log.club-owner-activity-log",
-          );
-          if (activityLogService?.logActivity) {
-            activityLogService.logActivity({
-              clubOwnerId: ownerDocId || ownerRecord.id,
-              category: "membership_plans",
-              actionType: "CREATE",
-              entityName: "Local Membership Plan",
-              entityId: createdPlan?.documentId || createdPlan?.id,
-              description: `Admin created local membership plan '${planName.trim()}' (Price: ₹${price}, Duration: ${monthDuration} months)`,
-            });
-          }
-        } catch (logErr) {
-          strapi.log.warn(
-            "[ActivityLog] Failed to log admin plan creation:",
-            logErr,
-          );
         }
 
         return ctx.send(
@@ -782,6 +760,7 @@ export default factories.createCoreController(
         }
 
         const roleName = await getUserRole(user);
+        const isAdmin = roleName === "admin" || roleName === "superadmin";
         const documentId = String(id).trim();
 
         const existing: any = await strapi.db.query(LOCAL_PLAN_UID).findOne({
@@ -807,9 +786,11 @@ export default factories.createCoreController(
           return ctx.notFound("Local membership plan not found");
         }
 
-        // Ownership check for authenticated club owners
+        // Ownership check: Club owners can only edit their own plans, Admin/SuperAdmin can edit all plans
+        let userClubOwner: any = null;
+
         if (roleName === "clubowner") {
-          const userClubOwner = await getClubOwnerForUser(user);
+          userClubOwner = await getClubOwnerForUser(user);
 
           if (
             !userClubOwner ||
@@ -819,10 +800,22 @@ export default factories.createCoreController(
               "You are not authorized to modify plans belonging to another club",
             );
           }
-        } else if (roleName !== "admin" && roleName !== "superadmin") {
-          return ctx.forbidden(
-            "Access denied. Only ClubOwner, Admin, or SuperAdmin can modify plans.",
-          );
+        } else if (isAdmin) {
+          // Admin / SuperAdmin can edit all plans across any club
+        } else {
+          // Fallback: check if authenticated user has a linked club owner profile
+          userClubOwner = await getClubOwnerForUser(user);
+
+          if (
+            userClubOwner &&
+            isMatchingOwner(existing.club_owner, userClubOwner)
+          ) {
+            // Authorized as matching club owner
+          } else {
+            return ctx.forbidden(
+              "Access denied. Only ClubOwner, Admin, or SuperAdmin can modify plans.",
+            );
+          }
         }
 
         const body = ctx.request.body;
@@ -902,93 +895,104 @@ export default factories.createCoreController(
           );
         }
 
-        // 📝 Log Activity (with detailed list of modified fields)
-        try {
-          const activityLogService: any = strapi.service(
-            "api::club-owner-activity-log.club-owner-activity-log",
-          );
-          if (activityLogService?.logActivity) {
-            const ownerIdentifier =
-              existing.club_owner?.documentId ||
-              existing.club_owner?.id ||
-              existing.club_owner;
+        // 📝 Log Activity (only for club owners, NOT admin)
+        if (!isAdmin && (userClubOwner || roleName === "clubowner")) {
+          const ownerForLog =
+            userClubOwner || (await getClubOwnerForUser(user));
+          const targetOwnerId =
+            ownerForLog?.documentId ||
+            ownerForLog?.id ||
+            existing.club_owner?.documentId ||
+            existing.club_owner?.id ||
+            existing.club_owner;
 
-            const changedDetails: string[] = [];
+          if (targetOwnerId) {
+            try {
+              const activityLogService: any = strapi.service(
+                "api::club-owner-activity-log.club-owner-activity-log",
+              );
+              if (activityLogService?.logActivity) {
+                const changedDetails: string[] = [];
 
-            if (
-              updateData.planName !== undefined &&
-              updateData.planName !== existing.planName
-            ) {
-              changedDetails.push(
-                `planName: '${existing.planName ?? ""}' -> '${
-                  updateData.planName
-                }'`,
-              );
-            }
-            if (
-              updateData.price !== undefined &&
-              Number(updateData.price) !== Number(existing.price)
-            ) {
-              changedDetails.push(
-                `price: ₹${existing.price ?? 0} -> ₹${updateData.price}`,
-              );
-            }
-            if (
-              updateData.monthDuration !== undefined &&
-              Number(updateData.monthDuration) !==
-                Number(existing.monthDuration)
-            ) {
-              changedDetails.push(
-                `monthDuration: ${existing.monthDuration ?? 0}mo -> ${
-                  updateData.monthDuration
-                }mo`,
-              );
-            }
-            if (
-              updateData.isActive !== undefined &&
-              Boolean(updateData.isActive) !== Boolean(existing.isActive)
-            ) {
-              changedDetails.push(
-                `isActive: ${existing.isActive ? "true" : "false"} -> ${
-                  updateData.isActive ? "true" : "false"
-                }`,
-              );
-            }
-            if (
-              updateData.validUpto !== undefined &&
-              String(updateData.validUpto) !== String(existing.validUpto)
-            ) {
-              changedDetails.push(
-                `validUpto: '${existing.validUpto ?? ""}' -> '${
-                  updateData.validUpto
-                }'`,
-              );
-            }
-            if (
-              updateData.description !== undefined &&
-              updateData.description !== existing.description
-            ) {
-              changedDetails.push("description");
-            }
+                if (
+                  updateData.planName !== undefined &&
+                  updateData.planName !== existing.planName
+                ) {
+                  changedDetails.push(
+                    `planName: '${existing.planName ?? ""}' -> '${
+                      updateData.planName
+                    }'`,
+                  );
+                }
+                if (
+                  updateData.price !== undefined &&
+                  Number(updateData.price) !== Number(existing.price)
+                ) {
+                  changedDetails.push(
+                    `price: ₹${existing.price ?? 0} -> ₹${updateData.price}`,
+                  );
+                }
+                if (
+                  updateData.monthDuration !== undefined &&
+                  Number(updateData.monthDuration) !==
+                    Number(existing.monthDuration)
+                ) {
+                  changedDetails.push(
+                    `monthDuration: ${existing.monthDuration ?? 0}mo -> ${
+                      updateData.monthDuration
+                    }mo`,
+                  );
+                }
+                if (
+                  updateData.isActive !== undefined &&
+                  Boolean(updateData.isActive) !== Boolean(existing.isActive)
+                ) {
+                  changedDetails.push(
+                    `isActive: ${existing.isActive ? "true" : "false"} -> ${
+                      updateData.isActive ? "true" : "false"
+                    }`,
+                  );
+                }
+                if (
+                  updateData.validUpto !== undefined &&
+                  String(updateData.validUpto) !== String(existing.validUpto)
+                ) {
+                  changedDetails.push(
+                    `validUpto: '${existing.validUpto ?? ""}' -> '${
+                      updateData.validUpto
+                    }'`,
+                  );
+                }
+                if (
+                  updateData.description !== undefined &&
+                  updateData.description !== existing.description
+                ) {
+                  changedDetails.push("description");
+                }
 
-            const changeSummary =
-              changedDetails.length > 0
-                ? ` (Changed: ${changedDetails.join(", ")})`
-                : "";
+                const changeSummary =
+                  changedDetails.length > 0
+                    ? ` (Changed: ${changedDetails.join(", ")})`
+                    : "";
 
-            activityLogService.logActivity({
-              clubOwnerId: ownerIdentifier,
-              category: "membership_plans",
-              actionType: "UPDATE",
-              entityName: "Local Membership Plan",
-              entityId: existing.documentId || existing.id,
-              description: `Updated local membership plan '${
-                existing.planName || updated?.planName || ""
-              }'${changeSummary}`,
-            });
+                await activityLogService.logActivity({
+                  clubOwnerId: targetOwnerId,
+                  category: "membership_plans",
+                  actionType: "UPDATE",
+                  entityName: "Local Membership Plan",
+                  entityId: existing.documentId || existing.id,
+                  description: `Updated local membership plan '${
+                    existing.planName || updated?.planName || ""
+                  }'${changeSummary}`,
+                });
+              }
+            } catch (logErr) {
+              strapi.log.warn(
+                "[ActivityLog] Failed to log plan update:",
+                logErr,
+              );
+            }
           }
-        } catch (logErr) {
-          strapi.log.warn("[ActivityLog] Failed to log plan update:", logErr);
         }
 
         return ctx.send({
@@ -1016,6 +1020,7 @@ export default factories.createCoreController(
         }
 
         const roleName = await getUserRole(user);
+        const isAdmin = roleName === "admin" || roleName === "superadmin";
         const documentId = String(id).trim();
 
         const existing: any = await strapi.db.query(LOCAL_PLAN_UID).findOne({
@@ -1032,8 +1037,11 @@ export default factories.createCoreController(
           return ctx.notFound("Local membership plan not found");
         }
 
+        // Ownership check: Club owners can only delete their own plans, Admin/SuperAdmin can delete all plans
+        let userClubOwner: any = null;
+
         if (roleName === "clubowner") {
-          const userClubOwner = await getClubOwnerForUser(user);
+          userClubOwner = await getClubOwnerForUser(user);
 
           if (
             !userClubOwner ||
@@ -1043,10 +1051,22 @@ export default factories.createCoreController(
               "You are not authorized to delete plans belonging to another club",
             );
           }
-        } else if (roleName !== "admin" && roleName !== "superadmin") {
-          return ctx.forbidden(
-            "Access denied. Only ClubOwner, Admin, or SuperAdmin can delete plans.",
-          );
+        } else if (isAdmin) {
+          // Admin / SuperAdmin can delete all plans across any club
+        } else {
+          // Fallback: check if authenticated user has a linked club owner profile
+          userClubOwner = await getClubOwnerForUser(user);
+
+          if (
+            userClubOwner &&
+            isMatchingOwner(existing.club_owner, userClubOwner)
+          ) {
+            // Authorized as matching club owner
+          } else {
+            return ctx.forbidden(
+              "Access denied. Only ClubOwner, Admin, or SuperAdmin can delete plans.",
+            );
+          }
         }
 
         if ((strapi as any).documents && existing.documentId) {
@@ -1057,29 +1077,41 @@ export default factories.createCoreController(
           await strapi.entityService.delete(LOCAL_PLAN_UID, existing.id);
         }
 
-        // 📝 Log Activity
-        try {
-          const activityLogService: any = strapi.service(
-            "api::club-owner-activity-log.club-owner-activity-log",
-          );
-          if (activityLogService?.logActivity) {
-            const ownerIdentifier =
-              existing.club_owner?.documentId ||
-              existing.club_owner?.id ||
-              existing.club_owner;
-            activityLogService.logActivity({
-              clubOwnerId: ownerIdentifier,
-              category: "membership_plans",
-              actionType: "DELETE",
-              entityName: "Local Membership Plan",
-              entityId: existing.documentId || existing.id,
-              description: `Deleted local membership plan '${
-                existing.planName || ""
-              }'`,
-            });
+        // 📝 Log Activity (only for club owners, NOT admin)
+        if (!isAdmin && (userClubOwner || roleName === "clubowner")) {
+          const ownerForLog =
+            userClubOwner || (await getClubOwnerForUser(user));
+          const targetOwnerId =
+            ownerForLog?.documentId ||
+            ownerForLog?.id ||
+            existing.club_owner?.documentId ||
+            existing.club_owner?.id ||
+            existing.club_owner;
+
+          if (targetOwnerId) {
+            try {
+              const activityLogService: any = strapi.service(
+                "api::club-owner-activity-log.club-owner-activity-log",
+              );
+              if (activityLogService?.logActivity) {
+                await activityLogService.logActivity({
+                  clubOwnerId: targetOwnerId,
+                  category: "membership_plans",
+                  actionType: "DELETE",
+                  entityName: "Local Membership Plan",
+                  entityId: existing.documentId || existing.id,
+                  description: `Deleted local membership plan '${
+                    existing.planName || ""
+                  }'`,
+                });
+              }
+            } catch (logErr) {
+              strapi.log.warn(
+                "[ActivityLog] Failed to log plan deletion:",
+                logErr,
+              );
+            }
           }
-        } catch (logErr) {
-          strapi.log.warn("[ActivityLog] Failed to log plan deletion:", logErr);
         }
 
         return ctx.send({
@@ -1151,6 +1183,7 @@ export default factories.createCoreController(
         }
 
         const roleName = await getUserRole(user);
+        const isAdmin = roleName === "admin" || roleName === "superadmin";
         const documentId = String(id).trim();
 
         const existing: any = await strapi.db.query(LOCAL_PLAN_UID).findOne({
@@ -1167,8 +1200,11 @@ export default factories.createCoreController(
           return ctx.notFound("Local membership plan not found");
         }
 
+        // Ownership check: Club owners can only toggle their own plans, Admin/SuperAdmin can toggle all plans
+        let ownerRecord: any = null;
+
         if (roleName === "clubowner") {
-          const ownerRecord = await getClubOwnerForUser(user);
+          ownerRecord = await getClubOwnerForUser(user);
 
           if (!ownerRecord) {
             return ctx.badRequest(
@@ -1181,10 +1217,22 @@ export default factories.createCoreController(
               "Access denied. You can only toggle the active status of your own club's membership plans.",
             );
           }
-        } else if (roleName !== "admin" && roleName !== "superadmin") {
-          return ctx.forbidden(
-            "Access denied. Only ClubOwner, Admin, or SuperAdmin can toggle plan status.",
-          );
+        } else if (isAdmin) {
+          // Admin / SuperAdmin can toggle status of any plan across any club
+        } else {
+          // Fallback: check if authenticated user has a linked club owner profile
+          ownerRecord = await getClubOwnerForUser(user);
+
+          if (
+            ownerRecord &&
+            isMatchingOwner(existing.club_owner, ownerRecord)
+          ) {
+            // Authorized as matching club owner
+          } else {
+            return ctx.forbidden(
+              "Access denied. Only ClubOwner, Admin, or SuperAdmin can toggle plan status.",
+            );
+          }
         }
 
         const body = ctx.request.body;
@@ -1225,32 +1273,40 @@ export default factories.createCoreController(
           );
         }
 
-        // 📝 Log Activity
-        try {
-          const activityLogService: any = strapi.service(
-            "api::club-owner-activity-log.club-owner-activity-log",
-          );
-          if (activityLogService?.logActivity) {
-            const ownerIdentifier =
-              existing.club_owner?.documentId ||
-              existing.club_owner?.id ||
-              existing.club_owner;
-            activityLogService.logActivity({
-              clubOwnerId: ownerIdentifier,
-              category: "membership_plans",
-              actionType: "UPDATE",
-              entityName: "Local Membership Plan",
-              entityId: existing.documentId || existing.id,
-              description: `${
-                updated?.isActive ? "Activated" : "Deactivated"
-              } local membership plan '${existing.planName || ""}'`,
-            });
+        // 📝 Log Activity (only for club owners, NOT admin)
+        if (!isAdmin && (ownerRecord || roleName === "clubowner")) {
+          const ownerForLog = ownerRecord || (await getClubOwnerForUser(user));
+          const targetOwnerId =
+            ownerForLog?.documentId ||
+            ownerForLog?.id ||
+            existing.club_owner?.documentId ||
+            existing.club_owner?.id ||
+            existing.club_owner;
+
+          if (targetOwnerId) {
+            try {
+              const activityLogService: any = strapi.service(
+                "api::club-owner-activity-log.club-owner-activity-log",
+              );
+              if (activityLogService?.logActivity) {
+                await activityLogService.logActivity({
+                  clubOwnerId: targetOwnerId,
+                  category: "membership_plans",
+                  actionType: "UPDATE",
+                  entityName: "Local Membership Plan",
+                  entityId: existing.documentId || existing.id,
+                  description: `${
+                    updated?.isActive ? "Activated" : "Deactivated"
+                  } local membership plan '${existing.planName || ""}'`,
+                });
+              }
+            } catch (logErr) {
+              strapi.log.warn(
+                "[ActivityLog] Failed to log plan toggle status:",
+                logErr,
+              );
+            }
           }
-        } catch (logErr) {
-          strapi.log.warn(
-            "[ActivityLog] Failed to log plan toggle status:",
-            logErr,
-          );
         }
 
         return ctx.send({

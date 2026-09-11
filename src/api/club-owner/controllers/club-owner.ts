@@ -26,6 +26,96 @@ const POPULATE: any = {
   },
 };
 
+const CLUB_OWNER_UID = "api::club-owner.club-owner" as any;
+
+/* ---------- ROLE HELPER ---------- */
+async function getUserRole(user: any): Promise<string> {
+  if (!user) return "";
+  if (user._cachedRole) return user._cachedRole;
+
+  if (user.role?.name || user.role?.type) {
+    const role =
+      user.role.name?.toLowerCase().replace(/[\s_-]+/g, "") ||
+      user.role.type?.toLowerCase().replace(/[\s_-]+/g, "") ||
+      "";
+    user._cachedRole = role;
+    return role;
+  }
+
+  const fullUser: any = await strapi.db
+    .query("plugin::users-permissions.user")
+    .findOne({
+      where: { id: user.id },
+      select: ["id"],
+      populate: {
+        role: {
+          select: ["id", "name", "type"],
+        },
+      },
+    });
+
+  const role =
+    fullUser?.role?.name?.toLowerCase().replace(/[\s_-]+/g, "") ||
+    fullUser?.role?.type?.toLowerCase().replace(/[\s_-]+/g, "") ||
+    "";
+  user._cachedRole = role;
+  return role;
+}
+
+/* ---------- CLUB OWNER LOOKUP ---------- */
+async function getClubOwnerForUser(user: any) {
+  if (!user) return null;
+  const userObj = typeof user === "object" ? user : null;
+  const userId = userObj ? userObj.id : user;
+
+  if (userObj?._cachedClubOwner) {
+    return userObj._cachedClubOwner;
+  }
+
+  let owner: any = await strapi.db.query(CLUB_OWNER_UID).findOne({
+    where: { user: userId },
+    select: [
+      "id",
+      "documentId",
+      "clubId",
+      "clubName",
+      "ownerName",
+      "phoneNumber",
+      "email",
+    ],
+  });
+
+  if (!owner) {
+    const userWithDetail: any = await strapi.db
+      .query("plugin::users-permissions.user")
+      .findOne({
+        where: { id: userId },
+        select: ["id"],
+        populate: {
+          club_owner: {
+            select: [
+              "id",
+              "documentId",
+              "clubId",
+              "clubName",
+              "ownerName",
+              "phoneNumber",
+              "email",
+            ],
+          },
+        },
+      });
+
+    owner = userWithDetail?.club_owner || null;
+  }
+
+  if (userObj && owner) {
+    userObj._cachedClubOwner = owner;
+  }
+
+  return owner || null;
+}
+
 export default factories.createCoreController(
   "api::club-owner.club-owner",
   ({ strapi }) => ({
@@ -196,6 +286,15 @@ export default factories.createCoreController(
     async update(ctx: Context) {
       try {
         const { id } = ctx.params;
+        const user = ctx.state.user;
+
+        if (!user) {
+          return ctx.unauthorized("Authentication required");
+        }
+
+        const roleName = await getUserRole(user);
+        const isAdmin = roleName === "admin" || roleName === "superadmin";
+
         const body = (ctx.request.body as any) ?? {};
         const data = body.data ?? body;
 
@@ -207,13 +306,62 @@ export default factories.createCoreController(
           return ctx.badRequest("Update data is required");
         }
 
-        const existing = await strapi.entityService.findOne(
-          "api::club-owner.club-owner",
-          id,
-        );
+        const isNumeric = !isNaN(Number(id)) && /^\d+$/.test(String(id));
+        let existing: any = await strapi.db.query(CLUB_OWNER_UID).findOne({
+          where: isNumeric ? { id: Number(id) } : { documentId: String(id).trim() },
+          populate: {
+            user: {
+              select: ["id", "email"],
+            },
+          },
+        });
+
+        if (!existing) {
+          existing = await strapi.entityService.findOne(
+            CLUB_OWNER_UID,
+            id,
+            { populate: ["user"] },
+          );
+        }
 
         if (!existing) {
           return ctx.notFound("Club owner not found");
+        }
+
+        // Ownership check: Club owner can only update their own profile, Admin/SuperAdmin can update all
+        let userClubOwner: any = null;
+
+        if (roleName === "clubowner") {
+          userClubOwner = await getClubOwnerForUser(user);
+
+          if (!userClubOwner) {
+            return ctx.forbidden("Club owner profile not found for this account");
+          }
+
+          const isOwnerMatch =
+            (existing.documentId && userClubOwner.documentId && String(existing.documentId) === String(userClubOwner.documentId)) ||
+            (existing.id && userClubOwner.id && String(existing.id) === String(userClubOwner.id)) ||
+            (existing.user?.id && user.id && String(existing.user.id) === String(user.id));
+
+          if (!isOwnerMatch) {
+            return ctx.forbidden("Access denied. You can only update your own club profile.");
+          }
+        } else if (isAdmin) {
+          // Admin / SuperAdmin can update all club profiles without restriction
+        } else {
+          // Fallback: check if authenticated user is the owner of this club profile
+          userClubOwner = await getClubOwnerForUser(user);
+
+          const isOwnerMatch =
+            (userClubOwner && (
+              (existing.documentId && userClubOwner.documentId && String(existing.documentId) === String(userClubOwner.documentId)) ||
+              (existing.id && userClubOwner.id && String(existing.id) === String(userClubOwner.id))
+            )) ||
+            (existing.user?.id && user.id && String(existing.user.id) === String(user.id));
+
+          if (!isOwnerMatch) {
+            return ctx.forbidden("Access denied. Only ClubOwner, Admin, or SuperAdmin can update club profiles.");
+          }
         }
 
         const updateData = { ...data };
@@ -248,13 +396,28 @@ export default factories.createCoreController(
           updateData.club_facilities = facilityIds;
         }
 
-        await strapi.entityService.update("api::club-owner.club-owner", id, {
-          data: updateData,
-        });
+        let updated: any = null;
+
+        if ((strapi as any).documents && existing.documentId) {
+          try {
+            updated = await (strapi as any).documents(CLUB_OWNER_UID).update({
+              documentId: existing.documentId,
+              data: updateData,
+            });
+          } catch (docErr) {
+            strapi.log.warn("documents.update fallback in club-owner update:", docErr);
+          }
+        }
+
+        if (!updated) {
+          updated = await strapi.entityService.update(CLUB_OWNER_UID, existing.id || id, {
+            data: updateData,
+          });
+        }
 
         const entity: any = await strapi.entityService.findOne(
-          "api::club-owner.club-owner",
-          id,
+          CLUB_OWNER_UID,
+          existing.id || id,
           { populate: POPULATE },
         );
 
@@ -273,107 +436,119 @@ export default factories.createCoreController(
           }
         }
 
-        // 📝 Log Activity (with detailed list of modified fields)
-        try {
-          const activityLogService: any = strapi.service(
-            "api::club-owner-activity-log.club-owner-activity-log",
-          );
-          if (activityLogService?.logActivity) {
-            const changedDetails: string[] = [];
+        // 📝 Log Activity (only for club owners, NOT admin or superadmin)
+        if (!isAdmin && (userClubOwner || roleName === "clubowner")) {
+          const ownerForLog = userClubOwner || (await getClubOwnerForUser(user));
+          const targetOwnerId =
+            ownerForLog?.documentId ||
+            ownerForLog?.id ||
+            existing?.documentId ||
+            existing?.id ||
+            id;
 
-            const simpleFields = [
-              { key: "clubName", label: "clubName" },
-              { key: "ownerName", label: "ownerName" },
-              { key: "phoneNumber", label: "phoneNumber" },
-              { key: "email", label: "email" },
-              { key: "clubAddress", label: "clubAddress" },
-              { key: "city", label: "city" },
-              { key: "state", label: "state" },
-              { key: "pincode", label: "pincode" },
-              { key: "clubCategory", label: "clubCategory" },
-            ];
+          if (targetOwnerId) {
+            try {
+              const activityLogService: any = strapi.service(
+                "api::club-owner-activity-log.club-owner-activity-log",
+              );
+              if (activityLogService?.logActivity) {
+                const changedDetails: string[] = [];
 
-            for (const field of simpleFields) {
-              if (
-                data[field.key] !== undefined &&
-                String(data[field.key]) !== String(existing[field.key] ?? "")
-              ) {
-                changedDetails.push(
-                  `${field.label}: '${existing[field.key] ?? ""}' -> '${
-                    data[field.key]
-                  }'`,
-                );
+                const simpleFields = [
+                  { key: "clubName", label: "clubName" },
+                  { key: "ownerName", label: "ownerName" },
+                  { key: "phoneNumber", label: "phoneNumber" },
+                  { key: "email", label: "email" },
+                  { key: "clubAddress", label: "clubAddress" },
+                  { key: "city", label: "city" },
+                  { key: "state", label: "state" },
+                  { key: "pincode", label: "pincode" },
+                  { key: "clubCategory", label: "clubCategory" },
+                ];
+
+                for (const field of simpleFields) {
+                  if (
+                    data[field.key] !== undefined &&
+                    String(data[field.key]) !== String(existing[field.key] ?? "")
+                  ) {
+                    changedDetails.push(
+                      `${field.label}: '${existing[field.key] ?? ""}' -> '${
+                        data[field.key]
+                      }'`,
+                    );
+                  }
+                }
+
+                if (data.weekdayScheduling !== undefined) {
+                  changedDetails.push("weekdayScheduling");
+                }
+                if (
+                  data.facilities !== undefined ||
+                  data.club_facilities !== undefined
+                ) {
+                  changedDetails.push("facilities");
+                }
+                if (
+                  data.services !== undefined ||
+                  data.club_services !== undefined
+                ) {
+                  changedDetails.push("services");
+                }
+                if (data.logo !== undefined) {
+                  changedDetails.push("logo");
+                }
+                if (
+                  (data.latitude !== undefined &&
+                    String(data.latitude) !== String(existing.latitude ?? "")) ||
+                  (data.longitude !== undefined &&
+                    String(data.longitude) !== String(existing.longitude ?? ""))
+                ) {
+                  changedDetails.push("location (lat/long)");
+                }
+
+                const handledKeys = new Set([
+                  "clubName",
+                  "ownerName",
+                  "phoneNumber",
+                  "email",
+                  "clubAddress",
+                  "city",
+                  "state",
+                  "pincode",
+                  "weekdayScheduling",
+                  "facilities",
+                  "services",
+                  "logo",
+                  "latitude",
+                  "longitude",
+                ]);
+
+                for (const key of Object.keys(data)) {
+                  if (!handledKeys.has(key) && data[key] !== undefined) {
+                    changedDetails.push(key);
+                  }
+                }
+
+                const changeSummary =
+                  changedDetails.length > 0
+                    ? ` (Changed: ${changedDetails.join(", ")})`
+                    : "";
+
+                await activityLogService.logActivity({
+                  clubOwnerId: targetOwnerId,
+                  category: "profile",
+                  actionType: "UPDATE",
+                  entityName: "Club Profile",
+                  entityId: targetOwnerId,
+                  description: `Updated club profile details for ${
+                    entity?.clubName || existing?.clubName || "club"
+                  }${changeSummary}`,
+                });
               }
+            } catch (logErr) {
+              strapi.log.warn("[ActivityLog] Failed to log club update:", logErr);
             }
-
-            if (data.weekdayScheduling !== undefined) {
-              changedDetails.push("weekdayScheduling");
-            }
-            if (
-              data.facilities !== undefined ||
-              data.club_facilities !== undefined
-            ) {
-              changedDetails.push("facilities");
-            }
-            if (
-              data.services !== undefined ||
-              data.club_services !== undefined
-            ) {
-              changedDetails.push("services");
-            }
-            if (data.logo !== undefined) {
-              changedDetails.push("logo");
-            }
-            if (
-              (data.latitude !== undefined &&
-                String(data.latitude) !== String(existing.latitude ?? "")) ||
-              (data.longitude !== undefined &&
-                String(data.longitude) !== String(existing.longitude ?? ""))
-            ) {
-              changedDetails.push("location (lat/long)");
-            }
-
-            const handledKeys = new Set([
-              "clubName",
-              "ownerName",
-              "phoneNumber",
-              "email",
-              "clubAddress",
-              "city",
-              "state",
-              "pincode",
-              "weekdayScheduling",
-              "facilities",
-              "services",
-              "logo",
-              "latitude",
-              "longitude",
-            ]);
-
-            for (const key of Object.keys(data)) {
-              if (!handledKeys.has(key) && data[key] !== undefined) {
-                changedDetails.push(key);
-              }
-            }
-
-            const changeSummary =
-              changedDetails.length > 0
-                ? ` (Changed: ${changedDetails.join(", ")})`
-                : "";
-
-            activityLogService.logActivity({
-              clubOwnerId: entity?.documentId || entity?.id || id,
-              category: "profile",
-              actionType: "UPDATE",
-              entityName: "Club Profile",
-              entityId: entity?.documentId || entity?.id || id,
-              description: `Updated club profile details for ${
-                entity?.clubName || existing?.clubName || "club"
-              }${changeSummary}`,
-            });
           }
-        } catch (logErr) {
-          strapi.log.warn("[ActivityLog] Failed to log club update:", logErr);
         }
 
         ctx.body = updatedFields;
@@ -389,20 +564,40 @@ export default factories.createCoreController(
     async delete(ctx: Context) {
       try {
         const { id } = ctx.params;
+        const user = ctx.state.user;
+
+        if (!user) {
+          return ctx.unauthorized("Authentication required");
+        }
+
+        const roleName = await getUserRole(user);
+        const isAdmin = roleName === "admin" || roleName === "superadmin";
+
+        if (!isAdmin) {
+          return ctx.forbidden(
+            "Access denied. Only Admin and SuperAdmin can delete club owners.",
+          );
+        }
 
         if (!id) {
           return ctx.badRequest("Club owner ID is required");
         }
 
         const entity: any = await strapi.entityService.findOne(
-          "api::club-owner.club-owner",
+          CLUB_OWNER_UID,
           id,
           { populate: POPULATE },
         );
 
         if (!entity) return ctx.notFound("Club owner not found");
 
-        await strapi.entityService.delete("api::club-owner.club-owner", id);
+        if ((strapi as any).documents && entity.documentId) {
+          await (strapi as any).documents(CLUB_OWNER_UID).delete({
+            documentId: entity.documentId,
+          });
+        } else {
+          await strapi.entityService.delete(CLUB_OWNER_UID, entity.id || id);
+        }
 
         ctx.body = {
           success: true,
