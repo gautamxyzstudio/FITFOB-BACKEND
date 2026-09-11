@@ -70,7 +70,8 @@ export default factories.createCoreController(
               filters,
               populate: {
                 logo: true,
-                club_owner: true,
+                club_owners: true,
+                pending_club_owners: true,
               },
               sort: { createdAt: "desc" },
             });
@@ -81,7 +82,8 @@ export default factories.createCoreController(
               filters,
               populate: {
                 logo: true,
-                club_owner: true,
+                club_owners: true,
+                pending_club_owners: true,
               },
               sort: { createdAt: "desc" },
             },
@@ -110,7 +112,12 @@ export default factories.createCoreController(
             documentId: item.documentId || null,
             name: item.name,
             logo: logoUrl,
-            clubOwner: item.club_owner,
+            clubOwners: Array.isArray(item.club_owners)
+              ? item.club_owners.length
+              : 0,
+            pendingClubOwners: Array.isArray(item.pending_club_owners)
+              ? item.pending_club_owners.length
+              : 0,
             isActive: item.isActive,
             createdAt: item.createdAt,
           };
