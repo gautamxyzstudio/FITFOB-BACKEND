@@ -350,7 +350,6 @@ export default factories.createCoreController(
         });
 
         return ctx.send({
-          total: formatted.length,
           data: formatted,
         });
       } catch (error) {
