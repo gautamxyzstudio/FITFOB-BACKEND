@@ -706,7 +706,8 @@ export default factories.createCoreController(
     },
 
     /* =======================================================
-       TODAY'S CHECK INS
+       TODAY'S / FILTERED CHECK INS (FOR CLUB OWNER)
+       Route: GET /api/club-owners/today-checkins
     ======================================================= */
     async todayCheckins(ctx) {
       try {
@@ -730,44 +731,221 @@ export default factories.createCoreController(
           return ctx.notFound("Club owner profile not found for this user");
         }
 
-        // 3. Get today's date range
-        const now = new Date();
+        const {
+          startDate,
+          endDate,
+          from,
+          to,
+          start_date,
+          end_date,
+          date,
+          clientId,
+          client_id,
+          client,
+          clientName,
+          client_name,
+          name,
+          search,
+          q,
+          subscriptionType,
+        } = ctx.query as any;
 
-        const startOfDay = new Date(
-          now.getFullYear(),
-          now.getMonth(),
-          now.getDate(),
-          0,
-          0,
-          0,
-          0,
-        );
+        const where: any = {
+          club_owner: clubOwner.id,
+        };
 
-        const endOfDay = new Date(
-          now.getFullYear(),
-          now.getMonth(),
-          now.getDate(),
-          23,
-          59,
-          59,
-          999,
-        );
+        // 3. Date range: custom range if passed, otherwise defaults to Today
+        const rawStartDate = startDate || from || start_date;
+        const rawEndDate = endDate || to || end_date;
 
-        // 4. Fetch only this club owner's check-ins for today
+        if (date) {
+          const targetDate = new Date(date);
+          if (!isNaN(targetDate.getTime())) {
+            const dayStart = new Date(targetDate);
+            dayStart.setHours(0, 0, 0, 0);
+            const dayEnd = new Date(targetDate);
+            dayEnd.setHours(23, 59, 59, 999);
+            where.checkinTime = {
+              $gte: dayStart,
+              $lte: dayEnd,
+            };
+          }
+        } else if (rawStartDate || rawEndDate) {
+          where.checkinTime = {};
+          if (rawStartDate) {
+            const s = new Date(rawStartDate);
+            if (!isNaN(s.getTime())) {
+              if (
+                typeof rawStartDate === "string" &&
+                /^\d{4}-\d{2}-\d{2}$/.test(rawStartDate.trim())
+              ) {
+                s.setHours(0, 0, 0, 0);
+              }
+              where.checkinTime.$gte = s;
+            }
+          }
+          if (rawEndDate) {
+            const e = new Date(rawEndDate);
+            if (!isNaN(e.getTime())) {
+              if (
+                typeof rawEndDate === "string" &&
+                /^\d{4}-\d{2}-\d{2}$/.test(rawEndDate.trim())
+              ) {
+                e.setHours(23, 59, 59, 999);
+              }
+              where.checkinTime.$lte = e;
+            }
+          }
+        } else {
+          // Default to today's date range
+          const now = new Date();
+          const startOfDay = new Date(
+            now.getFullYear(),
+            now.getMonth(),
+            now.getDate(),
+            0,
+            0,
+            0,
+            0,
+          );
+          const endOfDay = new Date(
+            now.getFullYear(),
+            now.getMonth(),
+            now.getDate(),
+            23,
+            59,
+            59,
+            999,
+          );
+          where.checkinTime = {
+            $gte: startOfDay,
+            $lte: endOfDay,
+          };
+        }
+
+        // 4. Client filter by clientId or clientName / name / search (handles uppercase, lowercase, and partials)
+        const targetClientId = clientId || client_id || client;
+        const targetClientName =
+          clientName || client_name || name || search || q;
+
+        if (targetClientId || targetClientName) {
+          const clientWhere: any = {};
+
+          if (targetClientId && !targetClientName) {
+            const rawId = String(targetClientId).trim();
+            const isNum = !isNaN(Number(rawId)) && /^\d+$/.test(rawId);
+            const idConditions: any[] = [
+              { clientId: { $containsi: rawId } },
+              { clientId: rawId.toUpperCase() },
+              { clientId: rawId.toLowerCase() },
+              { documentId: rawId },
+            ];
+            if (isNum) {
+              idConditions.push({ id: Number(rawId) });
+            }
+            clientWhere.$or = idConditions;
+          } else if (targetClientName && !targetClientId) {
+            const trimmedName = String(targetClientName).trim();
+            const words = trimmedName.split(/\s+/).filter(Boolean);
+
+            if (words.length > 1) {
+              clientWhere.$and = words.map((w: string) => ({
+                $or: [
+                  { name: { $containsi: w } },
+                  { name: { $containsi: w.toLowerCase() } },
+                  { name: { $containsi: w.toUpperCase() } },
+                ],
+              }));
+            } else {
+              clientWhere.$or = [
+                { name: { $containsi: trimmedName } },
+                { name: { $containsi: trimmedName.toLowerCase() } },
+                { name: { $containsi: trimmedName.toUpperCase() } },
+              ];
+            }
+          } else if (targetClientId && targetClientName) {
+            const rawId = String(targetClientId).trim();
+            const isNum = !isNaN(Number(rawId)) && /^\d+$/.test(rawId);
+            const idConditions: any[] = [
+              { clientId: { $containsi: rawId } },
+              { clientId: rawId.toUpperCase() },
+              { clientId: rawId.toLowerCase() },
+              { documentId: rawId },
+            ];
+            if (isNum) {
+              idConditions.push({ id: Number(rawId) });
+            }
+
+            const trimmedName = String(targetClientName).trim();
+            const words = trimmedName.split(/\s+/).filter(Boolean);
+            const nameCondition =
+              words.length > 1
+                ? {
+                    $and: words.map((w: string) => ({
+                      $or: [
+                        { name: { $containsi: w } },
+                        { name: { $containsi: w.toLowerCase() } },
+                        { name: { $containsi: w.toUpperCase() } },
+                      ],
+                    })),
+                  }
+                : {
+                    $or: [
+                      { name: { $containsi: trimmedName } },
+                      { name: { $containsi: trimmedName.toLowerCase() } },
+                      { name: { $containsi: trimmedName.toUpperCase() } },
+                    ],
+                  };
+
+            clientWhere.$and = [{ $or: idConditions }, nameCondition];
+          }
+
+          const matchedClients = await strapi.db
+            .query("api::client-detail.client-detail")
+            .findMany({
+              where: clientWhere,
+              select: ["id"],
+            });
+
+          if (!matchedClients || matchedClients.length === 0) {
+            return ctx.send({ data: [] });
+          }
+
+          const clientIds = matchedClients.map((c: any) => c.id);
+          where.client_detail =
+            clientIds.length === 1 ? clientIds[0] : { $in: clientIds };
+        }
+
+        // 5. Subscription type filter (optional)
+        if (
+          subscriptionType &&
+          ["local", "outdoor"].includes(
+            String(subscriptionType).toLowerCase().trim(),
+          )
+        ) {
+          where.subscriptionType = String(subscriptionType).toLowerCase().trim();
+        }
+
+        // 6. Fetch check-ins
         const checkins = await strapi.db
           .query("api::client-checkin.client-checkin")
           .findMany({
-            where: {
-              club_owner: clubOwner.id,
-              checkinTime: {
-                $gte: startOfDay,
-                $lte: endOfDay,
-              },
-            },
+            where,
             populate: {
               client_detail: {
+                select: [
+                  "id",
+                  "documentId",
+                  "clientId",
+                  "name",
+                  "phoneNumber",
+                  "email",
+                  "gender",
+                ],
                 populate: {
-                  selfieUpload: true,
+                  selfieUpload: {
+                    select: ["id", "url", "name", "formats"],
+                  },
                 },
               },
             },
@@ -776,14 +954,18 @@ export default factories.createCoreController(
             },
           });
 
-        // 5. Format response
-        const data = checkins.map((checkin) => ({
-          id: checkin.id,
-          clientName: checkin.client_detail?.name || null,
-          selfieUploadUrl: checkin.client_detail?.selfieUpload?.url || null,
-          checkinTime: checkin.checkinTime,
-          subscriptionType: checkin.subscriptionType,
-        }));
+        // 7. Format response
+        const data = (Array.isArray(checkins) ? checkins : []).map(
+          (checkin: any) => ({
+            id: checkin.id,
+            documentId: checkin.documentId,
+            clientId: checkin.client_detail?.clientId || null,
+            clientName: checkin.client_detail?.name || null,
+            selfieUploadUrl: checkin.client_detail?.selfieUpload?.url || null,
+            checkinTime: checkin.checkinTime,
+            subscriptionType: checkin.subscriptionType,
+          }),
+        );
 
         return ctx.send({
           data,
@@ -791,8 +973,9 @@ export default factories.createCoreController(
       } catch (error) {
         strapi.log.error("Error fetching today's check-ins:", error);
 
-        return ctx.internalServerError("Unable to fetch today's check-ins");
+        return ctx.internalServerError("Unable to fetch check-ins");
       }
     },
+
   }),
 );

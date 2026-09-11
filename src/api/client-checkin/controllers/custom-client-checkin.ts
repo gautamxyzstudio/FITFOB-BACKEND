@@ -64,7 +64,7 @@ export default {
     ctx.send(result);
   },
 
-async manualCheckin(ctx: Context) {
+  async manualCheckin(ctx: Context) {
     try {
       const user = ctx.state.user;
 
@@ -87,6 +87,5 @@ async manualCheckin(ctx: Context) {
       return ctx.badRequest(error.message);
     }
   },
-
 
 };
