@@ -795,8 +795,6 @@ export default factories.createCoreController(
           createdSub.club_owner = formatClubOwner(createdSub.club_owner);
         }
 
-<<<<<<< Updated upstream
-=======
         // 📝 Log Activity
         try {
           const activityLogService: any = strapi.service(
@@ -821,7 +819,6 @@ export default factories.createCoreController(
           );
         }
 
->>>>>>> Stashed changes
         return ctx.send(
           {
             message:
@@ -1148,15 +1145,12 @@ export default factories.createCoreController(
             club_owner: {
               select: ["id", "documentId"],
             },
-<<<<<<< Updated upstream
-=======
             client_detail: {
               select: ["id", "documentId", "name", "clientId"],
             },
             local_membership_plan: {
               select: ["id", "documentId", "planName"],
             },
->>>>>>> Stashed changes
           },
         });
 
@@ -1217,8 +1211,6 @@ export default factories.createCoreController(
           );
         }
 
-<<<<<<< Updated upstream
-=======
         // 📝 Log Activity (with detailed list of modified fields)
         try {
           const activityLogService: any = strapi.service(
@@ -1278,7 +1270,6 @@ export default factories.createCoreController(
           );
         }
 
->>>>>>> Stashed changes
         return ctx.send({
           message: "Local subscription updated successfully",
           data: updated,
@@ -1311,15 +1302,12 @@ export default factories.createCoreController(
             club_owner: {
               select: ["id", "documentId"],
             },
-<<<<<<< Updated upstream
-=======
             client_detail: {
               select: ["id", "documentId", "name", "clientId"],
             },
             local_membership_plan: {
               select: ["id", "documentId", "planName"],
             },
->>>>>>> Stashed changes
           },
         });
 
@@ -1351,8 +1339,6 @@ export default factories.createCoreController(
           await strapi.entityService.delete(LOCAL_SUB_UID, existing.id);
         }
 
-<<<<<<< Updated upstream
-=======
         // 📝 Log Activity
         try {
           const activityLogService: any = strapi.service(
@@ -1387,7 +1373,6 @@ export default factories.createCoreController(
           );
         }
 
->>>>>>> Stashed changes
         return ctx.send({
           message: "Local subscription deleted successfully",
           deleted: existing,

@@ -1,4 +1,3 @@
-
 import { factories } from "@strapi/strapi";
 import { Context } from "koa";
 
@@ -48,7 +47,10 @@ async function getClubOwnerForUser(user: any) {
   const userObj = typeof user === "object" ? user : null;
   const userId = userObj ? userObj.id : user;
 
-  console.log("🔍 [getClubOwnerForUser] Finding club owner for userId:", userId);
+  console.log(
+    "🔍 [getClubOwnerForUser] Finding club owner for userId:",
+    userId,
+  );
 
   if (userObj?._cachedClubOwner) {
     console.log("⚡ [getClubOwnerForUser] Returning cached club owner");
@@ -69,7 +71,9 @@ async function getClubOwnerForUser(user: any) {
   });
 
   if (!owner) {
-    console.log("⚠️ [getClubOwnerForUser] Direct query returned null, checking user relation table...");
+    console.log(
+      "⚠️ [getClubOwnerForUser] Direct query returned null, checking user relation table...",
+    );
     const userWithDetail: any = await strapi.db
       .query("plugin::users-permissions.user")
       .findOne({
@@ -93,7 +97,12 @@ async function getClubOwnerForUser(user: any) {
     owner = userWithDetail?.club_owner || null;
   }
 
-  console.log("✅ [getClubOwnerForUser] Found owner:", owner ? { id: owner.id, documentId: owner.documentId, clubName: owner.clubName } : "NULL");
+  console.log(
+    "✅ [getClubOwnerForUser] Found owner:",
+    owner
+      ? { id: owner.id, documentId: owner.documentId, clubName: owner.clubName }
+      : "NULL",
+  );
 
   if (userObj && owner) {
     userObj._cachedClubOwner = owner;
@@ -151,6 +160,7 @@ export default factories.createCoreController(
         }
 
         const roleName = await getUserRole(user);
+        const isAdmin = roleName === "admin" || roleName === "superadmin";
         const body = getBody(ctx);
         let targetOwner: any = null;
 
@@ -159,7 +169,7 @@ export default factories.createCoreController(
           if (!targetOwner) {
             return ctx.notFound("Club owner profile not found for this user");
           }
-        } else if (roleName === "admin" || roleName === "superadmin") {
+        } else if (isAdmin) {
           const rawOwner = body.club_owner || ctx.query.club_owner;
           if (rawOwner) {
             const isNumeric =
@@ -212,16 +222,21 @@ export default factories.createCoreController(
 
         if ((strapi as any).documents && targetOwner.documentId) {
           try {
-            createdPhoto = await (strapi as any).documents(CLUB_PHOTO_UID).create({
-              data: {
-                imageInfo: imageInfo.trim(),
-                images: photoIds,
-                club_owner: targetOwner.documentId,
-              },
-              populate: ["images"],
-            });
+            createdPhoto = await (strapi as any)
+              .documents(CLUB_PHOTO_UID)
+              .create({
+                data: {
+                  imageInfo: imageInfo.trim(),
+                  images: photoIds,
+                  club_owner: targetOwner.documentId,
+                },
+                populate: ["images"],
+              });
           } catch (docErr) {
-            strapi.log.warn("documents.create fallback in photo upload:", docErr);
+            strapi.log.warn(
+              "documents.create fallback in photo upload:",
+              docErr,
+            );
           }
         }
 
@@ -236,25 +251,31 @@ export default factories.createCoreController(
           });
         }
 
-        // 📝 Log Activity (Profile Update)
-        try {
-          const activityLogService: any = strapi.service(
-            "api::club-owner-activity-log.club-owner-activity-log",
-          );
-          if (activityLogService?.logActivity) {
-            activityLogService.logActivity({
-              clubOwnerId: targetOwner.documentId || targetOwner.id,
-              category: "profile",
-              actionType: "UPDATE",
-              entityName: "Club Profile",
-              entityId: targetOwner.documentId || targetOwner.id,
-              description: `Updated club profile: Added club photo${
-                imageInfo.trim() ? `: '${imageInfo.trim()}'` : ""
-              }`,
-            });
+        // 📝 Log Activity (Profile Update - only for club owners, NOT admin)
+        if (!isAdmin && targetOwner) {
+          try {
+            const activityLogService: any = strapi.service(
+              "api::club-owner-activity-log.club-owner-activity-log",
+            );
+            if (activityLogService?.logActivity) {
+              const targetOwnerId = targetOwner.documentId || targetOwner.id;
+              await activityLogService.logActivity({
+                clubOwnerId: targetOwnerId,
+                category: "profile",
+                actionType: "UPDATE",
+                entityName: "Club Profile",
+                entityId: targetOwnerId,
+                description: `Updated club profile: Added club photo${
+                  imageInfo.trim() ? `: '${imageInfo.trim()}'` : ""
+                }`,
+              });
+            }
+          } catch (logErr) {
+            strapi.log.warn(
+              "[ActivityLog] Failed to log photo upload:",
+              logErr,
+            );
           }
-        } catch (logErr) {
-          strapi.log.warn("[ActivityLog] Failed to log photo upload:", logErr);
         }
 
         const firstImage = createdPhoto.images?.[0];
@@ -286,23 +307,17 @@ export default factories.createCoreController(
        2. GET MY CLUB PHOTOS (STRICTLY LOGGED-IN CLUB OWNER)
     ======================================================= */
     async getMyPhotos(ctx: Context) {
-      console.log("📸 [getMyPhotos] Endpoint hit. Auth header:", ctx.request.headers.authorization ? "Present" : "MISSING");
       try {
         const user = ctx.state.user;
-        console.log("👤 [getMyPhotos] ctx.state.user:", user ? { id: user.id, email: user.email } : "NULL");
 
         if (!user) {
-          console.log("❌ [getMyPhotos] Returning 401 Unauthorized");
           return ctx.unauthorized("Authentication required");
         }
 
         const owner = await getClubOwnerForUser(user);
         if (!owner) {
-          console.log("❌ [getMyPhotos] No club owner found for user:", user.id);
           return ctx.notFound("Club owner profile not found for this user");
         }
-
-        console.log("🔍 [getMyPhotos] Fetching photos for club_owner id:", owner.id);
 
         const photos: any[] = await strapi.db.query(CLUB_PHOTO_UID).findMany({
           where: {
@@ -316,8 +331,6 @@ export default factories.createCoreController(
           },
           orderBy: { id: "desc" },
         });
-
-        console.log(`✅ [getMyPhotos] Retrieved ${photos.length} photos for club: ${owner.clubName}`);
 
         const formatted = (photos || []).map((p: any) => {
           const firstImage = p.images?.[0];
@@ -341,27 +354,94 @@ export default factories.createCoreController(
           data: formatted,
         });
       } catch (error) {
-        console.error("💥 [getMyPhotos] Exception:", error);
         strapi.log.error("GET MY CLUB PHOTOS ERROR:", error);
         return ctx.internalServerError("Failed to fetch club photos");
       }
     },
 
     /* =======================================================
-       FIND (SCOPED TO LOGGED-IN OWNER)
+       FIND PHOTOS (BY OWNER DOCUMENTID OR ALL IF NONE PASSED)
     ======================================================= */
     async find(ctx: Context) {
-      return (this as any).getMyPhotos(ctx);
-    },
+      try {
+        const user = ctx.state.user;
+        if (!user) {
+          return ctx.unauthorized("Authentication required");
+        }
 
-    /* =======================================================
-       FINDONE (FORWARD 'me' TO GETMYPHOTOS)
-    ======================================================= */
-    async findOne(ctx: Context) {
-      if (ctx.params.id === "me") {
-        return (this as any).getMyPhotos(ctx);
+        const rawOwner =
+          ctx.query.documentId ||
+          ctx.query.club_owner ||
+          ctx.query.clubOwner ||
+          ctx.query.ownerId ||
+          ctx.query.clubId;
+
+        const whereClause: any = {};
+
+        if (rawOwner) {
+          const isNumeric =
+            !isNaN(Number(rawOwner)) && /^\d+$/.test(String(rawOwner));
+          const targetOwner = await strapi.db.query(CLUB_OWNER_UID).findOne({
+            where: isNumeric
+              ? { id: Number(rawOwner) }
+              : {
+                  $or: [
+                    { documentId: String(rawOwner).trim() },
+                    { clubId: String(rawOwner).trim() },
+                  ],
+                },
+            select: ["id", "documentId", "clubName", "clubId"],
+          });
+          if (!targetOwner) {
+            return ctx.notFound(`Club owner '${rawOwner}' not found`);
+          }
+          whereClause.club_owner = targetOwner.id;
+        }
+
+        const photos: any[] = await strapi.db.query(CLUB_PHOTO_UID).findMany({
+          where: whereClause,
+          populate: {
+            images: true,
+            club_owner: {
+              select: ["id", "documentId", "clubName", "clubId"],
+            },
+          },
+          orderBy: { id: "desc" },
+        });
+
+        const formatted = (photos || []).map((p: any) => {
+          const firstImage = p.images?.[0];
+          const fileUrl = firstImage?.url
+            ? firstImage.url.startsWith("http")
+              ? firstImage.url
+              : `${strapi.config.server.url}${firstImage.url}`
+            : null;
+
+          return {
+            id: p.id,
+            documentId: p.documentId,
+            imageInfo: p.imageInfo,
+            fileUrl,
+            club_owner: p.club_owner
+              ? {
+                  id: p.club_owner.id,
+                  documentId: p.club_owner.documentId,
+                  clubName: p.club_owner.clubName,
+                  clubId: p.club_owner.clubId,
+                }
+              : undefined,
+            createdAt: p.createdAt,
+          };
+        });
+
+        return ctx.send({
+          total: formatted.length,
+          data: formatted,
+        });
+      } catch (error) {
+        strapi.log.error("FIND CLUB PHOTOS ERROR:", error);
+        return ctx.internalServerError("Failed to fetch club photos");
       }
-      return super.findOne(ctx);
     },
 
     /* =======================================================
@@ -377,37 +457,61 @@ export default factories.createCoreController(
         }
 
         const roleName = await getUserRole(user);
+        const isAdmin = roleName === "admin" || roleName === "superadmin";
         const documentId = String(id).trim();
-        const isNumeric = !isNaN(Number(documentId)) && /^\d+$/.test(documentId);
+        const isNumeric =
+          !isNaN(Number(documentId)) && /^\d+$/.test(documentId);
 
-        const existing: any = await strapi.db.query(CLUB_PHOTO_UID).findOne({
-          where: isNumeric ? { id: Number(documentId) } : { documentId },
-          select: ["id", "documentId", "imageInfo"],
-          populate: {
-            club_owner: {
-              select: ["id", "documentId"],
-            },
-          },
-        });
+        let existing: any = null;
+        if ((strapi as any).documents && !isNumeric) {
+          try {
+            existing = await (strapi as any).documents(CLUB_PHOTO_UID).findOne({
+              documentId,
+              populate: ["club_owner"],
+            });
+          } catch (_) {}
+        }
+
+        if (!existing) {
+          existing = await strapi.db.query(CLUB_PHOTO_UID).findOne({
+            where: isNumeric ? { id: Number(documentId) } : { documentId },
+            populate: ["club_owner"],
+          });
+        }
 
         if (!existing) {
           return ctx.notFound("Club photo not found");
         }
 
-        // Ownership check for club owners
-        if (roleName === "clubowner") {
-          const owner = await getClubOwnerForUser(user);
+        let ownerRecord: any = null;
+        if (!isAdmin) {
+          ownerRecord = await getClubOwnerForUser(user);
+          if (!ownerRecord) {
+            return ctx.forbidden(
+              "Access denied. Only ClubOwner, Admin, or SuperAdmin can update club photos.",
+            );
+          }
+
+          const existingOwnerDocId =
+            existing.club_owner?.documentId ||
+            (typeof existing.club_owner === "string"
+              ? existing.club_owner
+              : null);
+          const existingOwnerId =
+            existing.club_owner?.id ||
+            (typeof existing.club_owner === "number"
+              ? existing.club_owner
+              : null);
+
           if (
-            !owner ||
-            (existing.club_owner?.documentId !== owner.documentId &&
-              existing.club_owner?.id !== owner.id)
+            (existingOwnerDocId &&
+              existingOwnerDocId !== ownerRecord.documentId) ||
+            (existingOwnerId && existingOwnerId !== ownerRecord.id)
           ) {
             return ctx.forbidden(
               "You are not authorized to update photos belonging to another club",
             );
           }
-        } else if (roleName !== "admin" && roleName !== "superadmin") {
-          return ctx.forbidden("Access denied");
         }
 
         const body = getBody(ctx);
@@ -446,7 +550,10 @@ export default factories.createCoreController(
               populate: ["images"],
             });
           } catch (docErr) {
-            strapi.log.warn("documents.update fallback in photo update:", docErr);
+            strapi.log.warn(
+              "documents.update fallback in photo update:",
+              docErr,
+            );
           }
         }
 
@@ -461,56 +568,76 @@ export default factories.createCoreController(
           );
         }
 
-        // 📝 Log Activity
-        try {
-          const activityLogService: any = strapi.service(
-            "api::club-owner-activity-log.club-owner-activity-log",
-          );
-          if (activityLogService?.logActivity) {
-            const ownerIdentifier =
-              existing.club_owner?.documentId ||
-              existing.club_owner?.id ||
-              existing.club_owner;
+        // 📝 Log Activity (only for club owners, NOT admin)
+        if (!isAdmin && (ownerRecord || roleName === "clubowner")) {
+          const ownerForLog = ownerRecord || (await getClubOwnerForUser(user));
+          const targetOwnerId =
+            ownerForLog?.documentId ||
+            ownerForLog?.id ||
+            existing.club_owner?.documentId ||
+            existing.club_owner?.id;
 
-            const changedParts: string[] = [];
-            if (
-              updateData.imageInfo !== undefined &&
-              updateData.imageInfo !== existing.imageInfo
-            ) {
-              changedParts.push(
-                `imageInfo: '${existing.imageInfo ?? ""}' -> '${updateData.imageInfo}'`,
+          if (targetOwnerId) {
+            try {
+              const activityLogService: any = strapi.service(
+                "api::club-owner-activity-log.club-owner-activity-log",
+              );
+              if (activityLogService?.logActivity) {
+                const changedParts: string[] = [];
+                if (
+                  updateData.imageInfo !== undefined &&
+                  updateData.imageInfo !== existing.imageInfo
+                ) {
+                  changedParts.push(
+                    `imageInfo: '${existing.imageInfo ?? ""}' -> '${
+                      updateData.imageInfo
+                    }'`,
+                  );
+                }
+                if (updateData.images) {
+                  changedParts.push("replaced image file");
+                }
+
+                const changeSummary =
+                  changedParts.length > 0
+                    ? ` (Changed: ${changedParts.join(", ")})`
+                    : "";
+
+                await activityLogService.logActivity({
+                  clubOwnerId: targetOwnerId,
+                  category: "profile",
+                  actionType: "UPDATE",
+                  entityName: "Club Profile",
+                  entityId: targetOwnerId,
+                  description: `Updated club profile: Updated club photo${
+                    existing.imageInfo ? `: '${existing.imageInfo}'` : ""
+                  }${changeSummary}`,
+                });
+              }
+            } catch (logErr) {
+              strapi.log.warn(
+                "[ActivityLog] Failed to log photo update:",
+                logErr,
               );
             }
-            if (updateData.images) {
-              changedParts.push("replaced image file");
-            }
-
-            const changeSummary =
-              changedParts.length > 0
-                ? ` (Changed: ${changedParts.join(", ")})`
-                : "";
-
-            activityLogService.logActivity({
-              clubOwnerId: ownerIdentifier,
-              category: "profile",
-              actionType: "UPDATE",
-              entityName: "Club Profile",
-              entityId:
-                existing.club_owner?.documentId ||
-                existing.club_owner?.id ||
-                ownerIdentifier,
-              description: `Updated club profile: Updated club photo${
-                existing.imageInfo ? `: '${existing.imageInfo}'` : ""
-              }${changeSummary}`,
-            });
           }
-        } catch (logErr) {
-          strapi.log.warn("[ActivityLog] Failed to log photo update:", logErr);
         }
+
+        const firstImage = updated.images?.[0];
+        const fileUrl = firstImage?.url
+          ? firstImage.url.startsWith("http")
+            ? firstImage.url
+            : `${strapi.config.server.url}${firstImage.url}`
+          : null;
 
         return ctx.send({
           message: "Club photo updated successfully",
-          data: updated,
+          data: {
+            id: updated.id,
+            documentId: updated.documentId,
+            imageInfo: updated.imageInfo,
+            fileUrl,
+          },
         });
       } catch (error) {
         strapi.log.error("UPDATE CLUB PHOTO ERROR:", error);
@@ -531,37 +658,61 @@ export default factories.createCoreController(
         }
 
         const roleName = await getUserRole(user);
+        const isAdmin = roleName === "admin" || roleName === "superadmin";
         const documentId = String(id).trim();
-        const isNumeric = !isNaN(Number(documentId)) && /^\d+$/.test(documentId);
+        const isNumeric =
+          !isNaN(Number(documentId)) && /^\d+$/.test(documentId);
 
-        const existing: any = await strapi.db.query(CLUB_PHOTO_UID).findOne({
-          where: isNumeric ? { id: Number(documentId) } : { documentId },
-          select: ["id", "documentId", "imageInfo"],
-          populate: {
-            club_owner: {
-              select: ["id", "documentId"],
-            },
-          },
-        });
+        let existing: any = null;
+        if ((strapi as any).documents && !isNumeric) {
+          try {
+            existing = await (strapi as any).documents(CLUB_PHOTO_UID).findOne({
+              documentId,
+              populate: ["club_owner"],
+            });
+          } catch (_) {}
+        }
+
+        if (!existing) {
+          existing = await strapi.db.query(CLUB_PHOTO_UID).findOne({
+            where: isNumeric ? { id: Number(documentId) } : { documentId },
+            populate: ["club_owner"],
+          });
+        }
 
         if (!existing) {
           return ctx.notFound("Club photo not found");
         }
 
-        // Ownership check for club owners
-        if (roleName === "clubowner") {
-          const owner = await getClubOwnerForUser(user);
+        let ownerRecord: any = null;
+        if (!isAdmin) {
+          ownerRecord = await getClubOwnerForUser(user);
+          if (!ownerRecord) {
+            return ctx.forbidden(
+              "Access denied. Only ClubOwner, Admin, or SuperAdmin can delete club photos.",
+            );
+          }
+
+          const existingOwnerDocId =
+            existing.club_owner?.documentId ||
+            (typeof existing.club_owner === "string"
+              ? existing.club_owner
+              : null);
+          const existingOwnerId =
+            existing.club_owner?.id ||
+            (typeof existing.club_owner === "number"
+              ? existing.club_owner
+              : null);
+
           if (
-            !owner ||
-            (existing.club_owner?.documentId !== owner.documentId &&
-              existing.club_owner?.id !== owner.id)
+            (existingOwnerDocId &&
+              existingOwnerDocId !== ownerRecord.documentId) ||
+            (existingOwnerId && existingOwnerId !== ownerRecord.id)
           ) {
             return ctx.forbidden(
               "You are not authorized to delete photos belonging to another club",
             );
           }
-        } else if (roleName !== "admin" && roleName !== "superadmin") {
-          return ctx.forbidden("Access denied");
         }
 
         if ((strapi as any).documents && existing.documentId) {
@@ -572,33 +723,39 @@ export default factories.createCoreController(
           await strapi.entityService.delete(CLUB_PHOTO_UID, existing.id);
         }
 
-        // 📝 Log Activity
-        try {
-          const activityLogService: any = strapi.service(
-            "api::club-owner-activity-log.club-owner-activity-log",
-          );
-          if (activityLogService?.logActivity) {
-            const ownerIdentifier =
-              existing.club_owner?.documentId ||
-              existing.club_owner?.id ||
-              existing.club_owner;
+        // 📝 Log Activity (only for club owners, NOT admin)
+        if (!isAdmin && (ownerRecord || roleName === "clubowner")) {
+          const ownerForLog = ownerRecord || (await getClubOwnerForUser(user));
+          const targetOwnerId =
+            ownerForLog?.documentId ||
+            ownerForLog?.id ||
+            existing.club_owner?.documentId ||
+            existing.club_owner?.id;
 
-            activityLogService.logActivity({
-              clubOwnerId: ownerIdentifier,
-              category: "profile",
-              actionType: "UPDATE",
-              entityName: "Club Profile",
-              entityId:
-                existing.club_owner?.documentId ||
-                existing.club_owner?.id ||
-                ownerIdentifier,
-              description: `Updated club profile: Deleted club photo${
-                existing.imageInfo ? `: '${existing.imageInfo}'` : ""
-              }`,
-            });
+          if (targetOwnerId) {
+            try {
+              const activityLogService: any = strapi.service(
+                "api::club-owner-activity-log.club-owner-activity-log",
+              );
+              if (activityLogService?.logActivity) {
+                await activityLogService.logActivity({
+                  clubOwnerId: targetOwnerId,
+                  category: "profile",
+                  actionType: "UPDATE",
+                  entityName: "Club Profile",
+                  entityId: targetOwnerId,
+                  description: `Updated club profile: Deleted club photo${
+                    existing.imageInfo ? `: '${existing.imageInfo}'` : ""
+                  }`,
+                });
+              }
+            } catch (logErr) {
+              strapi.log.warn(
+                "[ActivityLog] Failed to log photo delete:",
+                logErr,
+              );
+            }
           }
-        } catch (logErr) {
-          strapi.log.warn("[ActivityLog] Failed to log photo delete:", logErr);
         }
 
         return ctx.send({
@@ -612,4 +769,3 @@ export default factories.createCoreController(
     },
   }),
 );
-

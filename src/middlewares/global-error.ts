@@ -3,8 +3,6 @@ export default () => {
         try {
             await next();
         } catch (err: any) {
-<<<<<<< Updated upstream
-=======
             console.log("⚠️ [global-error] Error caught on:", ctx.request.method, ctx.request.url);
             console.log("⚠️ [global-error] Auth Header:", ctx.request.headers.authorization ? "Present" : "None");
             console.log("⚠️ [global-error] ctx.state.user:", ctx.state.user ? { id: ctx.state.user.id, email: ctx.state.user.email, role: ctx.state.user.role } : "None");
@@ -16,7 +14,6 @@ export default () => {
                 details: err.details,
             });
 
->>>>>>> Stashed changes
             const status =
                 err.status ||
                 err.statusCode ||

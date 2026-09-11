@@ -1,4 +1,4 @@
-  import { factories } from "@strapi/strapi";
+import { factories } from "@strapi/strapi";
 import { Context } from "koa";
 
 const ACTIVITY_LOG_UID =
@@ -272,7 +272,9 @@ export default factories.createCoreController(
         const targetIdentifier = clubId || documentId || club_owner || ownerId;
 
         if (targetIdentifier) {
-          const owner = await findClubOwnerByIdentifier(String(targetIdentifier));
+          const owner = await findClubOwnerByIdentifier(
+            String(targetIdentifier),
+          );
           if (!owner) {
             return ctx.notFound(
               `Club owner with identifier '${targetIdentifier}' not found`,
@@ -349,7 +351,9 @@ export default factories.createCoreController(
         const roleName = await getUserRole(user);
         const isNumeric = !isNaN(Number(id)) && /^\d+$/.test(String(id));
 
-        const where: any = isNumeric ? { id: Number(id) } : { documentId: String(id).trim() };
+        const where: any = isNumeric
+          ? { id: Number(id) }
+          : { documentId: String(id).trim() };
 
         const log: any = await strapi.db.query(ACTIVITY_LOG_UID).findOne({
           where,
@@ -388,4 +392,3 @@ export default factories.createCoreController(
     },
   }),
 );
-
