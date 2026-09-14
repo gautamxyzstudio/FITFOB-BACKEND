@@ -4,16 +4,6 @@ export default () => {
             await next();
         } catch (err: any) {
             console.log("⚠️ [global-error] Error caught on:", ctx.request.method, ctx.request.url);
-            console.log("⚠️ [global-error] Auth Header:", ctx.request.headers.authorization ? "Present" : "None");
-            console.log("⚠️ [global-error] ctx.state.user:", ctx.state.user ? { id: ctx.state.user.id, email: ctx.state.user.email, role: ctx.state.user.role } : "None");
-            console.log("⚠️ [global-error] Ability rules for this role:", ctx.state.auth?.ability?.rules?.map((r: any) => ({ action: r.action, subject: r.subject })));
-            console.log("⚠️ [global-error] Error details:", {
-                name: err.name,
-                message: err.message,
-                status: err.status,
-                details: err.details,
-            });
-
             const status =
                 err.status ||
                 err.statusCode ||
