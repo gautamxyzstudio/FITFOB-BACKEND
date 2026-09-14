@@ -12,12 +12,12 @@ const rekognition = new AWS.Rekognition(awsConfig);
 interface ValidationResult {
   valid: boolean;
   documentType:
-    | "aadhaar"
-    | "passport"
-    | "driving-license"
-    | "pan"
-    | "voter-id"
-    | "unknown";
+  | "aadhaar"
+  | "passport"
+  | "driving-license"
+  | "pan"
+  | "voter-id"
+  | "unknown";
 }
 
 type QueryField = {

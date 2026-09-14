@@ -12,7 +12,7 @@ export default {
       method: "POST",
       path: "/client-details/:id/read",
       handler: "custom-client-detail.markClientRead",
-       config: {
+      config: {
         auth: {}
       }
     },
@@ -20,7 +20,7 @@ export default {
       method: "GET",
       path: "/client/pending-list",
       handler: "custom-client-detail.pendingClients",
-        config: {
+      config: {
         auth: {}
       }
     },
@@ -28,7 +28,7 @@ export default {
       method: "GET",
       path: "/client/approved-list",
       handler: "custom-client-detail.approvedClients",
-        config: {
+      config: {
         auth: {}
       }
     },

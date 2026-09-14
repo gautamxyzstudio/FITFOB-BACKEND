@@ -53,7 +53,7 @@ function getBody(ctx: Context) {
   if (body.data && typeof body.data === "string") {
     try {
       body = JSON.parse(body.data);
-    } catch {}
+    } catch { }
   }
   return body;
 }
@@ -349,7 +349,7 @@ export default {
       if (draft.governmentId?.id) {
         try {
           await uploadService.remove(draft.governmentId);
-        } catch (_) {}
+        } catch (_) { }
       }
 
       const uploaded = await uploadService.upload({
@@ -456,7 +456,7 @@ export default {
             })
             .jpeg({ quality: 85 })
             .toBuffer();
-        } catch (_) {}
+        } catch (_) { }
       }
 
       if (idBuffer.length > 1024 * 1024) {
@@ -471,7 +471,7 @@ export default {
             })
             .jpeg({ quality: 85 })
             .toBuffer();
-        } catch (_) {}
+        } catch (_) { }
       }
 
       // 5. AWS compare
