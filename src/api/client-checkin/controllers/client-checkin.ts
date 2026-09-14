@@ -581,19 +581,19 @@ export default factories.createCoreController(
   ({ strapi }) => ({
     /* =======================================================
        1. FIND ALL / FILTER CHECK-INS (ADMIN & SUPERADMIN ONLY)
-       Route: GET /api/client-checkins
     ======================================================= */
     async find(ctx: Context) {
       try {
         const user = ctx.state.user;
+
         if (!user) {
           return ctx.unauthorized("Authentication required");
         }
 
+        // Only Admin and SuperAdmin can access this endpoint
         const roleName = await getUserRole(user);
-        const isAdmin = roleName === "admin" || roleName === "superadmin";
 
-        if (!isAdmin) {
+        if (roleName !== "admin" && roleName !== "superadmin") {
           return ctx.forbidden(
             "Access denied. Only Admin and SuperAdmin can access this endpoint.",
           );
@@ -602,222 +602,256 @@ export default factories.createCoreController(
         const {
           startDate,
           endDate,
-          from,
-          to,
-          start_date,
-          end_date,
-          date,
-          clubOwnerId,
-          club_owner,
-          clubOwner,
+
           clubId,
-          ownerDocumentId,
-          ownerId,
+          clubDocumentId,
+          clubName,
+
           clientId,
-          client_detail,
-          clientDetail,
-          client_id,
           clientDocumentId,
           clientName,
-          name,
+
           subscriptionType,
           status,
-          search,
-          q,
+
           sort,
         } = ctx.query as any;
 
         const where: any = {};
-        const appliedFilters: any = {};
 
-        // 1. Target Club Owner Filter
-        const targetOwnerIdentifier =
-          clubOwnerId ||
-          club_owner ||
-          clubOwner ||
-          clubId ||
-          ownerDocumentId ||
-          ownerId;
+        // ============================================================
+        // DATE FILTER
+        // Default = TODAY
+        // ============================================================
 
-        if (targetOwnerIdentifier) {
-          const owner = await findClubOwnerByIdentifier(targetOwnerIdentifier);
-          if (!owner) {
-            return ctx.notFound(
-              `Club owner with identifier '${targetOwnerIdentifier}' not found`,
-            );
-          }
-          where.club_owner = owner.id;
-          appliedFilters.clubOwner = {
-            id: owner.id,
-            documentId: owner.documentId,
-            clubId: owner.clubId,
-            clubName: owner.clubName,
-          };
-        }
-
-        // 2. Target Client Filter (supports ID, clientId, documentId, email, phone, or partial name)
-        const targetClientIdentifier =
-          clientId ||
-          client_detail ||
-          clientDetail ||
-          client_id ||
-          clientDocumentId ||
-          clientName ||
-          name;
-
-        if (targetClientIdentifier) {
-          const client = await findClientByIdentifier(targetClientIdentifier);
-          if (!client) {
-            return ctx.notFound(
-              `Client with identifier '${targetClientIdentifier}' not found`,
-            );
-          }
-          where.client_detail = client.id;
-          appliedFilters.client = {
-            id: client.id,
-            documentId: client.documentId,
-            clientId: client.clientId,
-            name: client.name,
-          };
-        }
-
-        // 2. Date Range Filter
-        const rawStartDate = startDate || from || start_date;
-        const rawEndDate = endDate || to || end_date;
-
-        if (date) {
-          const targetDate = new Date(date);
-          if (!isNaN(targetDate.getTime())) {
-            const dayStart = new Date(targetDate);
-            dayStart.setHours(0, 0, 0, 0);
-            const dayEnd = new Date(targetDate);
-            dayEnd.setHours(23, 59, 59, 999);
-            where.checkinTime = {
-              $gte: dayStart,
-              $lte: dayEnd,
-            };
-            appliedFilters.date = date;
-          }
-        } else if (rawStartDate || rawEndDate) {
+        if (startDate || endDate) {
           where.checkinTime = {};
-          if (rawStartDate) {
-            const s = new Date(rawStartDate);
-            if (!isNaN(s.getTime())) {
-              if (
-                typeof rawStartDate === "string" &&
-                /^\d{4}-\d{2}-\d{2}$/.test(rawStartDate.trim())
-              ) {
-                s.setHours(0, 0, 0, 0);
-              }
-              where.checkinTime.$gte = s;
-              appliedFilters.startDate = s.toISOString();
+
+          if (startDate) {
+            const start = new Date(String(startDate));
+
+            if (isNaN(start.getTime())) {
+              return ctx.badRequest("Invalid startDate");
             }
-          }
-          if (rawEndDate) {
-            const e = new Date(rawEndDate);
-            if (!isNaN(e.getTime())) {
-              if (
-                typeof rawEndDate === "string" &&
-                /^\d{4}-\d{2}-\d{2}$/.test(rawEndDate.trim())
-              ) {
-                e.setHours(23, 59, 59, 999);
-              }
-              where.checkinTime.$lte = e;
-              appliedFilters.endDate = e.toISOString();
+
+            // YYYY-MM-DD => beginning of day
+            if (/^\d{4}-\d{2}-\d{2}$/.test(String(startDate))) {
+              start.setHours(0, 0, 0, 0);
             }
+
+            where.checkinTime.$gte = start;
           }
+
+          if (endDate) {
+            const end = new Date(String(endDate));
+
+            if (isNaN(end.getTime())) {
+              return ctx.badRequest("Invalid endDate");
+            }
+
+            // YYYY-MM-DD => end of day
+            if (/^\d{4}-\d{2}-\d{2}$/.test(String(endDate))) {
+              end.setHours(23, 59, 59, 999);
+            }
+
+            where.checkinTime.$lte = end;
+          }
+        } else {
+          // No date filters => TODAY
+
+          const today = new Date();
+
+          const dayStart = new Date(today);
+          dayStart.setHours(0, 0, 0, 0);
+
+          const dayEnd = new Date(today);
+          dayEnd.setHours(23, 59, 59, 999);
+
+          where.checkinTime = {
+            $gte: dayStart,
+            $lte: dayEnd,
+          };
         }
 
-        // 3. Subscription Type Filter
+        // ============================================================
+        // CLUB FILTERS
+        // ============================================================
+
+        const clubFilters: any[] = [];
+
+        if (clubId && String(clubId).trim()) {
+          clubFilters.push({
+            clubId: String(clubId).trim(),
+          });
+        }
+
+        if (clubDocumentId && String(clubDocumentId).trim()) {
+          clubFilters.push({
+            documentId: String(clubDocumentId).trim(),
+          });
+        }
+
+        // Partial + case-insensitive club name search
+        if (clubName && String(clubName).trim()) {
+          clubFilters.push({
+            clubName: {
+              $containsi: String(clubName).trim(),
+            },
+          });
+        }
+
+        if (clubFilters.length > 0) {
+          const matchingClubs = await strapi.db.query(CLUB_OWNER_UID).findMany({
+            where: {
+              $and: clubFilters,
+            },
+            select: ["id"],
+          });
+
+          const clubOwnerIds = matchingClubs.map((club: any) => club.id);
+
+          if (clubOwnerIds.length === 0) {
+            return ctx.send({
+              data: [],
+              meta: {
+                total: 0,
+                localCount: 0,
+                outdoorCount: 0,
+                activeCount: 0,
+              },
+            });
+          }
+
+          where.club_owner = {
+            $in: clubOwnerIds,
+          };
+        }
+
+        // ============================================================
+        // CLIENT FILTERS
+        // ============================================================
+
+        const clientFilters: any[] = [];
+
+        if (clientId && String(clientId).trim()) {
+          clientFilters.push({
+            clientId: String(clientId).trim(),
+          });
+        }
+
+        if (clientDocumentId && String(clientDocumentId).trim()) {
+          clientFilters.push({
+            documentId: String(clientDocumentId).trim(),
+          });
+        }
+
+        // Partial + case-insensitive client name search
+        if (clientName && String(clientName).trim()) {
+          clientFilters.push({
+            name: {
+              $containsi: String(clientName).trim(),
+            },
+          });
+        }
+
+        if (clientFilters.length > 0) {
+          const matchingClients = await strapi.db.query(CLIENT_UID).findMany({
+            where: {
+              $and: clientFilters,
+            },
+            select: ["id"],
+          });
+
+          const clientDetailIds = matchingClients.map(
+            (client: any) => client.id,
+          );
+
+          if (clientDetailIds.length === 0) {
+            return ctx.send({
+              data: [],
+              meta: {
+                total: 0,
+                localCount: 0,
+                outdoorCount: 0,
+                activeCount: 0,
+              },
+            });
+          }
+
+          where.client_detail = {
+            $in: clientDetailIds,
+          };
+        }
+        // ============================================================
+        // SUBSCRIPTION TYPE
+        // ============================================================
+
         if (
           subscriptionType &&
           ["local", "outdoor"].includes(
             String(subscriptionType).toLowerCase().trim(),
           )
         ) {
-          const subType = String(subscriptionType).toLowerCase().trim();
-          where.subscriptionType = subType;
-          appliedFilters.subscriptionType = subType;
+          where.subscriptionType = String(subscriptionType)
+            .toLowerCase()
+            .trim();
         }
 
-        // 4. Status Filter
+        // ============================================================
+        // STATUS
+        // ============================================================
+
         if (status) {
-          const s = String(status).toLowerCase().trim();
-          if (s === "active" || s === "checked-in" || s === "checkedin") {
-            where.checkoutTime = { $null: true };
-            appliedFilters.status = "checked-in";
-          } else if (
-            s === "completed" ||
-            s === "checked-out" ||
-            s === "checkedout"
+          const normalizedStatus = String(status).toLowerCase().trim();
+
+          if (
+            normalizedStatus === "active" ||
+            normalizedStatus === "checked-in" ||
+            normalizedStatus === "checkedin"
           ) {
-            where.checkoutTime = { $notNull: true };
-            appliedFilters.status = "checked-out";
+            where.checkoutTime = {
+              $null: true,
+            };
+          }
+
+          if (
+            normalizedStatus === "completed" ||
+            normalizedStatus === "checked-out" ||
+            normalizedStatus === "checkedout"
+          ) {
+            where.checkoutTime = {
+              $notNull: true,
+            };
           }
         }
 
-        // 5. Keyword Search
-        const searchTerm = search || q;
-        if (searchTerm && String(searchTerm).trim()) {
-          const s = String(searchTerm).trim();
-          appliedFilters.search = s;
+        // ============================================================
+        // SORT
+        // ============================================================
 
-          const [matchingClients, matchingClubs] = await Promise.all([
-            strapi.db.query(CLIENT_UID).findMany({
-              where: {
-                $or: [
-                  { name: { $containsi: s } },
-                  { clientId: { $containsi: s } },
-                  { email: { $containsi: s } },
-                  { phoneNumber: { $containsi: s } },
-                ],
-              },
-              select: ["id"],
-            }),
-            strapi.db.query(CLUB_OWNER_UID).findMany({
-              where: {
-                $or: [
-                  { clubName: { $containsi: s } },
-                  { ownerName: { $containsi: s } },
-                  { clubId: { $containsi: s } },
-                  { email: { $containsi: s } },
-                  { phoneNumber: { $containsi: s } },
-                  { city: { $containsi: s } },
-                ],
-              },
-              select: ["id"],
-            }),
-          ]);
+        let orderBy: any = {
+          checkinTime: "desc",
+          id: "desc",
+        };
 
-          const clientIds = (matchingClients || []).map((c: any) => c.id);
-          const clubIds = (matchingClubs || []).map((c: any) => c.id);
-
-          if (clientIds.length > 0 || clubIds.length > 0) {
-            const orConditions: any[] = [];
-            if (clientIds.length > 0) {
-              orConditions.push({ client_detail: { $in: clientIds } });
-            }
-            if (clubIds.length > 0) {
-              orConditions.push({ club_owner: { $in: clubIds } });
-            }
-            where.$or = orConditions;
-          } else {
-            where.id = -1; // No matches found
-          }
-        }
-
-        // 6. Ordering
-        let orderBy: any = { checkinTime: "desc", id: "desc" };
         if (sort) {
           const parts = String(sort).split(":");
+
           if (parts.length === 2) {
-            orderBy = { [parts[0]]: parts[1].toLowerCase() };
-          } else if (parts.length === 1) {
-            orderBy = { [parts[0]]: "desc" };
+            orderBy = {
+              [parts[0]]: parts[1].toLowerCase(),
+            };
+          } else {
+            orderBy = {
+              [parts[0]]: "desc",
+            };
           }
         }
 
-        // 7. Execute Queries (All Check-ins without pagination)
+        // ============================================================
+        // FETCH CHECK-INS
+        // ============================================================
+
         const [rawCheckins, total, localCount, outdoorCount, activeCount] =
           await Promise.all([
             strapi.db.query(CHECKIN_UID).findMany({
@@ -825,15 +859,32 @@ export default factories.createCoreController(
               populate: POPULATE_CONFIG,
               orderBy,
             }),
-            strapi.db.query(CHECKIN_UID).count({ where }),
+
             strapi.db.query(CHECKIN_UID).count({
-              where: { ...where, subscriptionType: "local" },
+              where,
             }),
+
             strapi.db.query(CHECKIN_UID).count({
-              where: { ...where, subscriptionType: "outdoor" },
+              where: {
+                ...where,
+                subscriptionType: "local",
+              },
             }),
+
             strapi.db.query(CHECKIN_UID).count({
-              where: { ...where, checkoutTime: { $null: true } },
+              where: {
+                ...where,
+                subscriptionType: "outdoor",
+              },
+            }),
+
+            strapi.db.query(CHECKIN_UID).count({
+              where: {
+                ...where,
+                checkoutTime: {
+                  $null: true,
+                },
+              },
             }),
           ]);
 
@@ -846,15 +897,13 @@ export default factories.createCoreController(
         });
       } catch (error) {
         strapi.log.error("FIND CLIENT CHECKINS ERROR:", error);
+
         return ctx.internalServerError("Failed to fetch check-ins");
       }
     },
 
     /* =======================================================
        2. GET CLIENT'S OWN CHECK-INS (CLIENT ONLY)
-       Route: GET /api/client-checkins/my-checkins
-              GET /api/client-checkin/my-checkins
-              GET /api/client/my-checkins
     ======================================================= */
     async myCheckins(ctx: Context) {
       try {
@@ -1060,7 +1109,6 @@ export default factories.createCoreController(
 
     /* =======================================================
        3. FIND ONE CHECK-IN BY ID OR DOCUMENTID
-       Route: GET /api/client-checkins/:id
     ======================================================= */
     async findOne(ctx: Context) {
       try {

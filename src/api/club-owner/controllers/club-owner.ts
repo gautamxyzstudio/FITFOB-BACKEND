@@ -961,6 +961,7 @@ export default factories.createCoreController(
             documentId: checkin.documentId,
             clientId: checkin.client_detail?.clientId || null,
             clientName: checkin.client_detail?.name || null,
+            clientEmail: checkin.client_detail?.email || null,
             selfieUploadUrl: checkin.client_detail?.selfieUpload?.url || null,
             checkinTime: checkin.checkinTime,
             subscriptionType: checkin.subscriptionType,
