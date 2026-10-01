@@ -20,6 +20,18 @@ export default {
       handler: "pending-client-detail.basicInfo",
       config: { auth: {} },
     },
+    {
+      method: "POST",
+      path: "/pending-client/verify-otp",
+      handler: "pending-client-detail.verifyDetailsOtp",
+      config: { auth: {} },
+    },
+    {
+      method: "POST",
+      path: "/pending-client/resend-otp",
+      handler: "pending-client-detail.resendDetailsOtp",
+      config: { auth: {} },
+    },
 
     /* STEP 2 BODY INFO */
     {

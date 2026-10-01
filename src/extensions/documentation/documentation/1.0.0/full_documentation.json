@@ -14,7 +14,7 @@
       "name": "Apache 2.0",
       "url": "https://www.apache.org/licenses/LICENSE-2.0.html"
     },
-    "x-generation-date": "2026-10-01T11:39:42.561Z"
+    "x-generation-date": "2026-10-01T12:20:25.010Z"
   },
   "x-strapi-config": {
     "plugins": [
@@ -70030,7 +70030,8 @@
                 "enum": [
                   "register",
                   "reset_password",
-                  "club_owner_verification"
+                  "club_owner_verification",
+                  "client_verification"
                 ]
               },
               "last_sent_at": {
@@ -70133,7 +70134,8 @@
             "enum": [
               "register",
               "reset_password",
-              "club_owner_verification"
+              "club_owner_verification",
+              "client_verification"
             ]
           },
           "last_sent_at": {
@@ -70884,7 +70886,8 @@
                   "enum": [
                     "register",
                     "reset_password",
-                    "club_owner_verification"
+                    "club_owner_verification",
+                    "client_verification"
                   ]
                 },
                 "last_sent_at": {
@@ -81486,6 +81489,12 @@
                   "unknown"
                 ]
               },
+              "isPhoneVerified": {
+                "type": "boolean"
+              },
+              "isEmailVerified": {
+                "type": "boolean"
+              },
               "locale": {
                 "type": "string"
               },
@@ -86871,6 +86880,12 @@
               "unknown"
             ]
           },
+          "isPhoneVerified": {
+            "type": "boolean"
+          },
+          "isEmailVerified": {
+            "type": "boolean"
+          },
           "createdAt": {
             "type": "string",
             "format": "date-time"
@@ -87354,6 +87369,12 @@
                     "voter-id",
                     "unknown"
                   ]
+                },
+                "isPhoneVerified": {
+                  "type": "boolean"
+                },
+                "isEmailVerified": {
+                  "type": "boolean"
                 },
                 "createdAt": {
                   "type": "string",

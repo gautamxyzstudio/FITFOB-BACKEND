@@ -982,7 +982,12 @@ export interface ApiOtpRequestOtpRequest extends Struct.CollectionTypeSchema {
     otp_hash: Schema.Attribute.String;
     publishedAt: Schema.Attribute.DateTime;
     purpose: Schema.Attribute.Enumeration<
-      ['register', 'reset_password', 'club_owner_verification']
+      [
+        'register',
+        'reset_password',
+        'club_owner_verification',
+        'client_verification',
+      ]
     >;
     signupToken: Schema.Attribute.String;
     updatedAt: Schema.Attribute.DateTime;
@@ -1108,6 +1113,10 @@ export interface ApiPendingClientDetailPendingClientDetail
       'images' | 'files' | 'videos' | 'audios'
     >;
     height: Schema.Attribute.String;
+    isEmailVerified: Schema.Attribute.Boolean &
+      Schema.Attribute.DefaultTo<false>;
+    isPhoneVerified: Schema.Attribute.Boolean &
+      Schema.Attribute.DefaultTo<false>;
     latitude: Schema.Attribute.String;
     locale: Schema.Attribute.String & Schema.Attribute.Private;
     localizations: Schema.Attribute.Relation<

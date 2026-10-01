@@ -90,6 +90,14 @@
         "voter-id",
         "unknown"
       ]
+    },
+    "isPhoneVerified": {
+      "type": "boolean",
+      "default": false
+    },
+    "isEmailVerified": {
+      "type": "boolean",
+      "default": false
     }
   }
 }

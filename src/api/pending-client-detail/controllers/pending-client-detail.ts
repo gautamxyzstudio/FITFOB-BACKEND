@@ -3,12 +3,80 @@ import fs from "fs";
 import sharp from "sharp";
 import { generateClientAssets } from "../../../utils/generateClientId";
 import axios from "axios";
+import bcrypt from "bcryptjs";
 import { compareFaces } from "../../../utils/awsRekognition";
 import { validateGovernmentDocument } from "../../../services/aws-document-validator";
+import { sendTwilioOtp } from "../../../services/twilio-sms";
+import { getOtpEmailTemplate } from "../../../utils/otpEmailTemplate";
+
 const PENDING_UID = "api::pending-client-detail.pending-client-detail";
 const CLIENT_UID = "api::client-detail.client-detail";
 
 const UPLOAD_FOLDER_ID = 2;
+
+/* ---------- OTP GENERATOR ---------- */
+const generateOtp = () =>
+  Math.floor(100000 + Math.random() * 900000).toString();
+
+/* ---------- NORMALIZE PHONE ---------- */
+const normalizePhone = (identifier: string) => {
+  if (!identifier) return identifier;
+  if (identifier.includes("@")) return identifier.trim().toLowerCase();
+
+  let num = identifier.replace(/\D/g, "");
+
+  if (num.length === 10) return `+91${num}`;
+  if (num.length === 12 && num.startsWith("91")) return `+${num}`;
+  if (identifier.startsWith("+91")) return identifier;
+
+  return identifier;
+};
+
+/* ---------- IDENTIFY USER REGISTRATION TYPE ---------- */
+function getUserRegistrationType(user: any): "email" | "phone" {
+  if (user?.username) {
+    return user.username.includes("@") ? "email" : "phone";
+  }
+  if (user?.email && !user.email.toLowerCase().endsWith("@phone.user")) {
+    return "email";
+  }
+  return "phone";
+}
+
+/* ---------- CHECK STEP 1 PHONE / EMAIL VERIFICATION ---------- */
+function isPhoneOrEmailVerified(draft: any, user: any): boolean {
+  if (!draft?.phoneNumber || !draft?.email || !user) return false;
+
+  const regType = getUserRegistrationType(user);
+
+  if (regType === "email") {
+    return Boolean(draft.isPhoneVerified);
+  } else {
+    return Boolean(draft.isEmailVerified);
+  }
+}
+
+async function ensureStep1Verified(ctx: Context, draft: any): Promise<boolean> {
+  const sessionUser = ctx.state.user;
+  if (!sessionUser) {
+    ctx.unauthorized("Login required");
+    return false;
+  }
+
+  const user: any = await getFullUser(sessionUser.id);
+
+  if (!isPhoneOrEmailVerified(draft, user)) {
+    const regType = getUserRegistrationType(user);
+    ctx.badRequest(
+      regType === "email"
+        ? "Please verify your phone number in Step 1 before proceeding."
+        : "Please verify your email address in Step 1 before proceeding.",
+    );
+    return false;
+  }
+
+  return true;
+}
 
 /* ---------- OPTIMIZE IMAGE & UPDATE TEMP FILE ---------- */
 async function prepareAndOptimizeImage(
@@ -94,6 +162,8 @@ async function getEditableDraft(ctx: Context) {
         phoneNumber: user.phoneNumber || null,
         currentStep: 1,
         status: "draft",
+        isPhoneVerified: false,
+        isEmailVerified: false,
       },
     });
     return draft;
@@ -109,8 +179,15 @@ async function getEditableDraft(ctx: Context) {
 }
 
 /* ---------- FINAL VALIDATION BEFORE CLIENT CREATION ---------- */
-async function validateBeforeClientCreation(draft: any) {
+async function validateBeforeClientCreation(draft: any, user?: any) {
   if (!draft.name || !draft.gender) return "Please complete basic information";
+
+  if (user && !isPhoneOrEmailVerified(draft, user)) {
+    const regType = getUserRegistrationType(user);
+    return regType === "email"
+      ? "Please verify your phone number in Step 1"
+      : "Please verify your email address in Step 1";
+  }
 
   if (!draft.date_of_birth) return "Please complete body information";
 
@@ -191,30 +268,399 @@ export default {
 
   /* ================= STEP 1 BASIC INFO ================= */
   async basicInfo(ctx: Context) {
-    const draft: any = await getEditableDraft(ctx);
-    if (!draft) return;
+    try {
+      const draft: any = await getEditableDraft(ctx);
+      if (!draft) return;
 
-    const sessionUser = ctx.state.user;
-    const user = await getFullUser(sessionUser.id);
-    const body = getBody(ctx);
+      const sessionUser = ctx.state.user;
+      const user = await getFullUser(sessionUser.id);
+      if (!user) return ctx.unauthorized("User not found");
 
-    await strapi.entityService.update(PENDING_UID, draft.id, {
-      data: {
-        name: body.name,
-        gender: body.gender,
-        email: body.email || user.email,
-        phoneNumber: body.phoneNumber || user.phoneNumber,
+      const body = getBody(ctx);
+
+      if (!body.name || !body.gender) {
+        return ctx.badRequest("Name and gender are required");
+      }
+
+      if (!body.phoneNumber || !body.email) {
+        return ctx.badRequest("Phone number and Email are required");
+      }
+
+      const submittedPhone = normalizePhone(String(body.phoneNumber).trim());
+      const submittedEmail = String(body.email).trim().toLowerCase();
+
+      // Check user registration identifier type:
+      const regType = getUserRegistrationType(user);
+
+      // Check if phone or email changed from current draft
+      const isPhoneChanged =
+        normalizePhone(draft.phoneNumber || "") !== submittedPhone;
+      const isEmailChanged =
+        (draft.email || "").toLowerCase() !== submittedEmail;
+
+      let isPhoneVerified = Boolean(draft.isPhoneVerified);
+      let isEmailVerified = Boolean(draft.isEmailVerified);
+
+      let needsPhoneVerification = false;
+      let needsEmailVerification = false;
+
+      if (regType === "email") {
+        // User created with email -> phone number must be verified in draft
+        if (isPhoneChanged) {
+          isPhoneVerified = false;
+        }
+        needsPhoneVerification = !isPhoneVerified;
+      } else {
+        // User created with phone -> email must be verified in draft
+        if (isEmailChanged) {
+          isEmailVerified = false;
+        }
+        needsEmailVerification = !isEmailVerified;
+      }
+
+      const needsVerification =
+        needsPhoneVerification || needsEmailVerification;
+
+      await strapi.entityService.update(PENDING_UID, draft.id, {
+        data: {
+          name: body.name,
+          gender: body.gender,
+          phoneNumber: submittedPhone,
+          email: submittedEmail,
+          isPhoneVerified,
+          isEmailVerified,
+          currentStep: needsVerification
+            ? 1
+            : Math.max(draft.currentStep || 1, 2),
+        },
+      });
+
+      if (needsPhoneVerification) {
+        const otp = generateOtp();
+        const otpHash = await bcrypt.hash(otp, 10);
+
+        await strapi.db.query("api::otp-request.otp-request").deleteMany({
+          where: {
+            identifier: submittedPhone,
+            purpose: "client_verification",
+          },
+        });
+
+        await strapi.entityService.create("api::otp-request.otp-request", {
+          data: {
+            identifier: submittedPhone,
+            otp_hash: otpHash,
+            expires_at: new Date(Date.now() + 2 * 60 * 1000),
+            attempts: 0,
+            verified: false,
+            purpose: "client_verification",
+            last_sent_at: new Date(),
+          },
+        });
+
+        try {
+          await sendTwilioOtp(submittedPhone, otp);
+        } catch (smsError: any) {
+          strapi.log.error("[CLIENT PHONE OTP SEND ERROR]", smsError);
+          return ctx.badRequest(
+            "Failed to send OTP to the provided phone number. Please verify the phone number.",
+          );
+        }
+
+        return ctx.send({
+          requiresVerification: true,
+          verificationType: "phone",
+          identifier: submittedPhone,
+          message: "OTP sent to your phone number to verify.",
+        });
+      }
+
+      if (needsEmailVerification) {
+        const otp = generateOtp();
+        const otpHash = await bcrypt.hash(otp, 10);
+
+        await strapi.db.query("api::otp-request.otp-request").deleteMany({
+          where: {
+            identifier: submittedEmail,
+            purpose: "client_verification",
+          },
+        });
+
+        await strapi.entityService.create("api::otp-request.otp-request", {
+          data: {
+            identifier: submittedEmail,
+            otp_hash: otpHash,
+            expires_at: new Date(Date.now() + 2 * 60 * 1000),
+            attempts: 0,
+            verified: false,
+            purpose: "client_verification",
+            last_sent_at: new Date(),
+          },
+        });
+
+        try {
+          await axios.post(
+            "https://api.brevo.com/v3/smtp/email",
+            {
+              sender: { name: "FitFob", email: "qaxyzstudio@gmail.com" },
+              to: [{ email: submittedEmail }],
+              subject: "FitFob Client Email Verification OTP",
+              htmlContent: getOtpEmailTemplate(otp, {
+                title: "FitFob Email Verification Code",
+                subtext:
+                  "Use the One-Time Password (OTP) below to verify your email address for client onboarding:",
+                validityMinutes: 2,
+              }),
+            },
+            { headers: { "api-key": process.env.BREVO_API_KEY } },
+          );
+        } catch (emailError: any) {
+          strapi.log.error(
+            "[CLIENT EMAIL OTP SEND ERROR]",
+            emailError?.response?.data || emailError,
+          );
+          return ctx.badRequest(
+            "Failed to send verification email. Please verify the email address.",
+          );
+        }
+
+        return ctx.send({
+          requiresVerification: true,
+          verificationType: "email",
+          identifier: submittedEmail,
+          message: "OTP sent to your email address to verify.",
+        });
+      }
+
+      return ctx.send({
+        requiresVerification: false,
+        nextStep: 2,
+      });
+    } catch (err: any) {
+      strapi.log.error("CLIENT BASIC INFO ERROR:", err);
+      return ctx.internalServerError(
+        err?.message || "Failed to update basic info",
+      );
+    }
+  },
+
+  /* ================= STEP 1A — VERIFY OTP FOR PHONE / EMAIL ================= */
+  async verifyDetailsOtp(ctx: Context) {
+    try {
+      const draft: any = await getEditableDraft(ctx);
+      if (!draft) return;
+
+      const sessionUser = ctx.state.user;
+      if (!sessionUser) return ctx.unauthorized("Login required");
+
+      const user = await getFullUser(sessionUser.id);
+      if (!user) return ctx.unauthorized("User not found");
+
+      const body = getBody(ctx);
+      const otp = String(body.otp || "").trim();
+
+      if (!otp) {
+        return ctx.badRequest("OTP is required");
+      }
+
+      let identifier = body.identifier ? String(body.identifier).trim() : null;
+
+      if (!identifier) {
+        const regType = getUserRegistrationType(user);
+        if (regType === "email") {
+          identifier = draft.phoneNumber;
+        } else {
+          identifier = draft.email;
+        }
+      }
+
+      if (!identifier) {
+        return ctx.badRequest("Identifier (phone number or email) is required");
+      }
+
+      const isEmail = identifier.includes("@");
+      identifier = isEmail
+        ? identifier.toLowerCase()
+        : normalizePhone(identifier);
+
+      const record = await strapi.db
+        .query("api::otp-request.otp-request")
+        .findOne({
+          where: {
+            identifier,
+            purpose: "client_verification",
+          },
+          orderBy: { createdAt: "desc" },
+        });
+
+      if (!record) {
+        return ctx.badRequest("OTP not found. Please request a new OTP.");
+      }
+
+      if (new Date(record.expires_at).getTime() < Date.now()) {
+        await strapi.db.query("api::otp-request.otp-request").delete({
+          where: { id: record.id },
+        });
+        return ctx.badRequest("OTP expired. Please resend OTP.");
+      }
+
+      const valid = await bcrypt.compare(otp, record.otp_hash);
+      if (!valid) {
+        await strapi.db.query("api::otp-request.otp-request").update({
+          where: { id: record.id },
+          data: { attempts: (record.attempts || 0) + 1 },
+        });
+        return ctx.badRequest("Invalid OTP");
+      }
+
+      // Delete consumed OTP
+      await strapi.db.query("api::otp-request.otp-request").delete({
+        where: { id: record.id },
+      });
+
+      // Update pending draft (do NOT modify user record)
+      const updateData: any = {
         currentStep: Math.max(draft.currentStep || 1, 2),
-      },
-    });
+      };
 
-    ctx.send({ nextStep: 2 });
+      if (isEmail) {
+        updateData.isEmailVerified = true;
+        updateData.email = identifier;
+      } else {
+        updateData.isPhoneVerified = true;
+        updateData.phoneNumber = identifier;
+      }
+
+      await strapi.entityService.update(PENDING_UID, draft.id, {
+        data: updateData,
+      });
+
+      return ctx.send({
+        nextStep: 2,
+        message: `${isEmail ? "Email" : "Phone number"} verified successfully.`,
+      });
+    } catch (err: any) {
+      strapi.log.error("VERIFY CLIENT DETAILS OTP ERROR:", err);
+      return ctx.internalServerError(
+        err?.message || "Failed to verify details OTP",
+      );
+    }
+  },
+
+  /* ================= STEP 1B — RESEND OTP FOR PHONE / EMAIL ================= */
+  async resendDetailsOtp(ctx: Context) {
+    try {
+      const draft: any = await getEditableDraft(ctx);
+      if (!draft) return;
+
+      const sessionUser = ctx.state.user;
+      if (!sessionUser) return ctx.unauthorized("Login required");
+
+      const user = await getFullUser(sessionUser.id);
+      if (!user) return ctx.unauthorized("User not found");
+
+      const body = getBody(ctx);
+      let identifier = body.identifier ? String(body.identifier).trim() : null;
+
+      if (!identifier) {
+        const regType = getUserRegistrationType(user);
+        if (regType === "email") {
+          identifier = draft.phoneNumber;
+        } else {
+          identifier = draft.email;
+        }
+      }
+
+      if (!identifier) {
+        return ctx.badRequest("Identifier (phone number or email) is required");
+      }
+
+      const isEmail = identifier.includes("@");
+      identifier = isEmail
+        ? identifier.toLowerCase()
+        : normalizePhone(identifier);
+
+      // Check cooldown (30 seconds)
+      const existing = await strapi.db
+        .query("api::otp-request.otp-request")
+        .findOne({
+          where: {
+            identifier,
+            purpose: "client_verification",
+          },
+          orderBy: { createdAt: "desc" },
+        });
+
+      if (existing?.last_sent_at) {
+        const now = Date.now();
+        const last = new Date(existing.last_sent_at).getTime();
+        if (now - last < 30000) {
+          return ctx.badRequest(
+            "Please wait 30 seconds before requesting again",
+          );
+        }
+      }
+
+      const otp = generateOtp();
+      const otpHash = await bcrypt.hash(otp, 10);
+
+      await strapi.db.query("api::otp-request.otp-request").deleteMany({
+        where: {
+          identifier,
+          purpose: "client_verification",
+        },
+      });
+
+      await strapi.entityService.create("api::otp-request.otp-request", {
+        data: {
+          identifier,
+          otp_hash: otpHash,
+          expires_at: new Date(Date.now() + 2 * 60 * 1000),
+          attempts: 0,
+          verified: false,
+          purpose: "client_verification",
+          last_sent_at: new Date(),
+        },
+      });
+
+      if (isEmail) {
+        await axios.post(
+          "https://api.brevo.com/v3/smtp/email",
+          {
+            sender: { name: "FitFob", email: "qaxyzstudio@gmail.com" },
+            to: [{ email: identifier }],
+            subject: "FitFob Client Email Verification OTP",
+            htmlContent: getOtpEmailTemplate(otp, {
+              title: "FitFob Email Verification Code",
+              subtext:
+                "Here is your requested One-Time Password (OTP) to verify your email address:",
+              validityMinutes: 2,
+            }),
+          },
+          { headers: { "api-key": process.env.BREVO_API_KEY } },
+        );
+      } else {
+        await sendTwilioOtp(identifier, otp);
+      }
+
+      return ctx.send({
+        message: "OTP resent successfully",
+        identifier,
+      });
+    } catch (err: any) {
+      strapi.log.error("RESEND CLIENT DETAILS OTP ERROR:", err);
+      return ctx.internalServerError(
+        err?.message || "Failed to resend details OTP",
+      );
+    }
   },
 
   /* ================= STEP 2 BODY INFO ================= */
   async bodyInfo(ctx: Context) {
     const draft: any = await getEditableDraft(ctx);
     if (!draft) return;
+
+    if (!(await ensureStep1Verified(ctx, draft))) return;
 
     const body = getBody(ctx);
 
@@ -246,6 +692,8 @@ export default {
     const draft: any = await getEditableDraft(ctx);
     if (!draft) return;
 
+    if (!(await ensureStep1Verified(ctx, draft))) return;
+
     const body = getBody(ctx);
 
     await strapi.entityService.update(PENDING_UID, draft.id, {
@@ -263,6 +711,8 @@ export default {
   async selfie(ctx: Context) {
     const draft: any = await getEditableDraft(ctx);
     if (!draft) return;
+
+    if (!(await ensureStep1Verified(ctx, draft))) return;
 
     const files: any = ctx.request.files;
     if (!files || !files.selfieUpload)
@@ -304,7 +754,10 @@ export default {
     const draft: any = await getEditableDraft(ctx);
     if (!draft) return;
 
-    const validationError = await validateBeforeClientCreation(draft);
+    if (!(await ensureStep1Verified(ctx, draft))) return;
+
+    const user = await getFullUser(ctx.state.user.id);
+    const validationError = await validateBeforeClientCreation(draft, user);
     if (validationError) return ctx.badRequest(validationError);
 
     const files: any = ctx.request.files;
@@ -395,6 +848,12 @@ export default {
       if (!draft) {
         return ctx.notFound("Pending client not found");
       }
+
+      if (!(await ensureStep1Verified(ctx, draft))) return;
+
+      const user = await getFullUser(ctx.state.user.id);
+      const validationError = await validateBeforeClientCreation(draft, user);
+      if (validationError) return ctx.badRequest(validationError);
 
       // 1. Fetch client
       const pendingClient: any = await strapi.entityService.findOne(
