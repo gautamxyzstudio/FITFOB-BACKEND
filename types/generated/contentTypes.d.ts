@@ -981,7 +981,9 @@ export interface ApiOtpRequestOtpRequest extends Struct.CollectionTypeSchema {
       Schema.Attribute.Private;
     otp_hash: Schema.Attribute.String;
     publishedAt: Schema.Attribute.DateTime;
-    purpose: Schema.Attribute.Enumeration<['register', 'reset_password']>;
+    purpose: Schema.Attribute.Enumeration<
+      ['register', 'reset_password', 'club_owner_verification']
+    >;
     signupToken: Schema.Attribute.String;
     updatedAt: Schema.Attribute.DateTime;
     updatedBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
@@ -1172,6 +1174,10 @@ export interface ApiPendingClubOwnerPendingClubOwner
     currentStep: Schema.Attribute.Integer & Schema.Attribute.DefaultTo<1>;
     email: Schema.Attribute.Email;
     facilities: Schema.Attribute.JSON;
+    isEmailVerified: Schema.Attribute.Boolean &
+      Schema.Attribute.DefaultTo<false>;
+    isPhoneVerified: Schema.Attribute.Boolean &
+      Schema.Attribute.DefaultTo<false>;
     latitude: Schema.Attribute.String;
     locale: Schema.Attribute.String & Schema.Attribute.Private;
     localizations: Schema.Attribute.Relation<

@@ -31,7 +31,8 @@
       "type": "enumeration",
       "enum": [
         "register",
-        "reset_password"
+        "reset_password",
+        "club_owner_verification"
       ]
     },
     "last_sent_at": {

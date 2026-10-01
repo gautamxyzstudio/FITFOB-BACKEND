@@ -105,6 +105,14 @@
       "relation": "oneToMany",
       "target": "api::club-photo.club-photo",
       "mappedBy": "pending_club_owner"
+    },
+    "isPhoneVerified": {
+      "type": "boolean",
+      "default": false
+    },
+    "isEmailVerified": {
+      "type": "boolean",
+      "default": false
     }
   }
 }

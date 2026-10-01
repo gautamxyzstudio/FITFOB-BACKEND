@@ -28,6 +28,18 @@ export default {
       handler: "pending-club-owner.clubOwnerDetails",
       config: { auth: {} },
     },
+    {
+      method: "POST",
+      path: "/pending-club-owner/verify-otp",
+      handler: "pending-club-owner.verifyDetailsOtp",
+      config: { auth: {} },
+    },
+    {
+      method: "POST",
+      path: "/pending-club-owner/resend-otp",
+      handler: "pending-club-owner.resendDetailsOtp",
+      config: { auth: {} },
+    },
     /* STEP 2 — MAP LOCATION (LATITUDE / LONGITUDE) */
     {
       method: "POST",

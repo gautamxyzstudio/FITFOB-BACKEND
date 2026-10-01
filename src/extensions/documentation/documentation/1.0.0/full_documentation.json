@@ -14,7 +14,7 @@
       "name": "Apache 2.0",
       "url": "https://www.apache.org/licenses/LICENSE-2.0.html"
     },
-    "x-generation-date": "2026-09-11T12:44:01.635Z"
+    "x-generation-date": "2026-10-01T11:39:42.561Z"
   },
   "x-strapi-config": {
     "plugins": [
@@ -7556,6 +7556,168 @@
         }
       }
     },
+    "/pending-club-owner/verify-otp": {
+      "post": {
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PendingClubOwnerResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Pending-club-owner"
+        ],
+        "parameters": [],
+        "operationId": "post/pending-club-owner/verify-otp",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PendingClubOwnerRequest"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/pending-club-owner/resend-otp": {
+      "post": {
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PendingClubOwnerResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Pending-club-owner"
+        ],
+        "parameters": [],
+        "operationId": "post/pending-club-owner/resend-otp",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PendingClubOwnerRequest"
+              }
+            }
+          }
+        }
+      }
+    },
     "/pending-club-owner/map-location": {
       "post": {
         "responses": {
@@ -14638,6 +14800,12 @@
                                     }
                                   }
                                 },
+                                "isPhoneVerified": {
+                                  "type": "boolean"
+                                },
+                                "isEmailVerified": {
+                                  "type": "boolean"
+                                },
                                 "createdAt": {
                                   "type": "string",
                                   "format": "date-time"
@@ -20338,6 +20506,12 @@
                                             }
                                           }
                                         }
+                                      },
+                                      "isPhoneVerified": {
+                                        "type": "boolean"
+                                      },
+                                      "isEmailVerified": {
+                                        "type": "boolean"
                                       },
                                       "createdAt": {
                                         "type": "string",
@@ -26649,6 +26823,12 @@
                             }
                           }
                         },
+                        "isPhoneVerified": {
+                          "type": "boolean"
+                        },
+                        "isEmailVerified": {
+                          "type": "boolean"
+                        },
                         "createdAt": {
                           "type": "string",
                           "format": "date-time"
@@ -31270,6 +31450,12 @@
                                             }
                                           }
                                         }
+                                      },
+                                      "isPhoneVerified": {
+                                        "type": "boolean"
+                                      },
+                                      "isEmailVerified": {
+                                        "type": "boolean"
                                       },
                                       "createdAt": {
                                         "type": "string",
@@ -37493,6 +37679,12 @@
                           }
                         }
                       },
+                      "isPhoneVerified": {
+                        "type": "boolean"
+                      },
+                      "isEmailVerified": {
+                        "type": "boolean"
+                      },
                       "createdAt": {
                         "type": "string",
                         "format": "date-time"
@@ -42837,6 +43029,12 @@
                           }
                         }
                       },
+                      "isPhoneVerified": {
+                        "type": "boolean"
+                      },
+                      "isEmailVerified": {
+                        "type": "boolean"
+                      },
                       "createdAt": {
                         "type": "string",
                         "format": "date-time"
@@ -48179,6 +48377,12 @@
                             }
                           }
                         }
+                      },
+                      "isPhoneVerified": {
+                        "type": "boolean"
+                      },
+                      "isEmailVerified": {
+                        "type": "boolean"
                       },
                       "createdAt": {
                         "type": "string",
@@ -53531,6 +53735,12 @@
                             }
                           }
                         },
+                        "isPhoneVerified": {
+                          "type": "boolean"
+                        },
+                        "isEmailVerified": {
+                          "type": "boolean"
+                        },
                         "createdAt": {
                           "type": "string",
                           "format": "date-time"
@@ -57793,6 +58003,12 @@
                                             }
                                           }
                                         }
+                                      },
+                                      "isPhoneVerified": {
+                                        "type": "boolean"
+                                      },
+                                      "isEmailVerified": {
+                                        "type": "boolean"
                                       },
                                       "createdAt": {
                                         "type": "string",
@@ -63879,6 +64095,12 @@
                           }
                         }
                       },
+                      "isPhoneVerified": {
+                        "type": "boolean"
+                      },
+                      "isEmailVerified": {
+                        "type": "boolean"
+                      },
                       "createdAt": {
                         "type": "string",
                         "format": "date-time"
@@ -68149,6 +68371,12 @@
                                     }
                                   }
                                 },
+                                "isPhoneVerified": {
+                                  "type": "boolean"
+                                },
+                                "isEmailVerified": {
+                                  "type": "boolean"
+                                },
                                 "createdAt": {
                                   "type": "string",
                                   "format": "date-time"
@@ -69801,7 +70029,8 @@
                 "type": "string",
                 "enum": [
                   "register",
-                  "reset_password"
+                  "reset_password",
+                  "club_owner_verification"
                 ]
               },
               "last_sent_at": {
@@ -69903,7 +70132,8 @@
             "type": "string",
             "enum": [
               "register",
-              "reset_password"
+              "reset_password",
+              "club_owner_verification"
             ]
           },
           "last_sent_at": {
@@ -70653,7 +70883,8 @@
                   "type": "string",
                   "enum": [
                     "register",
-                    "reset_password"
+                    "reset_password",
+                    "club_owner_verification"
                   ]
                 },
                 "last_sent_at": {
@@ -74385,6 +74616,12 @@
                                             }
                                           }
                                         }
+                                      },
+                                      "isPhoneVerified": {
+                                        "type": "boolean"
+                                      },
+                                      "isEmailVerified": {
+                                        "type": "boolean"
                                       },
                                       "createdAt": {
                                         "type": "string",
@@ -79538,6 +79775,12 @@
                                       }
                                     }
                                   }
+                                },
+                                "isPhoneVerified": {
+                                  "type": "boolean"
+                                },
+                                "isEmailVerified": {
+                                  "type": "boolean"
                                 },
                                 "createdAt": {
                                   "type": "string",
@@ -85179,6 +85422,12 @@
                                           }
                                         }
                                       },
+                                      "isPhoneVerified": {
+                                        "type": "boolean"
+                                      },
+                                      "isEmailVerified": {
+                                        "type": "boolean"
+                                      },
                                       "createdAt": {
                                         "type": "string",
                                         "format": "date-time"
@@ -87331,6 +87580,12 @@
                   ],
                   "example": "string or id"
                 }
+              },
+              "isPhoneVerified": {
+                "type": "boolean"
+              },
+              "isEmailVerified": {
+                "type": "boolean"
               },
               "locale": {
                 "type": "string"
@@ -90896,6 +91151,12 @@
                                           }
                                         }
                                       },
+                                      "isPhoneVerified": {
+                                        "type": "boolean"
+                                      },
+                                      "isEmailVerified": {
+                                        "type": "boolean"
+                                      },
                                       "createdAt": {
                                         "type": "string",
                                         "format": "date-time"
@@ -92617,6 +92878,12 @@
                 }
               }
             }
+          },
+          "isPhoneVerified": {
+            "type": "boolean"
+          },
+          "isEmailVerified": {
+            "type": "boolean"
           },
           "createdAt": {
             "type": "string",
