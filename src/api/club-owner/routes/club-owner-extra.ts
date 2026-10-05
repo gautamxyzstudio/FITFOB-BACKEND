@@ -2,6 +2,14 @@ export default {
   routes: [
     {
       method: "GET",
+      path: "/club-owners/search",
+      handler: "club-owner.searchNearbyOrCity",
+      config: {
+        auth: {},
+      },
+    },
+    {
+      method: "GET",
       path: "/club-owners/unverified",
       handler: "club-owner.unverified",
       config: {

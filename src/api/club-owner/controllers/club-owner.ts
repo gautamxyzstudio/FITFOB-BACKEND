@@ -116,6 +116,85 @@ async function getClubOwnerForUser(user: any) {
   return owner || null;
 }
 
+/* ---------- HAVERSINE DISTANCE HELPER ---------- */
+function calculateHaversineDistance(
+  lat1: number,
+  lon1: number,
+  lat2: number,
+  lon2: number,
+): number {
+  const R = 6371; // Earth's radius in kilometers
+  const toRad = (deg: number) => (deg * Math.PI) / 180;
+  const dLat = toRad(lat2 - lat1);
+  const dLon = toRad(lon2 - lon1);
+  const a =
+    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+    Math.cos(toRad(lat1)) *
+      Math.cos(toRad(lat2)) *
+      Math.sin(dLon / 2) *
+      Math.sin(dLon / 2);
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  return R * c;
+}
+
+/* ---------- MEDIA URL FORMATTER ---------- */
+function formatMediaUrl(url: string | null): string | null {
+  if (!url) return null;
+  return url.startsWith("http")
+    ? url
+    : `${strapi.config.server.url || ""}${url}`;
+}
+
+/* ---------- EXTRACT FLAT STRING LIST (SERVICES / FACILITIES) ---------- */
+function extractStringList(
+  jsonField: any,
+  relationItems: any[],
+): string[] {
+  const result: string[] = [];
+
+  // From relation entities (e.g. { name: "Gym" })
+  if (Array.isArray(relationItems)) {
+    for (const item of relationItems) {
+      if (typeof item === "string" && item.trim()) {
+        result.push(item.trim());
+      } else if (item?.name && typeof item.name === "string" && item.name.trim()) {
+        result.push(item.name.trim());
+      }
+    }
+  }
+
+  // From JSON array or string
+  if (jsonField) {
+    let parsed = jsonField;
+    if (typeof parsed === "string") {
+      try {
+        parsed = JSON.parse(parsed);
+      } catch {
+        parsed = parsed.split(",").map((s: string) => s.trim());
+      }
+    }
+
+    if (Array.isArray(parsed)) {
+      for (const item of parsed) {
+        if (typeof item === "string" && item.trim()) {
+          result.push(item.trim());
+        } else if (typeof item === "object" && item !== null) {
+          const name =
+            item.name ||
+            item.serviceName ||
+            item.facilityName ||
+            item.title;
+          if (name && typeof name === "string" && name.trim()) {
+            result.push(name.trim());
+          }
+        }
+      }
+    }
+  }
+
+  return Array.from(new Set(result));
+}
+
 export default factories.createCoreController(
   "api::club-owner.club-owner",
   ({ strapi }) => ({
@@ -975,6 +1054,280 @@ export default factories.createCoreController(
         strapi.log.error("Error fetching today's check-ins:", error);
 
         return ctx.internalServerError("Unable to fetch check-ins");
+      }
+    },
+
+    /* =======================================================
+       SEARCH NEARBY OR BY CITY (10 KM RADIUS / CITY FILTER)
+    ======================================================= */
+    async searchNearbyOrCity(ctx: Context) {
+      try {
+        const { latitude, longitude, lat, lon, lng, city, radius } =
+          ctx.query as any;
+
+        const rawLat = latitude ?? lat;
+        const rawLon = longitude ?? lon ?? lng;
+
+        const hasCoordinates =
+          rawLat !== undefined &&
+          rawLat !== null &&
+          rawLon !== undefined &&
+          rawLon !== null &&
+          String(rawLat).trim() !== "" &&
+          String(rawLon).trim() !== "" &&
+          !isNaN(Number(rawLat)) &&
+          !isNaN(Number(rawLon));
+
+        const hasCity =
+          city !== undefined &&
+          city !== null &&
+          String(city).trim().length > 0;
+
+        if (!hasCoordinates && !hasCity) {
+          return ctx.badRequest(
+            "Please provide either coordinates (latitude & longitude) for nearby search or a city name.",
+          );
+        }
+
+        const maxRadiusKm =
+          radius && !isNaN(Number(radius)) ? Number(radius) : 10;
+
+        // ----------------------------------------------------
+        // Phase 1: Query candidate approved club owners
+        // ----------------------------------------------------
+        const baseWhere: any = {
+          user: {
+            verification_status: "approved",
+          },
+        };
+
+        if (hasCity && !hasCoordinates) {
+          baseWhere.city = {
+            $containsi: String(city).trim(),
+          };
+        }
+
+        const candidateOwners = await strapi.db
+          .query(CLUB_OWNER_UID)
+          .findMany({
+            where: baseWhere,
+            select: [
+              "id",
+              "documentId",
+              "clubName",
+              "clubId",
+              "latitude",
+              "longitude",
+              "city",
+              "services",
+              "facilities",
+            ],
+          });
+
+        if (!candidateOwners || candidateOwners.length === 0) {
+          return ctx.send({ data: [] });
+        }
+
+        let filteredClubs: any[] = [];
+
+        if (hasCoordinates) {
+          const userLat = Number(rawLat);
+          const userLon = Number(rawLon);
+
+          for (const owner of candidateOwners) {
+            if (owner.latitude && owner.longitude) {
+              const ownerLat = Number(owner.latitude);
+              const ownerLon = Number(owner.longitude);
+
+              if (!isNaN(ownerLat) && !isNaN(ownerLon)) {
+                const dist = calculateHaversineDistance(
+                  userLat,
+                  userLon,
+                  ownerLat,
+                  ownerLon,
+                );
+
+                if (dist <= maxRadiusKm) {
+                  filteredClubs.push({
+                    ...owner,
+                    distance: Number(dist.toFixed(2)),
+                    distanceUnit: "km",
+                  });
+                }
+              }
+            }
+          }
+
+          // Sort closest to farthest
+          filteredClubs.sort((a, b) => a.distance - b.distance);
+        } else {
+          // Scenario B: City Search without coordinates
+          filteredClubs = candidateOwners.map((owner: any) => ({
+            ...owner,
+            distance: null,
+            distanceUnit: "km",
+          }));
+        }
+
+        if (filteredClubs.length === 0) {
+          return ctx.send({ data: [] });
+        }
+
+        const clubOwnerIds = filteredClubs.map((c) => c.id);
+
+        // ----------------------------------------------------
+        // Phase 2: Concurrent pipeline for lean relations
+        // ----------------------------------------------------
+        const [photosList, relationsList, plansList] = await Promise.all([
+          // 1. Club Photos with images
+          strapi.db.query("api::club-photo.club-photo").findMany({
+            where: {
+              club_owner: { id: { $in: clubOwnerIds } },
+            },
+            populate: {
+              images: {
+                select: ["url", "formats"],
+              },
+              club_owner: {
+                select: ["id"],
+              },
+            },
+          }),
+
+          // 2. Club Services & Facilities relations
+          strapi.db.query(CLUB_OWNER_UID).findMany({
+            where: {
+              id: { $in: clubOwnerIds },
+            },
+            select: ["id"],
+            populate: {
+              club_services: {
+                select: ["name"],
+              },
+              club_facilities: {
+                select: ["name"],
+              },
+            },
+          }),
+
+          // 3. Active Local Membership Plans
+          strapi.db
+            .query("api::local-membership-plan.local-membership-plan")
+            .findMany({
+              where: {
+                club_owner: { id: { $in: clubOwnerIds } },
+                isActive: true,
+              },
+              select: [
+                "id",
+                "documentId",
+                "planName",
+                "price",
+                "monthDuration",
+                "validUpto",
+                "isActive",
+              ],
+              populate: {
+                club_owner: {
+                  select: ["id"],
+                },
+              },
+            }),
+        ]);
+
+        // Map photos by owner ID
+        const photosByOwnerId = new Map<number, { url: string }[]>();
+        for (const photo of photosList || []) {
+          const ownerId = photo.club_owner?.id;
+          if (!ownerId) continue;
+
+          if (!photosByOwnerId.has(ownerId)) {
+            photosByOwnerId.set(ownerId, []);
+          }
+
+          const existingPhotos = photosByOwnerId.get(ownerId)!;
+          if (Array.isArray(photo.images)) {
+            for (const img of photo.images) {
+              if (img?.url) {
+                const formattedUrl = formatMediaUrl(img.url);
+                if (formattedUrl) {
+                  existingPhotos.push({ url: formattedUrl });
+                }
+              }
+            }
+          } else if (photo.images?.url) {
+            const formattedUrl = formatMediaUrl(photo.images.url);
+            if (formattedUrl) {
+              existingPhotos.push({ url: formattedUrl });
+            }
+          }
+        }
+
+        // Map services and facilities by owner ID
+        const servicesByOwnerId = new Map<number, string[]>();
+        const facilitiesByOwnerId = new Map<number, string[]>();
+
+        const relationMap = new Map<number, any>();
+        for (const rel of relationsList || []) {
+          relationMap.set(rel.id, rel);
+        }
+
+        for (const club of filteredClubs) {
+          const rel = relationMap.get(club.id);
+          const services = extractStringList(
+            club.services,
+            rel?.club_services || [],
+          );
+          const facilities = extractStringList(
+            club.facilities,
+            rel?.club_facilities || [],
+          );
+          servicesByOwnerId.set(club.id, services);
+          facilitiesByOwnerId.set(club.id, facilities);
+        }
+
+        // Map active membership plans by owner ID
+        const plansByOwnerId = new Map<number, any[]>();
+        for (const plan of plansList || []) {
+          const ownerId = plan.club_owner?.id;
+          if (!ownerId) continue;
+
+          if (!plansByOwnerId.has(ownerId)) {
+            plansByOwnerId.set(ownerId, []);
+          }
+
+          plansByOwnerId.get(ownerId)!.push({
+            documentId: plan.documentId,
+            planName: plan.planName,
+            price:
+              typeof plan.price === "string"
+                ? parseFloat(plan.price)
+                : plan.price,
+            monthDuration: plan.monthDuration,
+            validUpto: plan.validUpto || "unlimited",
+          });
+        }
+
+        // Assemble clean, customized & lean response payload
+        const data = filteredClubs.map((club: any) => ({
+          id: club.id,
+          documentId: club.documentId,
+          clubName: club.clubName,
+          clubId: club.clubId,
+          distance: club.distance !== undefined ? club.distance : null,
+          distanceUnit: "km",
+          club_photos: photosByOwnerId.get(club.id) || [],
+          services: servicesByOwnerId.get(club.id) || [],
+          facilities: facilitiesByOwnerId.get(club.id) || [],
+          membershipPlans: plansByOwnerId.get(club.id) || [],
+        }));
+
+        return ctx.send({
+          data,
+        });
+      } catch (error) {
+        strapi.log.error("SEARCH CLUB OWNERS ERROR:", error);
+        return ctx.internalServerError("Failed to search club owners");
       }
     },
 
