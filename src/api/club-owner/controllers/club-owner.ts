@@ -146,10 +146,7 @@ function formatMediaUrl(url: string | null): string | null {
 }
 
 /* ---------- EXTRACT FLAT STRING LIST (SERVICES / FACILITIES) ---------- */
-function extractStringList(
-  jsonField: any,
-  relationItems: any[],
-): string[] {
+function extractStringList(jsonField: any, relationItems: any[]): string[] {
   const result: string[] = [];
 
   // From relation entities (e.g. { name: "Gym" })
@@ -157,7 +154,11 @@ function extractStringList(
     for (const item of relationItems) {
       if (typeof item === "string" && item.trim()) {
         result.push(item.trim());
-      } else if (item?.name && typeof item.name === "string" && item.name.trim()) {
+      } else if (
+        item?.name &&
+        typeof item.name === "string" &&
+        item.name.trim()
+      ) {
         result.push(item.name.trim());
       }
     }
@@ -180,10 +181,7 @@ function extractStringList(
           result.push(item.trim());
         } else if (typeof item === "object" && item !== null) {
           const name =
-            item.name ||
-            item.serviceName ||
-            item.facilityName ||
-            item.title;
+            item.name || item.serviceName || item.facilityName || item.title;
           if (name && typeof name === "string" && name.trim()) {
             result.push(name.trim());
           }
@@ -229,8 +227,7 @@ export default factories.createCoreController(
             clubName: item.clubName,
             clubId: item.clubId,
             phoneNumber: item.phoneNumber,
-            logo:
-              item.logo?.formats?.thumbnail?.url || item.logo?.url || null,
+            logo: item.logo?.formats?.thumbnail?.url || item.logo?.url || null,
             createdAt: item.createdAt,
             clubAddress: item.clubAddress,
             city: item.city,
@@ -360,6 +357,209 @@ export default factories.createCoreController(
     },
 
     /* =======================================================
+       GET CLUB OWNER DETAIL ON USER / CLIENT SIDE
+       (GET /api/club-owners/client-detail/:documentId)
+    ======================================================= */
+    async clientDetail(ctx: Context) {
+      try {
+        const { documentId, id } = ctx.params;
+        const docId = String(documentId || id || "").trim();
+
+        if (!docId) {
+          return ctx.badRequest("documentId is required");
+        }
+
+        const { latitude, longitude, lat, lon, lng } = ctx.query as any;
+
+        // 1. Fetch club owner strictly by documentId
+        let owner: any = await strapi.db.query(CLUB_OWNER_UID).findOne({
+          where: { documentId: docId },
+          populate: {
+            user: {
+              select: ["id", "email", "verification_status"],
+            },
+            logo: {
+              select: ["url", "formats"],
+            },
+            club_services: {
+              select: ["id", "name"],
+            },
+            club_facilities: {
+              select: ["id", "name"],
+            },
+          },
+        });
+
+        if (!owner && (strapi as any).documents) {
+          try {
+            owner = await (strapi as any).documents(CLUB_OWNER_UID).findOne({
+              documentId: docId,
+              populate: {
+                user: true,
+                logo: true,
+                club_services: true,
+                club_facilities: true,
+              },
+            });
+          } catch (_) {}
+        }
+
+        if (!owner) {
+          return ctx.notFound("Club owner not found");
+        }
+
+        // 2. Fetch club photos & active membership plans concurrently
+        const [photosList, plansList] = await Promise.all([
+          strapi.db.query("api::club-photo.club-photo").findMany({
+            where: {
+              club_owner: owner.id,
+            },
+            populate: {
+              images: {
+                select: ["url", "formats"],
+              },
+            },
+            orderBy: { id: "desc" },
+          }),
+          strapi.db
+            .query("api::local-membership-plan.local-membership-plan")
+            .findMany({
+              where: {
+                club_owner: owner.id,
+                isActive: true,
+              },
+              select: [
+                "id",
+                "documentId",
+                "planName",
+                "price",
+                "monthDuration",
+                "validUpto",
+                "description",
+                "isActive",
+              ],
+              orderBy: { price: "asc" },
+            }),
+        ]);
+
+        // 3. Format club_photos: return only url and imageInfo
+        const club_photos: { url: string; imageInfo: string }[] = [];
+        for (const photo of photosList || []) {
+          const imageInfo = photo.imageInfo || "";
+          if (Array.isArray(photo.images)) {
+            for (const img of photo.images) {
+              if (img?.url) {
+                const url = formatMediaUrl(img.url);
+                if (url) {
+                  club_photos.push({ url, imageInfo });
+                }
+              }
+            }
+          } else if (photo.images?.url) {
+            const url = formatMediaUrl(photo.images.url);
+            if (url) {
+              club_photos.push({ url, imageInfo });
+            }
+          }
+        }
+
+        // 4. Format flat arrays of string names for facilities & services
+        const facilities = extractStringList(
+          owner.facilities,
+          owner.club_facilities || [],
+        );
+        const services = extractStringList(
+          owner.services,
+          owner.club_services || [],
+        );
+
+        // 5. Format active membership plans
+        const membershipPlans = (plansList || []).map((plan: any) => ({
+          id: plan.id,
+          documentId: plan.documentId,
+          planName: plan.planName,
+          price:
+            typeof plan.price === "string"
+              ? parseFloat(plan.price)
+              : plan.price,
+          monthDuration: plan.monthDuration,
+          validUpto: plan.validUpto || "unlimited",
+          description: plan.description || null,
+          isActive: plan.isActive,
+        }));
+
+        // 6. Optional distance calculation if user coordinates are provided
+        const rawLat = latitude ?? lat;
+        const rawLon = longitude ?? lon ?? lng;
+        let distance: number | null = null;
+
+        if (
+          rawLat !== undefined &&
+          rawLon !== undefined &&
+          !isNaN(Number(rawLat)) &&
+          !isNaN(Number(rawLon)) &&
+          owner.latitude &&
+          owner.longitude &&
+          !isNaN(Number(owner.latitude)) &&
+          !isNaN(Number(owner.longitude))
+        ) {
+          const dist = calculateHaversineDistance(
+            Number(rawLat),
+            Number(rawLon),
+            Number(owner.latitude),
+            Number(owner.longitude),
+          );
+          distance = Number(dist.toFixed(2));
+        }
+
+        // 7. Format logo
+        const logo = formatMediaUrl(
+          owner.logo?.formats?.thumbnail?.url || owner.logo?.url || null,
+        );
+
+        // 8. Order weekdayScheduling
+        const weekdayScheduling = owner.weekdayScheduling
+          ? orderWeekdayScheduling(owner.weekdayScheduling)
+          : null;
+
+        // 9. Exact payload format requested by client
+        const responseData = {
+          id: owner.id,
+          documentId: owner.documentId,
+          ownerName: owner.ownerName,
+          phoneNumber: owner.phoneNumber,
+          email: owner.email,
+          clubName: owner.clubName,
+          logo,
+          facilities,
+          services,
+          latitude: owner.latitude,
+          longitude: owner.longitude,
+          distance,
+          distanceUnit: distance !== null ? "km" : undefined,
+          clubAddress: owner.clubAddress,
+          pincode: owner.pincode,
+          city: owner.city,
+          state: owner.state,
+          createdAt: owner.createdAt,
+          updatedAt: owner.updatedAt,
+          publishedAt: owner.publishedAt,
+          locale: owner.locale ?? null,
+          clubId: owner.clubId,
+          weekdayScheduling,
+          clubCategory: owner.clubCategory || null,
+          club_photos,
+          membershipPlans,
+        };
+
+        return ctx.send(responseData);
+      } catch (err) {
+        strapi.log.error("GET CLIENT DETAIL ERROR:", err);
+        return ctx.internalServerError("Failed to fetch client detail");
+      }
+    },
+
+    /* =======================================================
        UPDATE CLUB OWNER
     ======================================================= */
     async update(ctx: Context) {
@@ -387,7 +587,9 @@ export default factories.createCoreController(
 
         const isNumeric = !isNaN(Number(id)) && /^\d+$/.test(String(id));
         let existing: any = await strapi.db.query(CLUB_OWNER_UID).findOne({
-          where: isNumeric ? { id: Number(id) } : { documentId: String(id).trim() },
+          where: isNumeric
+            ? { id: Number(id) }
+            : { documentId: String(id).trim() },
           populate: {
             user: {
               select: ["id", "email"],
@@ -396,11 +598,9 @@ export default factories.createCoreController(
         });
 
         if (!existing) {
-          existing = await strapi.entityService.findOne(
-            CLUB_OWNER_UID,
-            id,
-            { populate: ["user"] },
-          );
+          existing = await strapi.entityService.findOne(CLUB_OWNER_UID, id, {
+            populate: ["user"],
+          });
         }
 
         if (!existing) {
@@ -414,16 +614,27 @@ export default factories.createCoreController(
           userClubOwner = await getClubOwnerForUser(user);
 
           if (!userClubOwner) {
-            return ctx.forbidden("Club owner profile not found for this account");
+            return ctx.forbidden(
+              "Club owner profile not found for this account",
+            );
           }
 
           const isOwnerMatch =
-            (existing.documentId && userClubOwner.documentId && String(existing.documentId) === String(userClubOwner.documentId)) ||
-            (existing.id && userClubOwner.id && String(existing.id) === String(userClubOwner.id)) ||
-            (existing.user?.id && user.id && String(existing.user.id) === String(user.id));
+            (existing.documentId &&
+              userClubOwner.documentId &&
+              String(existing.documentId) ===
+                String(userClubOwner.documentId)) ||
+            (existing.id &&
+              userClubOwner.id &&
+              String(existing.id) === String(userClubOwner.id)) ||
+            (existing.user?.id &&
+              user.id &&
+              String(existing.user.id) === String(user.id));
 
           if (!isOwnerMatch) {
-            return ctx.forbidden("Access denied. You can only update your own club profile.");
+            return ctx.forbidden(
+              "Access denied. You can only update your own club profile.",
+            );
           }
         } else if (isAdmin) {
           // Admin / SuperAdmin can update all club profiles without restriction
@@ -432,14 +643,22 @@ export default factories.createCoreController(
           userClubOwner = await getClubOwnerForUser(user);
 
           const isOwnerMatch =
-            (userClubOwner && (
-              (existing.documentId && userClubOwner.documentId && String(existing.documentId) === String(userClubOwner.documentId)) ||
-              (existing.id && userClubOwner.id && String(existing.id) === String(userClubOwner.id))
-            )) ||
-            (existing.user?.id && user.id && String(existing.user.id) === String(user.id));
+            (userClubOwner &&
+              ((existing.documentId &&
+                userClubOwner.documentId &&
+                String(existing.documentId) ===
+                  String(userClubOwner.documentId)) ||
+                (existing.id &&
+                  userClubOwner.id &&
+                  String(existing.id) === String(userClubOwner.id)))) ||
+            (existing.user?.id &&
+              user.id &&
+              String(existing.user.id) === String(user.id));
 
           if (!isOwnerMatch) {
-            return ctx.forbidden("Access denied. Only ClubOwner, Admin, or SuperAdmin can update club profiles.");
+            return ctx.forbidden(
+              "Access denied. Only ClubOwner, Admin, or SuperAdmin can update club profiles.",
+            );
           }
         }
 
@@ -484,14 +703,21 @@ export default factories.createCoreController(
               data: updateData,
             });
           } catch (docErr) {
-            strapi.log.warn("documents.update fallback in club-owner update:", docErr);
+            strapi.log.warn(
+              "documents.update fallback in club-owner update:",
+              docErr,
+            );
           }
         }
 
         if (!updated) {
-          updated = await strapi.entityService.update(CLUB_OWNER_UID, existing.id || id, {
-            data: updateData,
-          });
+          updated = await strapi.entityService.update(
+            CLUB_OWNER_UID,
+            existing.id || id,
+            {
+              data: updateData,
+            },
+          );
         }
 
         const entity: any = await strapi.entityService.findOne(
@@ -517,7 +743,8 @@ export default factories.createCoreController(
 
         // 📝 Log Activity (only for club owners, NOT admin or superadmin)
         if (!isAdmin && (userClubOwner || roleName === "clubowner")) {
-          const ownerForLog = userClubOwner || (await getClubOwnerForUser(user));
+          const ownerForLog =
+            userClubOwner || (await getClubOwnerForUser(user));
           const targetOwnerId =
             ownerForLog?.documentId ||
             ownerForLog?.id ||
@@ -548,7 +775,8 @@ export default factories.createCoreController(
                 for (const field of simpleFields) {
                   if (
                     data[field.key] !== undefined &&
-                    String(data[field.key]) !== String(existing[field.key] ?? "")
+                    String(data[field.key]) !==
+                      String(existing[field.key] ?? "")
                   ) {
                     changedDetails.push(
                       `${field.label}: '${existing[field.key] ?? ""}' -> '${
@@ -578,7 +806,8 @@ export default factories.createCoreController(
                 }
                 if (
                   (data.latitude !== undefined &&
-                    String(data.latitude) !== String(existing.latitude ?? "")) ||
+                    String(data.latitude) !==
+                      String(existing.latitude ?? "")) ||
                   (data.longitude !== undefined &&
                     String(data.longitude) !== String(existing.longitude ?? ""))
                 ) {
@@ -625,7 +854,10 @@ export default factories.createCoreController(
                 });
               }
             } catch (logErr) {
-              strapi.log.warn("[ActivityLog] Failed to log club update:", logErr);
+              strapi.log.warn(
+                "[ActivityLog] Failed to log club update:",
+                logErr,
+              );
             }
           }
         }
@@ -1002,7 +1234,9 @@ export default factories.createCoreController(
             String(subscriptionType).toLowerCase().trim(),
           )
         ) {
-          where.subscriptionType = String(subscriptionType).toLowerCase().trim();
+          where.subscriptionType = String(subscriptionType)
+            .toLowerCase()
+            .trim();
         }
 
         // 6. Fetch check-ins
@@ -1079,9 +1313,7 @@ export default factories.createCoreController(
           !isNaN(Number(rawLon));
 
         const hasCity =
-          city !== undefined &&
-          city !== null &&
-          String(city).trim().length > 0;
+          city !== undefined && city !== null && String(city).trim().length > 0;
 
         if (!hasCoordinates && !hasCity) {
           return ctx.badRequest(
@@ -1107,22 +1339,20 @@ export default factories.createCoreController(
           };
         }
 
-        const candidateOwners = await strapi.db
-          .query(CLUB_OWNER_UID)
-          .findMany({
-            where: baseWhere,
-            select: [
-              "id",
-              "documentId",
-              "clubName",
-              "clubId",
-              "latitude",
-              "longitude",
-              "city",
-              "services",
-              "facilities",
-            ],
-          });
+        const candidateOwners = await strapi.db.query(CLUB_OWNER_UID).findMany({
+          where: baseWhere,
+          select: [
+            "id",
+            "documentId",
+            "clubName",
+            "clubId",
+            "latitude",
+            "longitude",
+            "city",
+            "services",
+            "facilities",
+          ],
+        });
 
         if (!candidateOwners || candidateOwners.length === 0) {
           return ctx.send({ data: [] });
@@ -1330,6 +1560,5 @@ export default factories.createCoreController(
         return ctx.internalServerError("Failed to search club owners");
       }
     },
-
   }),
 );

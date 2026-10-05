@@ -10,6 +10,14 @@ export default {
     },
     {
       method: "GET",
+      path: "/club-owners/client/:documentId",
+      handler: "club-owner.clientDetail",
+      config: {
+        auth: {},
+      },
+    },
+    {
+      method: "GET",
       path: "/club-owners/unverified",
       handler: "club-owner.unverified",
       config: {
@@ -37,24 +45,24 @@ export default {
       path: "/club-owner/me",
       handler: "club-owner.getMyClubOwner",
       config: {
-        auth: {}
-      }
+        auth: {},
+      },
     },
     {
       method: "POST",
       path: "/club-owners/:id/read",
       handler: "club-owner.markClubRead",
-        config: {     
+      config: {
         auth: {},
-    }
+      },
     },
     {
       method: "GET",
       path: "/club-owners/today-checkins",
       handler: "club-owner.todayCheckins",
       config: {
-      auth:{}
+        auth: {},
       },
     },
   ],
-};  
+};
