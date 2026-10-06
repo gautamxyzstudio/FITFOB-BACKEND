@@ -135,6 +135,12 @@
       "relation": "oneToMany",
       "target": "api::holdiday.holdiday",
       "mappedBy": "club_owner"
+    },
+    "favorited_by": {
+      "type": "relation",
+      "relation": "manyToMany",
+      "target": "api::client-detail.client-detail",
+      "mappedBy": "favorites"
     }
   }
 }

@@ -91,6 +91,12 @@
     },
     "faceSimilarity": {
       "type": "decimal"
+    },
+    "favorites": {
+      "type": "relation",
+      "relation": "manyToMany",
+      "target": "api::club-owner.club-owner",
+      "inversedBy": "favorited_by"
     }
   }
 }

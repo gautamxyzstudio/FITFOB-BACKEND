@@ -9,6 +9,30 @@ export default {
       }
     },
     {
+      method: "GET",
+      path: "/client-detail/favorites",
+      handler: "custom-client-detail.getFavorites",
+      config: {
+        auth: {}
+      }
+    },
+    {
+      method: "POST",
+      path: "/client-detail/favorites/remove/:clubOwnerId",
+      handler: "custom-client-detail.removeFavorite",
+      config: {
+        auth: {}
+      }
+    },
+    {
+      method: "POST",
+      path: "/client-detail/favorites/:clubOwnerId",
+      handler: "custom-client-detail.addFavorite",
+      config: {
+        auth: {}
+      }
+    },
+    {
       method: "POST",
       path: "/client-details/:id/read",
       handler: "custom-client-detail.markClientRead",
@@ -32,6 +56,5 @@ export default {
         auth: {}
       }
     },
-
   ]
-};
+};

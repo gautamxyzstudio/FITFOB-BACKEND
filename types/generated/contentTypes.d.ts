@@ -513,6 +513,10 @@ export interface ApiClientDetailClientDetail
     date_of_birth: Schema.Attribute.Date;
     email: Schema.Attribute.Email;
     faceSimilarity: Schema.Attribute.Decimal;
+    favorites: Schema.Attribute.Relation<
+      'manyToMany',
+      'api::club-owner.club-owner'
+    >;
     gender: Schema.Attribute.String;
     governmentId: Schema.Attribute.Media<
       'images' | 'files' | 'videos' | 'audios'
@@ -715,6 +719,10 @@ export interface ApiClubOwnerClubOwner extends Struct.CollectionTypeSchema {
       Schema.Attribute.Private;
     email: Schema.Attribute.Email;
     facilities: Schema.Attribute.JSON;
+    favorited_by: Schema.Attribute.Relation<
+      'manyToMany',
+      'api::client-detail.client-detail'
+    >;
     holdidays: Schema.Attribute.Relation<'oneToMany', 'api::holdiday.holdiday'>;
     latitude: Schema.Attribute.String;
     local_membership_plans: Schema.Attribute.Relation<
