@@ -1064,7 +1064,12 @@ export default {
     const files: any = ctx.request.files;
 
     const photoFile =
-      files?.image || files?.club_photos || files?.clubPhotos || files?.images || files?.file || files?.photo;
+      files?.image ||
+      files?.club_photos ||
+      files?.clubPhotos ||
+      files?.images ||
+      files?.file ||
+      files?.photo;
 
     if (!photoFile) return ctx.badRequest("Please upload a club photo");
 
@@ -1124,7 +1129,7 @@ export default {
       uploadedAt: p.createdAt,
       fileUrl: p.images?.[0]
         ? `${strapi.config.server.url}${p.images[0].url}`
-        : null
+        : null,
     }));
 
     ctx.send({ data: response });
@@ -1269,7 +1274,9 @@ export default {
       // 🔍 Filter by status in memory (ensures accuracy even if relation filtering is skipped by ORM)
       if (targetStatus !== "all") {
         finalData = finalData.filter((item: any) => {
-          const itemStatus = (item.user?.verification_status || "pending").toLowerCase();
+          const itemStatus = (
+            item.user?.verification_status || "pending"
+          ).toLowerCase();
           return itemStatus === targetStatus;
         });
       }
@@ -1316,16 +1323,35 @@ export default {
             club_owner_documents: {
               populate: {
                 File: {
-                  fields: ['url', 'width', 'height', 'size', 'formats', 'ext', 'name', 'mime', 'createdAt'],
-                }
+                  fields: [
+                    "url",
+                    "width",
+                    "height",
+                    "size",
+                    "formats",
+                    "ext",
+                    "name",
+                    "mime",
+                    "createdAt",
+                  ],
+                },
               },
-              fields: ['documentName', 'createdAt', "publishedAt"]
+              fields: ["documentName", "createdAt", "publishedAt"],
             },
             club_photos: {
               fields: ["imageInfo"],
               populate: {
                 images: {
-                  fields: ["url", "width", "height", "size", "formats", "ext", "name", "mime"],
+                  fields: [
+                    "url",
+                    "width",
+                    "height",
+                    "size",
+                    "formats",
+                    "ext",
+                    "name",
+                    "mime",
+                  ],
                 },
               },
             },

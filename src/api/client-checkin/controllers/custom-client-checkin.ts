@@ -1,9 +1,7 @@
 import { Context } from "koa";
 
 export default {
-
   async scan(ctx: Context) {
-
     const user = ctx.state.user;
 
     if (!user) {
@@ -24,7 +22,6 @@ export default {
   },
 
   async confirmOutdoor(ctx: Context) {
-
     const user = ctx.state.user;
 
     if (!user) {
@@ -87,5 +84,4 @@ export default {
       return ctx.badRequest(error.message);
     }
   },
-
 };

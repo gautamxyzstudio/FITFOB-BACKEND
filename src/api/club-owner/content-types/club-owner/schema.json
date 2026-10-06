@@ -129,6 +129,12 @@
       "relation": "oneToMany",
       "target": "api::club-owner-activity-log.club-owner-activity-log",
       "mappedBy": "club_owner"
+    },
+    "holdidays": {
+      "type": "relation",
+      "relation": "oneToMany",
+      "target": "api::holdiday.holdiday",
+      "mappedBy": "club_owner"
     }
   }
 }

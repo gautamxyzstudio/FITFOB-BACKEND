@@ -1,0 +1,43 @@
+{
+  "kind": "collectionType",
+  "collectionName": "holdidays",
+  "info": {
+    "singularName": "holdiday",
+    "pluralName": "holidays",
+    "displayName": "Holidays"
+  },
+  "options": {
+    "draftAndPublish": false
+  },
+  "pluginOptions": {},
+  "attributes": {
+    "title": {
+      "type": "string"
+    },
+    "closureType": {
+      "type": "enumeration",
+      "enum": [
+        "full_day",
+        "partial_day"
+      ]
+    },
+    "startDate": {
+      "type": "date"
+    },
+    "startTime": {
+      "type": "time"
+    },
+    "endtime": {
+      "type": "time"
+    },
+    "endDate": {
+      "type": "date"
+    },
+    "club_owner": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::club-owner.club-owner",
+      "inversedBy": "holdidays"
+    }
+  }
+}

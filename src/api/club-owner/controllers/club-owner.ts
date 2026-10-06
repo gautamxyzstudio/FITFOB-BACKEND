@@ -27,6 +27,16 @@ const POPULATE: any = {
 };
 
 const CLUB_OWNER_UID = "api::club-owner.club-owner" as any;
+const HOLDIDAY_UID = "api::holdiday.holdiday" as any;
+
+/* ---------- HELPER: GET TODAY DATE (YYYY-MM-DD) ---------- */
+function getTodayDateString(): string {
+  const now = new Date();
+  const year = now.getFullYear();
+  const month = String(now.getMonth() + 1).padStart(2, "0");
+  const day = String(now.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
 
 /* ---------- ROLE HELPER ---------- */
 async function getUserRole(user: any): Promise<string> {
@@ -408,8 +418,9 @@ export default factories.createCoreController(
           return ctx.notFound("Club owner not found");
         }
 
-        // 2. Fetch club photos & active membership plans concurrently
-        const [photosList, plansList] = await Promise.all([
+        // 2. Fetch club photos, active membership plans & upcoming/today holidays concurrently
+        const today = getTodayDateString();
+        const [photosList, plansList, holidaysList] = await Promise.all([
           strapi.db.query("api::club-photo.club-photo").findMany({
             where: {
               club_owner: owner.id,
@@ -440,6 +451,26 @@ export default factories.createCoreController(
               ],
               orderBy: { price: "asc" },
             }),
+          strapi.db.query(HOLDIDAY_UID).findMany({
+            where: {
+              club_owner: owner.id,
+              $or: [
+                { endDate: { $gte: today } },
+                { $and: [{ endDate: { $null: true } }, { startDate: { $gte: today } }] },
+              ],
+            },
+            select: [
+              "id",
+              "documentId",
+              "title",
+              "closureType",
+              "startDate",
+              "endDate",
+              "startTime",
+              "endtime",
+            ],
+            orderBy: { startDate: "asc" },
+          }),
         ]);
 
         // 3. Format club_photos: return only url and imageInfo
@@ -488,7 +519,19 @@ export default factories.createCoreController(
           isActive: plan.isActive,
         }));
 
-        // 6. Optional distance calculation if user coordinates are provided
+        // 6. Format upcoming and today holidays (skipping previous days)
+        const holidays = (holidaysList || []).map((h: any) => ({
+          id: h.id,
+          documentId: h.documentId,
+          title: h.title,
+          closureType: h.closureType,
+          startDate: h.startDate,
+          endDate: h.endDate || h.startDate,
+          startTime: h.startTime || null,
+          endtime: h.endtime || null,
+        }));
+
+        // 7. Optional distance calculation if user coordinates are provided
         const rawLat = latitude ?? lat;
         const rawLon = longitude ?? lon ?? lng;
         let distance: number | null = null;
@@ -512,17 +555,17 @@ export default factories.createCoreController(
           distance = Number(dist.toFixed(2));
         }
 
-        // 7. Format logo
+        // 8. Format logo
         const logo = formatMediaUrl(
           owner.logo?.formats?.thumbnail?.url || owner.logo?.url || null,
         );
 
-        // 8. Order weekdayScheduling
+        // 9. Order weekdayScheduling
         const weekdayScheduling = owner.weekdayScheduling
           ? orderWeekdayScheduling(owner.weekdayScheduling)
           : null;
 
-        // 9. Exact payload format requested by client
+        // 10. Exact payload format requested by client
         const responseData = {
           id: owner.id,
           documentId: owner.documentId,
@@ -550,6 +593,7 @@ export default factories.createCoreController(
           clubCategory: owner.clubCategory || null,
           club_photos,
           membershipPlans,
+          holidays,
         };
 
         return ctx.send(responseData);
@@ -1408,7 +1452,8 @@ export default factories.createCoreController(
         // ----------------------------------------------------
         // Phase 2: Concurrent pipeline for lean relations
         // ----------------------------------------------------
-        const [photosList, relationsList, plansList] = await Promise.all([
+        const today = getTodayDateString();
+        const [photosList, relationsList, plansList, holidaysList] = await Promise.all([
           // 1. Club Photos with images
           strapi.db.query("api::club-photo.club-photo").findMany({
             where: {
@@ -1463,6 +1508,33 @@ export default factories.createCoreController(
                 },
               },
             }),
+
+          // 4. Upcoming & Today Holidays (skipping past days)
+          strapi.db.query(HOLDIDAY_UID).findMany({
+            where: {
+              club_owner: { id: { $in: clubOwnerIds } },
+              $or: [
+                { endDate: { $gte: today } },
+                { $and: [{ endDate: { $null: true } }, { startDate: { $gte: today } }] },
+              ],
+            },
+            select: [
+              "id",
+              "documentId",
+              "title",
+              "closureType",
+              "startDate",
+              "endDate",
+              "startTime",
+              "endtime",
+            ],
+            populate: {
+              club_owner: {
+                select: ["id"],
+              },
+            },
+            orderBy: { startDate: "asc" },
+          }),
         ]);
 
         // Map photos by owner ID
@@ -1538,6 +1610,28 @@ export default factories.createCoreController(
           });
         }
 
+        // Map upcoming & today holidays by owner ID
+        const holidaysByOwnerId = new Map<number, any[]>();
+        for (const holiday of holidaysList || []) {
+          const ownerId = holiday.club_owner?.id;
+          if (!ownerId) continue;
+
+          if (!holidaysByOwnerId.has(ownerId)) {
+            holidaysByOwnerId.set(ownerId, []);
+          }
+
+          holidaysByOwnerId.get(ownerId)!.push({
+            id: holiday.id,
+            documentId: holiday.documentId,
+            title: holiday.title,
+            closureType: holiday.closureType,
+            startDate: holiday.startDate,
+            endDate: holiday.endDate || holiday.startDate,
+            startTime: holiday.startTime || null,
+            endtime: holiday.endtime || null,
+          });
+        }
+
         // Assemble clean, customized & lean response payload
         const data = filteredClubs.map((club: any) => ({
           id: club.id,
@@ -1550,6 +1644,7 @@ export default factories.createCoreController(
           services: servicesByOwnerId.get(club.id) || [],
           facilities: facilitiesByOwnerId.get(club.id) || [],
           membershipPlans: plansByOwnerId.get(club.id) || [],
+          holidays: holidaysByOwnerId.get(club.id) || [],
         }));
 
         return ctx.send({

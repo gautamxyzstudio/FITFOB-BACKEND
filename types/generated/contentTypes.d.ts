@@ -715,6 +715,7 @@ export interface ApiClubOwnerClubOwner extends Struct.CollectionTypeSchema {
       Schema.Attribute.Private;
     email: Schema.Attribute.Email;
     facilities: Schema.Attribute.JSON;
+    holdidays: Schema.Attribute.Relation<'oneToMany', 'api::holdiday.holdiday'>;
     latitude: Schema.Attribute.String;
     local_membership_plans: Schema.Attribute.Relation<
       'oneToMany',
@@ -857,6 +858,43 @@ export interface ApiDeviceTokenDeviceToken extends Struct.CollectionTypeSchema {
       'manyToOne',
       'plugin::users-permissions.user'
     >;
+  };
+}
+
+export interface ApiHoldidayHoldiday extends Struct.CollectionTypeSchema {
+  collectionName: 'holdidays';
+  info: {
+    displayName: 'Holidays';
+    pluralName: 'holidays';
+    singularName: 'holdiday';
+  };
+  options: {
+    draftAndPublish: false;
+  };
+  attributes: {
+    closureType: Schema.Attribute.Enumeration<['full_day', 'partial_day']>;
+    club_owner: Schema.Attribute.Relation<
+      'manyToOne',
+      'api::club-owner.club-owner'
+    >;
+    createdAt: Schema.Attribute.DateTime;
+    createdBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
+      Schema.Attribute.Private;
+    endDate: Schema.Attribute.Date;
+    endtime: Schema.Attribute.Time;
+    locale: Schema.Attribute.String & Schema.Attribute.Private;
+    localizations: Schema.Attribute.Relation<
+      'oneToMany',
+      'api::holdiday.holdiday'
+    > &
+      Schema.Attribute.Private;
+    publishedAt: Schema.Attribute.DateTime;
+    startDate: Schema.Attribute.Date;
+    startTime: Schema.Attribute.Time;
+    title: Schema.Attribute.String;
+    updatedAt: Schema.Attribute.DateTime;
+    updatedBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
+      Schema.Attribute.Private;
   };
 }
 
@@ -1833,6 +1871,7 @@ declare module '@strapi/strapi' {
       'api::club-photo.club-photo': ApiClubPhotoClubPhoto;
       'api::club-service.club-service': ApiClubServiceClubService;
       'api::device-token.device-token': ApiDeviceTokenDeviceToken;
+      'api::holdiday.holdiday': ApiHoldidayHoldiday;
       'api::local-membership-plan.local-membership-plan': ApiLocalMembershipPlanLocalMembershipPlan;
       'api::local-subscription.local-subscription': ApiLocalSubscriptionLocalSubscription;
       'api::otp-request.otp-request': ApiOtpRequestOtpRequest;
