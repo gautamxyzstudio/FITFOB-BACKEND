@@ -1461,7 +1461,7 @@ export default factories.createCoreController(
         const today = getTodayDateString();
         const [photosList, relationsList, plansList, holidaysList] =
           await Promise.all([
-            // 1. Club Photos with images
+            // 1. Club Photos with images (latest first)
             strapi.db.query("api::club-photo.club-photo").findMany({
               where: {
                 club_owner: { id: { $in: clubOwnerIds } },
@@ -1474,6 +1474,7 @@ export default factories.createCoreController(
                   select: ["id"],
                 },
               },
+              orderBy: { id: "desc" },
             }),
 
             // 2. Club Services & Facilities relations
@@ -1549,7 +1550,7 @@ export default factories.createCoreController(
             }),
           ]);
 
-        // Map photos by owner ID
+        // Map photos by owner ID (latest 5 photos max)
         const photosByOwnerId = new Map<number, { url: string }[]>();
         for (const photo of photosList || []) {
           const ownerId = photo.club_owner?.id;
@@ -1560,8 +1561,11 @@ export default factories.createCoreController(
           }
 
           const existingPhotos = photosByOwnerId.get(ownerId)!;
+          if (existingPhotos.length >= 5) continue;
+
           if (Array.isArray(photo.images)) {
             for (const img of photo.images) {
+              if (existingPhotos.length >= 5) break;
               if (img?.url) {
                 const formattedUrl = formatMediaUrl(img.url);
                 if (formattedUrl) {
@@ -1656,7 +1660,7 @@ export default factories.createCoreController(
           longitude:club.longitude,
           distance: club.distance !== undefined ? club.distance : null,
           distanceUnit: "km",
-          club_photos: photosByOwnerId.get(club.id) || [],
+          club_photos: (photosByOwnerId.get(club.id) || []).slice(0, 5),
           services: servicesByOwnerId.get(club.id) || [],
           facilities: facilitiesByOwnerId.get(club.id) || [],
           membershipPlans: plansByOwnerId.get(club.id) || [],
