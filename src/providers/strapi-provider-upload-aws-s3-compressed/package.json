@@ -1,0 +1,10 @@
+{
+  "name": "strapi-provider-upload-aws-s3-compressed",
+  "version": "1.0.0",
+  "description": "Strapi AWS S3 upload provider with automatic image compression",
+  "main": "index.js",
+  "scripts": {},
+  "keywords": ["strapi", "upload", "provider", "aws-s3", "compression", "sharp"],
+  "author": "",
+  "license": "ISC"
+}

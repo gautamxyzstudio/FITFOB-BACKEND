@@ -1,10 +1,12 @@
+import path from "path";
+
 const sharp = require('sharp');
 sharp.cache(false); 
 
 export default ({ env }) => ({
   upload: {
     config: {
-      provider: "aws-s3",
+      provider: path.resolve(__dirname, "../src/providers/strapi-provider-upload-aws-s3-compressed"),
 
       providerOptions: {
         s3Options: {
@@ -17,6 +19,16 @@ export default ({ env }) => ({
           params: {
             Bucket: env("AWS_BUCKET"),
           },
+        },
+        // Auto-compress images before storing in AWS S3
+        compression: {
+          maxWidth: 2048,
+          maxHeight: 2048,
+          jpegQuality: 80,
+          pngQuality: 80,
+          webpQuality: 80,
+          avifQuality: 75,
+          tiffQuality: 80,
         },
       },
 
