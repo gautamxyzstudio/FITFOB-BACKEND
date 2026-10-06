@@ -456,7 +456,12 @@ export default factories.createCoreController(
               club_owner: owner.id,
               $or: [
                 { endDate: { $gte: today } },
-                { $and: [{ endDate: { $null: true } }, { startDate: { $gte: today } }] },
+                {
+                  $and: [
+                    { endDate: { $null: true } },
+                    { startDate: { $gte: today } },
+                  ],
+                },
               ],
             },
             select: [
@@ -1392,6 +1397,7 @@ export default factories.createCoreController(
             "clubId",
             "latitude",
             "longitude",
+            "clubAddress",
             "city",
             "services",
             "facilities",
@@ -1453,89 +1459,95 @@ export default factories.createCoreController(
         // Phase 2: Concurrent pipeline for lean relations
         // ----------------------------------------------------
         const today = getTodayDateString();
-        const [photosList, relationsList, plansList, holidaysList] = await Promise.all([
-          // 1. Club Photos with images
-          strapi.db.query("api::club-photo.club-photo").findMany({
-            where: {
-              club_owner: { id: { $in: clubOwnerIds } },
-            },
-            populate: {
-              images: {
-                select: ["url", "formats"],
-              },
-              club_owner: {
-                select: ["id"],
-              },
-            },
-          }),
-
-          // 2. Club Services & Facilities relations
-          strapi.db.query(CLUB_OWNER_UID).findMany({
-            where: {
-              id: { $in: clubOwnerIds },
-            },
-            select: ["id"],
-            populate: {
-              club_services: {
-                select: ["name"],
-              },
-              club_facilities: {
-                select: ["name"],
-              },
-            },
-          }),
-
-          // 3. Active Local Membership Plans
-          strapi.db
-            .query("api::local-membership-plan.local-membership-plan")
-            .findMany({
+        const [photosList, relationsList, plansList, holidaysList] =
+          await Promise.all([
+            // 1. Club Photos with images
+            strapi.db.query("api::club-photo.club-photo").findMany({
               where: {
                 club_owner: { id: { $in: clubOwnerIds } },
-                isActive: true,
               },
-              select: [
-                "id",
-                "documentId",
-                "planName",
-                "price",
-                "monthDuration",
-                "validUpto",
-                "isActive",
-              ],
               populate: {
+                images: {
+                  select: ["url", "formats"],
+                },
                 club_owner: {
                   select: ["id"],
                 },
               },
             }),
 
-          // 4. Upcoming & Today Holidays (skipping past days)
-          strapi.db.query(HOLDIDAY_UID).findMany({
-            where: {
-              club_owner: { id: { $in: clubOwnerIds } },
-              $or: [
-                { endDate: { $gte: today } },
-                { $and: [{ endDate: { $null: true } }, { startDate: { $gte: today } }] },
-              ],
-            },
-            select: [
-              "id",
-              "documentId",
-              "title",
-              "closureType",
-              "startDate",
-              "endDate",
-              "startTime",
-              "endtime",
-            ],
-            populate: {
-              club_owner: {
-                select: ["id"],
+            // 2. Club Services & Facilities relations
+            strapi.db.query(CLUB_OWNER_UID).findMany({
+              where: {
+                id: { $in: clubOwnerIds },
               },
-            },
-            orderBy: { startDate: "asc" },
-          }),
-        ]);
+              select: ["id"],
+              populate: {
+                club_services: {
+                  select: ["name"],
+                },
+                club_facilities: {
+                  select: ["name"],
+                },
+              },
+            }),
+
+            // 3. Active Local Membership Plans
+            strapi.db
+              .query("api::local-membership-plan.local-membership-plan")
+              .findMany({
+                where: {
+                  club_owner: { id: { $in: clubOwnerIds } },
+                  isActive: true,
+                },
+                select: [
+                  "id",
+                  "documentId",
+                  "planName",
+                  "price",
+                  "monthDuration",
+                  "validUpto",
+                  "isActive",
+                ],
+                populate: {
+                  club_owner: {
+                    select: ["id"],
+                  },
+                },
+              }),
+
+            // 4. Upcoming & Today Holidays (skipping past days)
+            strapi.db.query(HOLDIDAY_UID).findMany({
+              where: {
+                club_owner: { id: { $in: clubOwnerIds } },
+                $or: [
+                  { endDate: { $gte: today } },
+                  {
+                    $and: [
+                      { endDate: { $null: true } },
+                      { startDate: { $gte: today } },
+                    ],
+                  },
+                ],
+              },
+              select: [
+                "id",
+                "documentId",
+                "title",
+                "closureType",
+                "startDate",
+                "endDate",
+                "startTime",
+                "endtime",
+              ],
+              populate: {
+                club_owner: {
+                  select: ["id"],
+                },
+              },
+              orderBy: { startDate: "asc" },
+            }),
+          ]);
 
         // Map photos by owner ID
         const photosByOwnerId = new Map<number, { url: string }[]>();
@@ -1638,6 +1650,10 @@ export default factories.createCoreController(
           documentId: club.documentId,
           clubName: club.clubName,
           clubId: club.clubId,
+          city: club.city,
+          address:club.clubAddress,
+          latitude:club.latitude,
+          longitude:club.longitude,
           distance: club.distance !== undefined ? club.distance : null,
           distanceUnit: "km",
           club_photos: photosByOwnerId.get(club.id) || [],
