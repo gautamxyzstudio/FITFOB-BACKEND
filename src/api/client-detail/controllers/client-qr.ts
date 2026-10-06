@@ -195,9 +195,77 @@ export default {
       const qrCode =
         `data:image/png;base64,${styledQR.toString("base64")}`;
 
+      /* ============================================
+         FETCH LATEST SUBSCRIPTIONS
+      ============================================ */
+
+      const [latestLocalSubscription, latestOutdoorSubscription] =
+        await Promise.all([
+          strapi.db
+            .query("api::local-subscription.local-subscription")
+            .findOne({
+              where: {
+                client_detail: client.id,
+              },
+              populate: {
+                local_membership_plan: true,
+              },
+              orderBy: { id: "desc" },
+            }),
+
+          strapi.db
+            .query("api::outdoor-subscription.outdoor-subscription")
+            .findOne({
+              where: {
+                client_detail: client.id,
+              },
+              populate: {
+                outdoor_membership_plan: true,
+              },
+              orderBy: { id: "desc" },
+            }),
+        ]);
+
+      const formattedLocalSubscription = latestLocalSubscription
+        ? {
+            startDate: latestLocalSubscription.startDate,
+            endDate: latestLocalSubscription.endDate,
+            membershipType: latestLocalSubscription.membershipType,
+            planName:
+              latestLocalSubscription.local_membership_plan?.planName || null,
+            monthDuration:
+              latestLocalSubscription.local_membership_plan?.monthDuration || null,
+            price:
+              typeof latestLocalSubscription.local_membership_plan?.price === "string"
+                ? parseFloat(latestLocalSubscription.local_membership_plan.price)
+                : latestLocalSubscription.local_membership_plan?.price ?? null,
+            subscriptionStatus: latestLocalSubscription.subscriptionStatus,
+          }
+        : null;
+
+      const formattedOutdoorSubscription = latestOutdoorSubscription
+        ? {
+            membershipType: latestOutdoorSubscription.membershipType,
+            totalVisitsAllowed: latestOutdoorSubscription.totalVisitsAllowed,
+            usedVisits: latestOutdoorSubscription.usedVisits,
+            remainingVisits: latestOutdoorSubscription.remainingVisits,
+            subscriptionStatus: latestOutdoorSubscription.subscriptionStatus,
+            planName:
+              latestOutdoorSubscription.outdoor_membership_plan?.planName || null,
+            price:
+              typeof latestOutdoorSubscription.outdoor_membership_plan?.price === "string"
+                ? parseFloat(latestOutdoorSubscription.outdoor_membership_plan.price)
+                : latestOutdoorSubscription.outdoor_membership_plan?.price ?? null,
+          }
+        : null;
+
       ctx.send({
         clientId: client.clientId,
         qrCode,
+        subscription: {
+          local_subscription: formattedLocalSubscription,
+          outdoor_subscription: formattedOutdoorSubscription,
+        },
       });
     } catch (error) {
       console.error("QR generation error:", error);
