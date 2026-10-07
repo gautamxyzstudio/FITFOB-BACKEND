@@ -22,6 +22,12 @@ export default {
     },
     {
       method: "POST",
+      path: "/pending-client/send-otp",
+      handler: "pending-client-detail.sendDetailsOtp",
+      config: { auth: {} },
+    },
+    {
+      method: "POST",
       path: "/pending-client/verify-otp",
       handler: "pending-client-detail.verifyDetailsOtp",
       config: { auth: {} },

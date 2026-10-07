@@ -30,6 +30,12 @@ export default {
     },
     {
       method: "POST",
+      path: "/pending-club-owner/send-otp",
+      handler: "pending-club-owner.sendDetailsOtp",
+      config: { auth: {} },
+    },
+    {
+      method: "POST",
       path: "/pending-club-owner/verify-otp",
       handler: "pending-club-owner.verifyDetailsOtp",
       config: { auth: {} },

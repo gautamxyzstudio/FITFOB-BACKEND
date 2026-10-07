@@ -69,8 +69,8 @@ async function ensureStep1Verified(ctx: Context, draft: any): Promise<boolean> {
     const regType = getUserRegistrationType(user);
     ctx.badRequest(
       regType === "email"
-        ? "Please verify your phone number in Step 1 before proceeding."
-        : "Please verify your email address in Step 1 before proceeding.",
+        ? "Please verify your phone number before proceeding."
+        : "Please verify your email address before proceeding.",
     );
     return false;
   }
@@ -155,6 +155,7 @@ async function getEditableDraft(ctx: Context) {
 
   // create automatically
   if (!draft) {
+    const regType = getUserRegistrationType(user);
     draft = await strapi.entityService.create(PENDING_UID, {
       data: {
         user: user.id,
@@ -162,8 +163,8 @@ async function getEditableDraft(ctx: Context) {
         phoneNumber: user.phoneNumber || null,
         currentStep: 1,
         status: "draft",
-        isPhoneVerified: false,
-        isEmailVerified: false,
+        isPhoneVerified: regType === "phone",
+        isEmailVerified: regType === "email",
       },
     });
     return draft;
@@ -292,34 +293,28 @@ export default {
       // Check user registration identifier type:
       const regType = getUserRegistrationType(user);
 
-      // Check if phone or email changed from current draft
-      const isPhoneChanged =
-        normalizePhone(draft.phoneNumber || "") !== submittedPhone;
-      const isEmailChanged =
-        (draft.email || "").toLowerCase() !== submittedEmail;
-
-      let isPhoneVerified = Boolean(draft.isPhoneVerified);
-      let isEmailVerified = Boolean(draft.isEmailVerified);
-
-      let needsPhoneVerification = false;
-      let needsEmailVerification = false;
-
+      // Verify that the required identifier was verified via OTP endpoint
       if (regType === "email") {
-        // User created with email -> phone number must be verified in draft
-        if (isPhoneChanged) {
-          isPhoneVerified = false;
-        }
-        needsPhoneVerification = !isPhoneVerified;
-      } else {
-        // User created with phone -> email must be verified in draft
-        if (isEmailChanged) {
-          isEmailVerified = false;
-        }
-        needsEmailVerification = !isEmailVerified;
-      }
+        const isPhoneVerified =
+          Boolean(draft.isPhoneVerified) &&
+          normalizePhone(draft.phoneNumber || "") === submittedPhone;
 
-      const needsVerification =
-        needsPhoneVerification || needsEmailVerification;
+        if (!isPhoneVerified) {
+          return ctx.badRequest(
+            "Please verify your phone number via OTP first before submitting basic info.",
+          );
+        }
+      } else {
+        const isEmailVerified =
+          Boolean(draft.isEmailVerified) &&
+          (draft.email || "").toLowerCase() === submittedEmail;
+
+        if (!isEmailVerified) {
+          return ctx.badRequest(
+            "Please verify your email address via OTP first before submitting basic info.",
+          );
+        }
+      }
 
       await strapi.entityService.update(PENDING_UID, draft.id, {
         data: {
@@ -327,83 +322,125 @@ export default {
           gender: body.gender,
           phoneNumber: submittedPhone,
           email: submittedEmail,
-          isPhoneVerified,
-          isEmailVerified,
-          currentStep: needsVerification
-            ? 1
-            : Math.max(draft.currentStep || 1, 2),
+          isPhoneVerified: true,
+          isEmailVerified: true,
+          currentStep: Math.max(draft.currentStep || 1, 2),
         },
       });
 
-      if (needsPhoneVerification) {
-        const otp = generateOtp();
-        const otpHash = await bcrypt.hash(otp, 10);
+      return ctx.send({
+        nextStep: 2,
+        message: "Basic info saved successfully.",
+      });
+    } catch (err: any) {
+      strapi.log.error("CLIENT BASIC INFO ERROR:", err);
+      return ctx.internalServerError(
+        err?.message || "Failed to update basic info",
+      );
+    }
+  },
 
-        await strapi.db.query("api::otp-request.otp-request").deleteMany({
-          where: {
-            identifier: submittedPhone,
-            purpose: "client_verification",
-          },
-        });
+  /* ================= STEP 1A — SEND OTP FOR PHONE / EMAIL ================= */
+  async sendDetailsOtp(ctx: Context) {
+    try {
+      const draft: any = await getEditableDraft(ctx);
+      if (!draft) return;
 
-        await strapi.entityService.create("api::otp-request.otp-request", {
-          data: {
-            identifier: submittedPhone,
-            otp_hash: otpHash,
-            expires_at: new Date(Date.now() + 2 * 60 * 1000),
-            attempts: 0,
-            verified: false,
-            purpose: "client_verification",
-            last_sent_at: new Date(),
-          },
-        });
+      const sessionUser = ctx.state.user;
+      if (!sessionUser) return ctx.unauthorized("Login required");
 
-        try {
-          await sendTwilioOtp(submittedPhone, otp);
-        } catch (smsError: any) {
-          strapi.log.error("[CLIENT PHONE OTP SEND ERROR]", smsError);
-          return ctx.badRequest(
-            "Failed to send OTP to the provided phone number. Please verify the phone number.",
-          );
+      const user = await getFullUser(sessionUser.id);
+      if (!user) return ctx.unauthorized("User not found");
+
+      const regType = getUserRegistrationType(user);
+      const body = getBody(ctx);
+      let rawIdentifier =
+        body.identifier ||
+        (regType === "email" ? body.phoneNumber : body.email) ||
+        body.phoneNumber ||
+        body.email ||
+        null;
+
+      if (!rawIdentifier) {
+        if (regType === "email") {
+          rawIdentifier = draft.phoneNumber;
+        } else {
+          rawIdentifier = draft.email;
         }
-
-        return ctx.send({
-          requiresVerification: true,
-          verificationType: "phone",
-          identifier: submittedPhone,
-          message: "OTP sent to your phone number to verify.",
-        });
       }
 
-      if (needsEmailVerification) {
-        const otp = generateOtp();
-        const otpHash = await bcrypt.hash(otp, 10);
+      if (!rawIdentifier) {
+        return ctx.badRequest(
+          regType === "email"
+            ? "Phone number is required to send verification OTP."
+            : "Email address is required to send verification OTP.",
+        );
+      }
 
-        await strapi.db.query("api::otp-request.otp-request").deleteMany({
-          where: {
-            identifier: submittedEmail,
-            purpose: "client_verification",
-          },
-        });
+      const isEmail = String(rawIdentifier).includes("@");
 
-        await strapi.entityService.create("api::otp-request.otp-request", {
-          data: {
-            identifier: submittedEmail,
-            otp_hash: otpHash,
-            expires_at: new Date(Date.now() + 2 * 60 * 1000),
-            attempts: 0,
-            verified: false,
-            purpose: "client_verification",
-            last_sent_at: new Date(),
-          },
-        });
+      if (regType === "email" && isEmail) {
+        return ctx.badRequest(
+          "Your email address is already verified from signup. Please provide and verify your phone number.",
+        );
+      }
 
+      if (regType === "phone" && !isEmail) {
+        return ctx.badRequest(
+          "Your phone number is already verified from signup. Please provide and verify your email address.",
+        );
+      }
+
+      const identifier = isEmail
+        ? String(rawIdentifier).trim().toLowerCase()
+        : normalizePhone(String(rawIdentifier).trim());
+
+      // Save identifier to draft so draft stays in sync
+      const draftUpdateData: any = {};
+      if (isEmail) {
+        draftUpdateData.email = identifier;
+        if (draft.email !== identifier) {
+          draftUpdateData.isEmailVerified = false;
+        }
+      } else {
+        draftUpdateData.phoneNumber = identifier;
+        if (draft.phoneNumber !== identifier) {
+          draftUpdateData.isPhoneVerified = false;
+        }
+      }
+      await strapi.entityService.update(PENDING_UID, draft.id, {
+        data: draftUpdateData,
+      });
+
+      const otp = generateOtp();
+      const otpHash = await bcrypt.hash(otp, 10);
+
+      await strapi.db.query("api::otp-request.otp-request").deleteMany({
+        where: {
+          identifier,
+          purpose: "client_verification",
+        },
+      });
+
+      await strapi.entityService.create("api::otp-request.otp-request", {
+        data: {
+          identifier,
+          otp_hash: otpHash,
+          expires_at: new Date(Date.now() + 2 * 60 * 1000),
+          attempts: 0,
+          verified: false,
+          purpose: "client_verification",
+          last_sent_at: new Date(),
+        },
+      });
+
+      if (isEmail) {
         try {
           await axios.post(
             "https://api.brevo.com/v3/smtp/email",
             {
               sender: { name: "FitFob", email: "qaxyzstudio@gmail.com" },
-              to: [{ email: submittedEmail }],
+              to: [{ email: identifier }],
               subject: "FitFob Client Email Verification OTP",
               htmlContent: getOtpEmailTemplate(otp, {
                 title: "FitFob Email Verification Code",
@@ -425,26 +462,37 @@ export default {
         }
 
         return ctx.send({
-          requiresVerification: true,
+          success: true,
           verificationType: "email",
-          identifier: submittedEmail,
+          identifier,
           message: "OTP sent to your email address to verify.",
         });
-      }
+      } else {
+        try {
+          await sendTwilioOtp(identifier, otp);
+        } catch (smsError: any) {
+          strapi.log.error("[CLIENT PHONE OTP SEND ERROR]", smsError);
+          return ctx.badRequest(
+            "Failed to send OTP to the provided phone number. Please verify the phone number.",
+          );
+        }
 
-      return ctx.send({
-        requiresVerification: false,
-        nextStep: 2,
-      });
+        return ctx.send({
+          success: true,
+          verificationType: "phone",
+          identifier,
+          message: "OTP sent to your phone number to verify.",
+        });
+      }
     } catch (err: any) {
-      strapi.log.error("CLIENT BASIC INFO ERROR:", err);
+      strapi.log.error("SEND DETAILS OTP ERROR:", err);
       return ctx.internalServerError(
-        err?.message || "Failed to update basic info",
+        err?.message || "Failed to send details OTP",
       );
     }
   },
 
-  /* ================= STEP 1A — VERIFY OTP FOR PHONE / EMAIL ================= */
+  /* ================= STEP 1B — VERIFY OTP FOR PHONE / EMAIL ================= */
   async verifyDetailsOtp(ctx: Context) {
     try {
       const draft: any = await getEditableDraft(ctx);
@@ -463,10 +511,16 @@ export default {
         return ctx.badRequest("OTP is required");
       }
 
-      let identifier = body.identifier ? String(body.identifier).trim() : null;
+      const regType = getUserRegistrationType(user);
+      const rawIdentifier =
+        body.identifier ||
+        (regType === "email" ? body.phoneNumber : body.email) ||
+        body.phoneNumber ||
+        body.email ||
+        null;
+      let identifier = rawIdentifier ? String(rawIdentifier).trim() : null;
 
       if (!identifier) {
-        const regType = getUserRegistrationType(user);
         if (regType === "email") {
           identifier = draft.phoneNumber;
         } else {
@@ -475,10 +529,27 @@ export default {
       }
 
       if (!identifier) {
-        return ctx.badRequest("Identifier (phone number or email) is required");
+        return ctx.badRequest(
+          regType === "email"
+            ? "Phone number is required to verify OTP"
+            : "Email address is required to verify OTP",
+        );
       }
 
       const isEmail = identifier.includes("@");
+
+      if (regType === "email" && isEmail) {
+        return ctx.badRequest(
+          "Your email address is already verified from signup. Please verify your phone number.",
+        );
+      }
+
+      if (regType === "phone" && !isEmail) {
+        return ctx.badRequest(
+          "Your phone number is already verified from signup. Please provide your email address.",
+        );
+      }
+
       identifier = isEmail
         ? identifier.toLowerCase()
         : normalizePhone(identifier);
@@ -518,10 +589,20 @@ export default {
         where: { id: record.id },
       });
 
+      const hasCompletedStep1Details = Boolean(draft.name && draft.gender);
+
       // Update pending draft (do NOT modify user record)
       const updateData: any = {
-        currentStep: Math.max(draft.currentStep || 1, 2),
+        currentStep: hasCompletedStep1Details
+          ? Math.max(draft.currentStep || 1, 2)
+          : (draft.currentStep || 1),
       };
+
+      if (regType === "email") {
+        updateData.isEmailVerified = true;
+      } else {
+        updateData.isPhoneVerified = true;
+      }
 
       if (isEmail) {
         updateData.isEmailVerified = true;
@@ -536,8 +617,10 @@ export default {
       });
 
       return ctx.send({
-        nextStep: 2,
-        message: `${isEmail ? "Email" : "Phone number"} verified successfully.`,
+        verified: true,
+        verificationType: isEmail ? "email" : "phone",
+        identifier,
+        nextStep: hasCompletedStep1Details ? 2 : 1,
       });
     } catch (err: any) {
       strapi.log.error("VERIFY CLIENT DETAILS OTP ERROR:", err);
@@ -547,7 +630,7 @@ export default {
     }
   },
 
-  /* ================= STEP 1B — RESEND OTP FOR PHONE / EMAIL ================= */
+  /* ================= STEP 1C — RESEND OTP FOR PHONE / EMAIL ================= */
   async resendDetailsOtp(ctx: Context) {
     try {
       const draft: any = await getEditableDraft(ctx);
@@ -559,11 +642,17 @@ export default {
       const user = await getFullUser(sessionUser.id);
       if (!user) return ctx.unauthorized("User not found");
 
+      const regType = getUserRegistrationType(user);
       const body = getBody(ctx);
-      let identifier = body.identifier ? String(body.identifier).trim() : null;
+      const rawIdentifier =
+        body.identifier ||
+        (regType === "email" ? body.phoneNumber : body.email) ||
+        body.phoneNumber ||
+        body.email ||
+        null;
+      let identifier = rawIdentifier ? String(rawIdentifier).trim() : null;
 
       if (!identifier) {
-        const regType = getUserRegistrationType(user);
         if (regType === "email") {
           identifier = draft.phoneNumber;
         } else {
@@ -572,10 +661,26 @@ export default {
       }
 
       if (!identifier) {
-        return ctx.badRequest("Identifier (phone number or email) is required");
+        return ctx.badRequest(
+          regType === "email"
+            ? "Phone number is required to resend OTP"
+            : "Email address is required to resend OTP",
+        );
       }
 
       const isEmail = identifier.includes("@");
+
+      if (regType === "email" && isEmail) {
+        return ctx.badRequest(
+          "Your email address is already verified from signup. Please provide your phone number to resend OTP.",
+        );
+      }
+
+      if (regType === "phone" && !isEmail) {
+        return ctx.badRequest(
+          "Your phone number is already verified from signup. Please provide your email address to resend OTP.",
+        );
+      }
       identifier = isEmail
         ? identifier.toLowerCase()
         : normalizePhone(identifier);
@@ -624,26 +729,44 @@ export default {
       });
 
       if (isEmail) {
-        await axios.post(
-          "https://api.brevo.com/v3/smtp/email",
-          {
-            sender: { name: "FitFob", email: "qaxyzstudio@gmail.com" },
-            to: [{ email: identifier }],
-            subject: "FitFob Client Email Verification OTP",
-            htmlContent: getOtpEmailTemplate(otp, {
-              title: "FitFob Email Verification Code",
-              subtext:
-                "Here is your requested One-Time Password (OTP) to verify your email address:",
-              validityMinutes: 2,
-            }),
-          },
-          { headers: { "api-key": process.env.BREVO_API_KEY } },
-        );
+        try {
+          await axios.post(
+            "https://api.brevo.com/v3/smtp/email",
+            {
+              sender: { name: "FitFob", email: "qaxyzstudio@gmail.com" },
+              to: [{ email: identifier }],
+              subject: "FitFob Client Email Verification OTP",
+              htmlContent: getOtpEmailTemplate(otp, {
+                title: "FitFob Email Verification Code",
+                subtext:
+                  "Here is your requested One-Time Password (OTP) to verify your email address:",
+                validityMinutes: 2,
+              }),
+            },
+            { headers: { "api-key": process.env.BREVO_API_KEY } },
+          );
+        } catch (emailError: any) {
+          strapi.log.error(
+            "[CLIENT EMAIL OTP SEND ERROR]",
+            emailError?.response?.data || emailError,
+          );
+          return ctx.badRequest(
+            "Failed to send verification email. Please verify the email address.",
+          );
+        }
       } else {
-        await sendTwilioOtp(identifier, otp);
+        try {
+          await sendTwilioOtp(identifier, otp);
+        } catch (smsError: any) {
+          strapi.log.error("[CLIENT PHONE OTP SEND ERROR]", smsError);
+          return ctx.badRequest(
+            "Failed to send OTP to the provided phone number. Please verify the phone number.",
+          );
+        }
       }
 
       return ctx.send({
+        success: true,
         message: "OTP resent successfully",
         identifier,
       });
