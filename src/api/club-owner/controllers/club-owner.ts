@@ -203,6 +203,141 @@ function extractStringList(jsonField: any, relationItems: any[]): string[] {
   return Array.from(new Set(result));
 }
 
+/* ---------- RESOLVE CLIENT FAVORITES HELPER ---------- */
+async function resolveClientFavorites(ctx: Context): Promise<any[]> {
+  try {
+    let user = ctx.state?.user;
+
+    // 1. Fallback: If ctx.state.user is not yet populated but Bearer token is provided
+    if (!user && ctx.request?.header?.authorization?.startsWith("Bearer ")) {
+      const token = ctx.request.header.authorization.slice(7).trim();
+      try {
+        const jwtService = strapi.plugin("users-permissions")?.service("jwt");
+        if (jwtService?.verify) {
+          const payload = await jwtService.verify(token);
+          if (payload?.id) {
+            user = await strapi.db
+              .query("plugin::users-permissions.user")
+              .findOne({
+                where: { id: payload.id },
+                select: ["id"],
+              });
+          }
+        }
+      } catch (_) {}
+    }
+
+    const {
+      clientId,
+      client_id,
+      clientDetailId,
+      client_detail_id,
+      userId,
+      user_id,
+    } = (ctx.query || {}) as any;
+
+    const targetClientId = clientId || client_id || ctx.get?.("x-client-id");
+    const targetClientDetailId =
+      clientDetailId || client_detail_id || ctx.get?.("x-client-detail-id");
+    const targetUserId = userId || user_id || ctx.get?.("x-user-id");
+
+    let clientDetail: any = null;
+
+    // A. Find by logged-in user
+    if (user?.id) {
+      clientDetail = await strapi.db
+        .query("api::client-detail.client-detail")
+        .findOne({
+          where: { user: user.id },
+          select: ["id", "documentId"],
+          populate: {
+            favorites: {
+              select: ["id", "documentId", "clubId"],
+            },
+          },
+        });
+    }
+
+    // B. Find by clientDetailId / documentId
+    if (!clientDetail && targetClientDetailId) {
+      const detailStr = String(targetClientDetailId).trim();
+      const isNum = !isNaN(Number(detailStr)) && /^\d+$/.test(detailStr);
+      clientDetail = await strapi.db
+        .query("api::client-detail.client-detail")
+        .findOne({
+          where: isNum
+            ? {
+                $or: [
+                  { id: Number(detailStr) },
+                  { documentId: detailStr },
+                ],
+              }
+            : { documentId: detailStr },
+          select: ["id", "documentId"],
+          populate: {
+            favorites: {
+              select: ["id", "documentId", "clubId"],
+            },
+          },
+        });
+    }
+
+    // C. Find by clientId (e.g., "CL-00123" or id)
+    if (!clientDetail && targetClientId) {
+      const rawCId = String(targetClientId).trim();
+      const isNum = !isNaN(Number(rawCId)) && /^\d+$/.test(rawCId);
+      const orConditions: any[] = [
+        { clientId: rawCId },
+        { clientId: rawCId.toUpperCase() },
+        { clientId: rawCId.toLowerCase() },
+        { documentId: rawCId },
+      ];
+      if (isNum) {
+        orConditions.push({ id: Number(rawCId) });
+      }
+
+      clientDetail = await strapi.db
+        .query("api::client-detail.client-detail")
+        .findOne({
+          where: { $or: orConditions },
+          select: ["id", "documentId"],
+          populate: {
+            favorites: {
+              select: ["id", "documentId", "clubId"],
+            },
+          },
+        });
+    }
+
+    // D. Find by userId param
+    if (!clientDetail && targetUserId) {
+      const rawUId = String(targetUserId).trim();
+      if (!isNaN(Number(rawUId)) && /^\d+$/.test(rawUId)) {
+        clientDetail = await strapi.db
+          .query("api::client-detail.client-detail")
+          .findOne({
+            where: { user: Number(rawUId) },
+            select: ["id", "documentId"],
+            populate: {
+              favorites: {
+                select: ["id", "documentId", "clubId"],
+              },
+            },
+          });
+      }
+    }
+
+    if (clientDetail && Array.isArray(clientDetail.favorites)) {
+      return clientDetail.favorites;
+    }
+
+    return [];
+  } catch (err) {
+    strapi.log.warn("[resolveClientFavorites] Error resolving favorites:", err);
+    return [];
+  }
+}
+
 export default factories.createCoreController(
   "api::club-owner.club-owner",
   ({ strapi }) => ({
@@ -368,7 +503,7 @@ export default factories.createCoreController(
 
     /* =======================================================
        GET CLUB OWNER DETAIL ON USER / CLIENT SIDE
-       (GET /api/club-owners/client-detail/:documentId)
+       (GET /api/club-owners/client/:documentId)
     ======================================================= */
     async clientDetail(ctx: Context) {
       try {
@@ -418,65 +553,67 @@ export default factories.createCoreController(
           return ctx.notFound("Club owner not found");
         }
 
-        // 2. Fetch club photos, active membership plans & upcoming/today holidays concurrently
+        // 2. Fetch club photos, active membership plans, upcoming/today holidays & client favorites concurrently
         const today = getTodayDateString();
-        const [photosList, plansList, holidaysList] = await Promise.all([
-          strapi.db.query("api::club-photo.club-photo").findMany({
-            where: {
-              club_owner: owner.id,
-            },
-            populate: {
-              images: {
-                select: ["url", "formats"],
-              },
-            },
-            orderBy: { id: "desc" },
-          }),
-          strapi.db
-            .query("api::local-membership-plan.local-membership-plan")
-            .findMany({
+        const [photosList, plansList, holidaysList, clientFavorites] =
+          await Promise.all([
+            strapi.db.query("api::club-photo.club-photo").findMany({
               where: {
                 club_owner: owner.id,
-                isActive: true,
+              },
+              populate: {
+                images: {
+                  select: ["url", "formats"],
+                },
+              },
+              orderBy: { id: "desc" },
+            }),
+            strapi.db
+              .query("api::local-membership-plan.local-membership-plan")
+              .findMany({
+                where: {
+                  club_owner: owner.id,
+                  isActive: true,
+                },
+                select: [
+                  "id",
+                  "documentId",
+                  "planName",
+                  "price",
+                  "monthDuration",
+                  "validUpto",
+                  "description",
+                  "isActive",
+                ],
+                orderBy: { price: "asc" },
+              }),
+            strapi.db.query(HOLDIDAY_UID).findMany({
+              where: {
+                club_owner: owner.id,
+                $or: [
+                  { endDate: { $gte: today } },
+                  {
+                    $and: [
+                      { endDate: { $null: true } },
+                      { startDate: { $gte: today } },
+                    ],
+                  },
+                ],
               },
               select: [
                 "id",
                 "documentId",
-                "planName",
-                "price",
-                "monthDuration",
-                "validUpto",
-                "description",
-                "isActive",
+                "title",
+                "closureType",
+                "startDate",
+                "endDate",
+                "startTime",
+                "endtime",
               ],
-              orderBy: { price: "asc" },
+              orderBy: { startDate: "asc" },
             }),
-          strapi.db.query(HOLDIDAY_UID).findMany({
-            where: {
-              club_owner: owner.id,
-              $or: [
-                { endDate: { $gte: today } },
-                {
-                  $and: [
-                    { endDate: { $null: true } },
-                    { startDate: { $gte: today } },
-                  ],
-                },
-              ],
-            },
-            select: [
-              "id",
-              "documentId",
-              "title",
-              "closureType",
-              "startDate",
-              "endDate",
-              "startTime",
-              "endtime",
-            ],
-            orderBy: { startDate: "asc" },
-          }),
-        ]);
+            resolveClientFavorites(ctx),
+          ]);
 
         // 3. Format club_photos: return only url and imageInfo
         const club_photos: { url: string; imageInfo: string }[] = [];
@@ -570,7 +707,25 @@ export default factories.createCoreController(
           ? orderWeekdayScheduling(owner.weekdayScheduling)
           : null;
 
-        // 10. Exact payload format requested by client
+        // 10. Check if club is favorited by the client
+        const isFav =
+          Array.isArray(clientFavorites) &&
+          clientFavorites.some((fav: any) => {
+            const idMatch =
+              fav?.id && owner?.id && Number(fav.id) === Number(owner.id);
+            const docIdMatch =
+              fav?.documentId &&
+              owner?.documentId &&
+              String(fav.documentId).trim() === String(owner.documentId).trim();
+            const clubIdMatch =
+              fav?.clubId &&
+              owner?.clubId &&
+              String(fav.clubId).trim().toLowerCase() ===
+                String(owner.clubId).trim().toLowerCase();
+            return Boolean(idMatch || docIdMatch || clubIdMatch);
+          });
+
+        // 11. Exact payload format requested by client
         const responseData = {
           id: owner.id,
           documentId: owner.documentId,
@@ -596,6 +751,7 @@ export default factories.createCoreController(
           clubId: owner.clubId,
           weekdayScheduling,
           clubCategory: owner.clubCategory || null,
+          isFav,
           club_photos,
           membershipPlans,
           holidays,

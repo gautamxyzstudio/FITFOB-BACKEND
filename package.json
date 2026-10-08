@@ -60,5 +60,16 @@
   "strapi": {
     "uuid": "8b33742a-4716-4ff8-88c8-3db49a33931a",
     "installId": "c89ed7d360f2deaaf82014455245288c257bb29f71be91518429bcff64a1fbac"
+  },
+  "allowScripts": {
+    "@firebase/util@1.15.3": true,
+    "@swc/core@1.16.1": true,
+    "aws-sdk@2.1693.0": true,
+    "better-sqlite3@12.4.1": true,
+    "core-js-pure@3.50.0": true,
+    "esbuild@0.20.2": true,
+    "esbuild@0.28.2": true,
+    "esbuild@0.21.5": true,
+    "protobufjs@7.6.6": true
   }
 }
