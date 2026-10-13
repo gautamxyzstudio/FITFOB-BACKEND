@@ -3,6 +3,12 @@
  * into an array of numeric database IDs for relation linking.
  */
 
+let cachedServices: any[] | null = null;
+let servicesCacheTime = 0;
+let cachedFacilities: any[] | null = null;
+let facilitiesCacheTime = 0;
+const CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes
+
 export async function resolveClubServiceIds(servicesInput: any): Promise<number[]> {
   if (!servicesInput) return [];
 
@@ -20,6 +26,24 @@ export async function resolveClubServiceIds(servicesInput: any): Promise<number[
       items = Object.values(items);
     } else {
       items = [items];
+    }
+  }
+
+  let allServices: any[] = [];
+  const now = Date.now();
+  if (cachedServices && now - servicesCacheTime < CACHE_TTL_MS) {
+    allServices = cachedServices;
+  } else {
+    try {
+      const res = await strapi.db.connection.raw(
+        `SELECT id, document_id, LOWER(TRIM(name)) AS name FROM club_services`,
+      );
+      allServices = res?.rows || [];
+      cachedServices = allServices;
+      servicesCacheTime = now;
+    } catch (err) {
+      strapi.log.warn("Failed to fetch club_services directly, fallback:", err);
+      allServices = cachedServices || [];
     }
   }
 
@@ -43,30 +67,21 @@ export async function resolveClubServiceIds(servicesInput: any): Promise<number[
 
       const docId = item.documentId || item.document_id;
       if (docId) {
-        const found: any = await strapi.db
-          .query("api::club-service.club-service")
-          .findOne({
-            where: { documentId: String(docId).trim() },
-            select: ["id"],
-          });
-        if (found?.id) {
+        const found = allServices.find(
+          (s: any) => s.document_id === String(docId).trim(),
+        );
+        if (found) {
           ids.push(found.id);
           continue;
         }
       }
 
-      const nameStr = item.name || item.serviceName || item.service_name || item.title;
+      const nameStr =
+        item.name || item.serviceName || item.service_name || item.title;
       if (nameStr) {
-        const name = String(nameStr).trim();
-        const found: any = await strapi.db
-          .query("api::club-service.club-service")
-          .findOne({
-            where: {
-              $or: [{ name }, { name: { $eqi: name } }],
-            },
-            select: ["id"],
-          });
-        if (found?.id) {
+        const lowerName = String(nameStr).trim().toLowerCase();
+        const found = allServices.find((s: any) => s.name === lowerName);
+        if (found) {
           ids.push(found.id);
           continue;
         }
@@ -81,15 +96,11 @@ export async function resolveClubServiceIds(servicesInput: any): Promise<number[
         continue;
       }
 
-      const found: any = await strapi.db
-        .query("api::club-service.club-service")
-        .findOne({
-          where: {
-            $or: [{ documentId: str }, { name: str }, { name: { $eqi: str } }],
-          },
-          select: ["id"],
-        });
-      if (found?.id) {
+      const lowerStr = str.toLowerCase();
+      const found = allServices.find(
+        (s: any) => s.document_id === str || s.name === lowerStr,
+      );
+      if (found) {
         ids.push(found.id);
       }
     }
@@ -118,6 +129,24 @@ export async function resolveClubFacilityIds(facilitiesInput: any): Promise<numb
     }
   }
 
+  let allFacilities: any[] = [];
+  const now = Date.now();
+  if (cachedFacilities && now - facilitiesCacheTime < CACHE_TTL_MS) {
+    allFacilities = cachedFacilities;
+  } else {
+    try {
+      const res = await strapi.db.connection.raw(
+        `SELECT id, document_id, LOWER(TRIM(name)) AS name FROM club_facilities`,
+      );
+      allFacilities = res?.rows || [];
+      cachedFacilities = allFacilities;
+      facilitiesCacheTime = now;
+    } catch (err) {
+      strapi.log.warn("Failed to fetch club_facilities directly, fallback:", err);
+      allFacilities = cachedFacilities || [];
+    }
+  }
+
   const ids: number[] = [];
 
   for (const item of items) {
@@ -138,30 +167,21 @@ export async function resolveClubFacilityIds(facilitiesInput: any): Promise<numb
 
       const docId = item.documentId || item.document_id;
       if (docId) {
-        const found: any = await strapi.db
-          .query("api::club-facility.club-facility")
-          .findOne({
-            where: { documentId: String(docId).trim() },
-            select: ["id"],
-          });
-        if (found?.id) {
+        const found = allFacilities.find(
+          (f: any) => f.document_id === String(docId).trim(),
+        );
+        if (found) {
           ids.push(found.id);
           continue;
         }
       }
 
-      const nameStr = item.name || item.facilityName || item.facility_name || item.title;
+      const nameStr =
+        item.name || item.facilityName || item.facility_name || item.title;
       if (nameStr) {
-        const name = String(nameStr).trim();
-        const found: any = await strapi.db
-          .query("api::club-facility.club-facility")
-          .findOne({
-            where: {
-              $or: [{ name }, { name: { $eqi: name } }],
-            },
-            select: ["id"],
-          });
-        if (found?.id) {
+        const lowerName = String(nameStr).trim().toLowerCase();
+        const found = allFacilities.find((f: any) => f.name === lowerName);
+        if (found) {
           ids.push(found.id);
           continue;
         }
@@ -176,15 +196,11 @@ export async function resolveClubFacilityIds(facilitiesInput: any): Promise<numb
         continue;
       }
 
-      const found: any = await strapi.db
-        .query("api::club-facility.club-facility")
-        .findOne({
-          where: {
-            $or: [{ documentId: str }, { name: str }, { name: { $eqi: str } }],
-          },
-          select: ["id"],
-        });
-      if (found?.id) {
+      const lowerStr = str.toLowerCase();
+      const found = allFacilities.find(
+        (f: any) => f.document_id === str || f.name === lowerStr,
+      );
+      if (found) {
         ids.push(found.id);
       }
     }

@@ -21,12 +21,12 @@ export async function generateClubId(): Promise<string> {
     clubId = `FFB${randomNumber}`;
 
     // 2️⃣ check DB
-    const found = await strapi.db.query(CLUB_UID).findOne({
-      where: { clubId },
-      select: ["id"],
-    });
+    const res = await strapi.db.connection.raw(
+      `SELECT id FROM club_owners WHERE club_id = ? LIMIT 1`,
+      [clubId],
+    );
 
-    exists = !!found;
+    exists = !!res?.rows?.[0];
     attempts++;
   }
 

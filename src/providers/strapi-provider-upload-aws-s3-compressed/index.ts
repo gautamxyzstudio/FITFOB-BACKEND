@@ -104,6 +104,10 @@ export async function compressFile(
 ): Promise<void> {
   const fileName = file.name || file.originalFilename || file.hash || "image";
 
+  if (file._skipCompression || file._optimized) {
+    return;
+  }
+
   if (!isRasterImage(file)) {
     const fileMime = file.mime || file.mimetype || file.ext || "unknown";
     const fileSizeKb = file.size ? `${file.size} KB` : "unknown size";
@@ -180,8 +184,8 @@ export async function compressFile(
     ) {
       pipeline = pipeline.jpeg({
         quality: jpegQuality,
-        mozjpeg: true,
-        progressive: true,
+        mozjpeg: false,
+        progressive: false,
       });
     } else if (format === "png" || mime.includes("png")) {
       pipeline = pipeline.png({

@@ -1056,9 +1056,11 @@ export const validateGovernmentDocument =
 
       /**
        * -----------------------------------------------------
-       * STEP 1: OCR
+       * STEP 1: OCR & CONCURRENT FACE CHECK
        * -----------------------------------------------------
        */
+      const facePromise = hasFace(buffer);
+
       let ocrResponse:
         | AWS.Textract.DetectDocumentTextResponse
         | undefined;
@@ -1138,8 +1140,6 @@ export const validateGovernmentDocument =
               },
               FeatureTypes: [
                 "QUERIES",
-                "FORMS",
-                "LAYOUT",
               ],
               QueriesConfig: {
                 Queries: queries,
@@ -1408,7 +1408,7 @@ export const validateGovernmentDocument =
        * -----------------------------------------------------
        */
       const photoExists =
-        await hasFace(buffer);
+        await facePromise;
 
       if (!photoExists) {
         console.log(

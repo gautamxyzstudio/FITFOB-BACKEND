@@ -1440,133 +1440,35 @@ function validateOcrContent(
 |--------------------------------------------------------------------------
 */
 
-async function analyzeImage(
-  buffer: Buffer,
-): Promise<{
-  documentType: OwnerDocumentType;
-  text: string;
-  queryResults: Record<
-    string,
-    QueryResult
-  >;
-}> {
-  /*
-  |--------------------------------------------------------------------------
-  | First OCR pass
-  |--------------------------------------------------------------------------
-  */
-
-  const detectResponse =
-    await textract
-      .detectDocumentText({
-        Document: {
-          Bytes: buffer,
-        },
-      })
-      .promise();
-
-  const text =
-    getTextractText(
-      detectResponse.Blocks,
-    );
-
-  // console.log(
-  //   "OWNER OCR TEXT:",
-  //   text,
-  // );
-
-  const documentType =
-    detectDocumentType(text);
-
-  // console.log(
-  //   "OWNER DOCUMENT TYPE:",
-  //   documentType,
-  // );
-
-  if (documentType === "unknown") {
-    return {
-      documentType,
-      text,
-      queryResults: {},
-    };
-  }
-
-  const config =
-    DOCUMENT_CONFIG[documentType];
-
-  let queryResults: Record<
-    string,
-    QueryResult
-  > = {};
-
-  /*
-  |--------------------------------------------------------------------------
-  | Second Textract pass
-  |--------------------------------------------------------------------------
-  */
-
-  try {
-    const analyzeResponse =
-      await textract
-        .analyzeDocument({
-          Document: {
-            Bytes: buffer,
-          },
-
-          FeatureTypes: [
-            "QUERIES",
-            "FORMS",
-            "LAYOUT",
-          ],
-
-          QueriesConfig: {
-            Queries: config.queries,
-          },
-        })
-        .promise();
-
-    queryResults =
-      extractQueryResults(
-        analyzeResponse.Blocks,
-      );
-
-    // console.log(
-    //   "OWNER QUERY RESULTS:",
-    //   queryResults,
-    // );
-  } catch (error) {
-    console.error(
-      "Textract AnalyzeDocument failed:",
-      error,
-    );
-  }
-
-  return {
-    documentType,
-    text,
-    queryResults,
-  };
-}
-
 /*
 |--------------------------------------------------------------------------
-| IMAGE VALIDATION
+| Fast OCR Image Analysis & Validation
 |--------------------------------------------------------------------------
 */
 
 async function validateImageDocument(
   buffer: Buffer,
 ): Promise<OwnerDocumentValidationResult> {
-  const analysis =
-    await analyzeImage(buffer);
+  // 1. Run DetectDocumentText and Face Detection concurrently in parallel
+  const [detectResponse, faceExists] = await Promise.all([
+    textract
+      .detectDocumentText({
+        Document: {
+          Bytes: buffer,
+        },
+      })
+      .promise(),
+    hasHumanFace(buffer).catch((err) => {
+      console.error("Owner face detection error:", err);
+      return false;
+    }),
+  ]);
 
-  if (
-    analysis.documentType === "unknown"
-  ) {
-    console.log(
-      "OWNER VALIDATION FAILED: UNKNOWN DOCUMENT",
-    );
+  const text = getTextractText(detectResponse.Blocks);
+  const documentType = detectDocumentType(text);
 
+  if (documentType === "unknown") {
+    console.log("OWNER VALIDATION FAILED: UNKNOWN DOCUMENT");
     return {
       valid: false,
       documentType: "unknown",
@@ -1574,180 +1476,102 @@ async function validateImageDocument(
     };
   }
 
-  const documentType =
-    analysis.documentType;
+  const config = DOCUMENT_CONFIG[documentType];
 
-  const config =
-    DOCUMENT_CONFIG[documentType];
-
-  /*
-  |--------------------------------------------------------------------------
-  | 1. OCR document identity
-  |--------------------------------------------------------------------------
-  */
-
-  const contentValid =
-    validateOcrContent(
-      documentType,
-      analysis.text,
-    );
-
-  console.log(
-    "OWNER STEP 1 - OCR CONTENT:",
-    contentValid,
-  );
-
+  // 2. Validate OCR identity content
+  const contentValid = validateOcrContent(documentType, text);
+  console.log("OWNER STEP 1 - OCR CONTENT:", contentValid);
   if (!contentValid) {
-    console.log(
-      "OWNER VALIDATION FAILED: OCR CONTENT",
-    );
-
+    console.log("OWNER VALIDATION FAILED: OCR CONTENT");
     return {
       valid: false,
       documentType,
-      displayName:
-        `${config.displayName} - Document details could not be verified`,
+      displayName: `${config.displayName} - Document details could not be verified`,
     };
   }
 
-  /*
-  |--------------------------------------------------------------------------
-  | 2. Document number
-  |--------------------------------------------------------------------------
-  */
+  // 3. Validate document number from direct OCR text
+  let queryResults: Record<string, QueryResult> = {};
+  let numberValid = validateDocumentNumber(documentType, text, queryResults);
 
-  const numberValid =
-    validateDocumentNumber(
-      documentType,
-      analysis.text,
-      analysis.queryResults,
-    );
-
-  console.log(
-    "OWNER STEP 2 - DOCUMENT NUMBER:",
-    numberValid,
-  );
-
-  if (!numberValid) {
-    console.log(
-      "OWNER VALIDATION FAILED: DOCUMENT NUMBER",
-    );
-
-    return {
-      valid: false,
-      documentType,
-      displayName:
-        `${config.displayName} - Invalid or missing document number`,
-    };
-  }
-
-  /*
-  |--------------------------------------------------------------------------
-  | 3. Date validation
-  |--------------------------------------------------------------------------
-  */
-
-  if (
+  // 4. Validate date of birth from direct OCR text if required
+  const requiresDob =
     documentType === "aadhaar" ||
     documentType === "pan" ||
     documentType === "passport" ||
-    documentType === "driving-license"
-  ) {
-    const dateExists =
-      hasDate(analysis.text) ||
-      !!analysis.queryResults.DOB?.text;
+    documentType === "driving-license";
 
-    console.log(
-      "OWNER STEP 3 - DOB:",
-      dateExists,
-    );
+  let dateExists = requiresDob ? hasDate(text) : true;
 
+  // 5. If direct OCR text couldn't extract number or date, run fallback AnalyzeDocument queries
+  if ((!numberValid || (requiresDob && !dateExists)) && config.queries && config.queries.length > 0) {
+    try {
+      console.log("OWNER FALLBACK: Running Textract AnalyzeDocument queries...");
+      const analyzeResponse = await textract
+        .analyzeDocument({
+          Document: {
+            Bytes: buffer,
+          },
+          FeatureTypes: ["QUERIES"],
+          QueriesConfig: {
+            Queries: config.queries,
+          },
+        })
+        .promise();
+
+      queryResults = extractQueryResults(analyzeResponse.Blocks);
+
+      if (!numberValid) {
+        numberValid = validateDocumentNumber(documentType, text, queryResults);
+      }
+      if (requiresDob && !dateExists) {
+        dateExists = hasDate(text) || !!queryResults.DOB?.text;
+      }
+    } catch (fallbackError) {
+      console.error("Textract fallback queries error:", fallbackError);
+    }
+  }
+
+  console.log("OWNER STEP 2 - DOCUMENT NUMBER:", numberValid);
+  if (!numberValid) {
+    console.log("OWNER VALIDATION FAILED: DOCUMENT NUMBER");
+    return {
+      valid: false,
+      documentType,
+      displayName: `${config.displayName} - Invalid or missing document number`,
+    };
+  }
+
+  if (requiresDob) {
+    console.log("OWNER STEP 3 - DOB:", dateExists);
     if (!dateExists) {
-      console.log(
-        "OWNER VALIDATION FAILED: DOB",
-      );
-
+      console.log("OWNER VALIDATION FAILED: DOB");
       return {
         valid: false,
         documentType,
-        displayName:
-          `${config.displayName} - Date of birth is missing`,
+        displayName: `${config.displayName} - Date of birth is missing`,
       };
     }
   }
 
-  /*
-  |--------------------------------------------------------------------------
-  | 4. Human photo
-  |--------------------------------------------------------------------------
-  */
-
+  // 6. Photo verification
   if (config.requiresFace) {
-    console.log(
-      "OWNER STEP 4 - CHECKING FACE",
-    );
-
-    const faceExists =
-      await hasHumanFace(buffer);
-
-    console.log(
-      "OWNER STEP 4 - FACE RESULT:",
-      faceExists,
-    );
-
+    console.log("OWNER STEP 4 - CHECKING FACE RESULT:", faceExists);
     if (!faceExists) {
-      console.log(
-        "OWNER VALIDATION FAILED: FACE",
-      );
-
+      console.log("OWNER VALIDATION FAILED: FACE");
       return {
         valid: false,
         documentType,
-        displayName:
-          `${config.displayName} - Photo is missing or not visible`,
+        displayName: `${config.displayName} - Photo is missing or not visible`,
       };
     }
   }
 
-  /*
-  |--------------------------------------------------------------------------
-  | 5. QR
-  |--------------------------------------------------------------------------
-  */
-
-  if (config.requiresQr) {
-    console.log(
-      `${documentType}: QR verification can be added separately.`,
-    );
-  }
-
-  /*
-  |--------------------------------------------------------------------------
-  | 6. Passport MRZ
-  |--------------------------------------------------------------------------
-  */
-
-  if (config.requiresMrz) {
-    console.log(
-      "Passport MRZ verification can be added separately.",
-    );
-  }
-
-  /*
-  |--------------------------------------------------------------------------
-  | VALID
-  |--------------------------------------------------------------------------
-  */
-
-  console.log(
-    "OWNER DOCUMENT VALIDATION: SUCCESS",
-  );
-
+  console.log("OWNER DOCUMENT VALIDATION: SUCCESS");
   return {
     valid: true,
     documentType,
-    displayName:
-      config.displayName,
+    displayName: config.displayName,
   };
 }
 

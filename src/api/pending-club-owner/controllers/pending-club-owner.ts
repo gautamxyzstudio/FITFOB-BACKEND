@@ -74,13 +74,15 @@ async function prepareAndOptimizeImage(
         fit: "inside",
         withoutEnlargement: true,
       })
-      .jpeg({ quality, mozjpeg: true })
+      .jpeg({ quality, mozjpeg: false })
       .toBuffer();
 
     // Overwrite temp file so Strapi uploads the lightweight optimized image
     await fs.promises.writeFile(filePath, optimizedBuffer);
     rawFile.size = optimizedBuffer.length;
     rawFile.mimetype = "image/jpeg";
+    rawFile._skipCompression = true;
+    rawFile._optimized = true;
 
     return optimizedBuffer;
   } catch (err) {
@@ -91,49 +93,361 @@ async function prepareAndOptimizeImage(
 
 /* ---------------- BODY PARSER ---------------- */
 function getBody(ctx: Context) {
-  let body: any = ctx.request.body || {};
-  if (body.data && typeof body.data === "string") {
-    try {
-      body = JSON.parse(body.data);
-    } catch {}
+  const rawBody: any = ctx.request.body || {};
+  let parsed: any = {};
+  if (rawBody.data) {
+    if (typeof rawBody.data === "string") {
+      const str = rawBody.data.trim();
+      try {
+        parsed = JSON.parse(str);
+      } catch {
+        const lastBrace = str.lastIndexOf("}");
+        if (lastBrace !== -1) {
+          try {
+            parsed = JSON.parse(str.substring(0, lastBrace + 1));
+          } catch (_) {}
+        }
+      }
+    } else if (typeof rawBody.data === "object") {
+      parsed = rawBody.data;
+    }
   }
-  return body;
+  return { ...rawBody, ...parsed };
 }
 
-/* ---------------- GET LATEST DRAFT ---------------- */
-async function getDraft(userId: number) {
-  const drafts = await strapi.entityService.findMany(PENDING_UID, {
-    filters: { user: { id: userId } },
-    sort: { id: "desc" },
-    limit: 1,
-    populate: ["logo"],
+/* ---------- GET FULL USER (DIRECT SQL) ---------- */
+async function getFullUser(userId: number) {
+  const res = await strapi.db.connection.raw(
+    `SELECT 
+      id, 
+      document_id,
+      username, 
+      email, 
+      phone_number, 
+      confirmed, 
+      blocked, 
+      verification_status
+    FROM up_users 
+    WHERE id = ? 
+    LIMIT 1`,
+    [userId],
+  );
+  const row = res?.rows?.[0];
+  if (!row) return null;
+  return {
+    ...row,
+    phoneNumber: row.phone_number,
+  };
+}
+
+/* ---------- MAP DRAFT ROW ---------- */
+function mapDraftRow(row: any) {
+  if (!row) return null;
+  return {
+    id: row.id,
+    documentId: row.document_id,
+    clubName: row.club_name,
+    ownerName: row.owner_name,
+    phoneNumber: row.phone_number,
+    email: row.email,
+    latitude: row.latitude,
+    longitude: row.longitude,
+    clubAddress: row.club_address,
+    city: row.city,
+    state: row.state,
+    pincode: row.pincode,
+    currentStep: row.current_step ? Number(row.current_step) : 1,
+    status: row.status,
+    services: row.services,
+    facilities: row.facilities,
+    weekdayScheduling: row.weekday_scheduling,
+    clubCategory: row.club_category,
+    isPhoneVerified: Boolean(row.is_phone_verified),
+    isEmailVerified: Boolean(row.is_email_verified),
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+    publishedAt: row.published_at,
+  };
+}
+
+/* ---------- MAP FILE ROW ---------- */
+function mapFileRow(row: any) {
+  if (!row) return null;
+  let parsedFormats = row.formats;
+  if (typeof parsedFormats === "string") {
+    try {
+      parsedFormats = JSON.parse(parsedFormats);
+    } catch (_) {}
+  }
+  return {
+    id: row.id,
+    documentId: row.document_id,
+    name: row.name,
+    alternativeText: row.alternative_text,
+    caption: row.caption,
+    width: row.width,
+    height: row.height,
+    formats: parsedFormats,
+    hash: row.hash,
+    ext: row.ext,
+    mime: row.mime,
+    size: row.size ? Number(row.size) : null,
+    url: row.url,
+    provider: row.provider,
+  };
+}
+
+/* ---------- MAP DOCS & PHOTOS WITH FILES ---------- */
+function mapDocumentsWithFiles(rows: any[]) {
+  return rows.map((r: any) => {
+    let file = null;
+    if (r.file_id) {
+      let parsedFormats = r.file_formats;
+      if (typeof parsedFormats === "string") {
+        try {
+          parsedFormats = JSON.parse(parsedFormats);
+        } catch (_) {}
+      }
+      file = {
+        id: r.file_id,
+        documentId: r.file_document_id,
+        name: r.file_name,
+        alternativeText: r.file_alternative_text,
+        caption: r.file_caption,
+        width: r.file_width,
+        height: r.file_height,
+        formats: parsedFormats,
+        hash: r.file_hash,
+        ext: r.file_ext,
+        mime: r.file_mime,
+        size: r.file_size ? Number(r.file_size) : null,
+        url: r.file_url,
+        provider: r.file_provider,
+      };
+    }
+    return {
+      id: r.id,
+      documentId: r.document_id,
+      documentName: r.document_name,
+      createdAt: r.created_at,
+      updatedAt: r.updated_at,
+      publishedAt: r.published_at,
+      File: file,
+    };
   });
-  return drafts?.[0] || null;
 }
 
-/* ---------------- EDITABLE DRAFT GUARD ---------------- */
-async function getEditableDraft(ctx: Context) {
-  const user = ctx.state.user;
+function groupPhotosWithFiles(rows: any[]) {
+  const photoMap = new Map<number, any>();
+  for (const r of rows) {
+    if (!photoMap.has(r.id)) {
+      photoMap.set(r.id, {
+        id: r.id,
+        documentId: r.document_id,
+        imageInfo: r.image_info,
+        createdAt: r.created_at,
+        updatedAt: r.updated_at,
+        publishedAt: r.published_at,
+        images: [],
+      });
+    }
+    if (r.file_id) {
+      const photo = photoMap.get(r.id);
+      let parsedFormats = r.file_formats;
+      if (typeof parsedFormats === "string") {
+        try {
+          parsedFormats = JSON.parse(parsedFormats);
+        } catch (_) {}
+      }
+      photo.images.push({
+        id: r.file_id,
+        documentId: r.file_document_id,
+        name: r.file_name,
+        alternativeText: r.file_alternative_text,
+        caption: r.file_caption,
+        width: r.file_width,
+        height: r.file_height,
+        formats: parsedFormats,
+        hash: r.file_hash,
+        ext: r.file_ext,
+        mime: r.file_mime,
+        size: r.file_size ? Number(r.file_size) : null,
+        url: r.file_url,
+        provider: r.file_provider,
+      });
+    }
+  }
+  return Array.from(photoMap.values());
+}
 
-  if (!user) {
+/* ---------------- GET LATEST DRAFT (DIRECT SQL) ---------------- */
+async function getDraftDirect(userId: number, includeLogo = false) {
+  const res = await strapi.db.connection.raw(
+    `SELECT 
+      p.*
+    FROM pending_club_owners p
+    JOIN up_users_pending_club_owner_lnk lnk ON lnk.pending_club_owner_id = p.id
+    WHERE lnk.user_id = ?
+    ORDER BY p.id DESC
+    LIMIT 1`,
+    [userId],
+  );
+
+  const rawDraft = res?.rows?.[0];
+  if (!rawDraft) return null;
+
+  const draft: any = mapDraftRow(rawDraft);
+
+  if (includeLogo) {
+    const logoRes = await strapi.db.connection.raw(
+      `SELECT 
+        f.*
+      FROM files_related_mph frm
+      JOIN files f ON f.id = frm.file_id
+      WHERE frm.related_id = ? 
+        AND frm.related_type = 'api::pending-club-owner.pending-club-owner' 
+        AND frm.field = 'logo'
+      LIMIT 1`,
+      [draft.id],
+    );
+    draft.logo = logoRes?.rows?.[0] ? mapFileRow(logoRes.rows[0]) : null;
+  } else {
+    draft.logo = null;
+  }
+
+  return draft;
+}
+
+async function getDraft(userId: number, includeLogo = false) {
+  return getDraftDirect(userId, includeLogo);
+}
+
+/* ---------------- EDITABLE DRAFT GUARD (DIRECT SQL) ---------------- */
+async function getEditableDraft(ctx: Context, includeLogo = false) {
+  const sessionUser = ctx.state.user;
+
+  if (!sessionUser) {
     ctx.unauthorized();
     return null;
   }
 
-  let draft: any = await getDraft(user.id);
+  // Combined single query to fetch full user and latest draft
+  const res = await strapi.db.connection.raw(
+    `SELECT 
+      u.id AS user_id, 
+      u.document_id AS user_document_id,
+      u.username AS user_username, 
+      u.email AS user_email, 
+      u.phone_number AS user_phone_number, 
+      u.confirmed AS user_confirmed, 
+      u.blocked AS user_blocked, 
+      u.verification_status AS user_verification_status,
+      p.id AS draft_id,
+      p.document_id,
+      p.club_name,
+      p.owner_name,
+      p.phone_number,
+      p.email,
+      p.latitude,
+      p.longitude,
+      p.club_address,
+      p.city,
+      p.state,
+      p.pincode,
+      p.current_step,
+      p.status,
+      p.services,
+      p.facilities,
+      p.weekday_scheduling,
+      p.club_category,
+      p.is_phone_verified,
+      p.is_email_verified,
+      p.created_at,
+      p.updated_at,
+      p.published_at
+    FROM up_users u
+    LEFT JOIN up_users_pending_club_owner_lnk lnk ON lnk.user_id = u.id
+    LEFT JOIN pending_club_owners p ON p.id = lnk.pending_club_owner_id
+    WHERE u.id = ?
+    ORDER BY p.id DESC
+    LIMIT 1`,
+    [sessionUser.id],
+  );
 
-  if (!draft) {
-    const regType = getUserRegistrationType(user);
-    draft = await strapi.entityService.create(PENDING_UID, {
-      data: {
-        user: user.id,
-        status: "draft",
-        currentStep: 1,
-        isPhoneVerified: regType === "phone",
-        isEmailVerified: regType === "email",
-      },
+  const row = res?.rows?.[0];
+  if (!row) {
+    ctx.unauthorized("User not found");
+    return null;
+  }
+
+  const user = {
+    id: row.user_id,
+    documentId: row.user_document_id,
+    username: row.user_username,
+    email: row.user_email,
+    phoneNumber: row.user_phone_number,
+    confirmed: row.user_confirmed,
+    blocked: row.user_blocked,
+    verification_status: row.user_verification_status,
+  };
+
+  let draft: any = null;
+
+  if (row.draft_id) {
+    draft = mapDraftRow({
+      ...row,
+      id: row.draft_id,
     });
-    return draft;
+
+    if (includeLogo) {
+      const logoRes = await strapi.db.connection.raw(
+        `SELECT f.* FROM files_related_mph frm
+         JOIN files f ON f.id = frm.file_id
+         WHERE frm.related_id = ? 
+           AND frm.related_type = 'api::pending-club-owner.pending-club-owner' 
+           AND frm.field = 'logo'
+         LIMIT 1`,
+        [draft.id],
+      );
+      draft.logo = logoRes?.rows?.[0] ? mapFileRow(logoRes.rows[0]) : null;
+    } else {
+      draft.logo = null;
+    }
+  } else {
+    const regType = getUserRegistrationType(user);
+    const docId = Math.random().toString(36).substring(2, 26);
+    const now = new Date();
+    const isPhoneVerified = regType === "phone";
+    const isEmailVerified = regType === "email";
+
+    const insertRes = await strapi.db.connection.raw(
+      `INSERT INTO pending_club_owners (
+        document_id,
+        current_step,
+        status,
+        is_phone_verified,
+        is_email_verified,
+        created_at,
+        updated_at,
+        published_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+      RETURNING *`,
+      [docId, 1, "draft", isPhoneVerified, isEmailVerified, now, now, now],
+    );
+
+    const insertedDraft = insertRes.rows[0];
+
+    // Link with user
+    await strapi.db.connection.raw(
+      `INSERT INTO up_users_pending_club_owner_lnk (
+        user_id,
+        pending_club_owner_id
+      ) VALUES (?, ?)`,
+      [user.id, insertedDraft.id],
+    );
+
+    draft = mapDraftRow(insertedDraft);
+    draft.logo = null;
   }
 
   if (draft.status === "completed") {
@@ -141,6 +455,7 @@ async function getEditableDraft(ctx: Context) {
     return null;
   }
 
+  draft._user = user;
   return draft;
 }
 
@@ -168,18 +483,23 @@ function isPhoneOrEmailVerified(draft: any, user: any): boolean {
   }
 }
 
-async function ensureStep1Verified(ctx: Context, draft: any): Promise<boolean> {
+async function ensureStep1Verified(
+  ctx: Context,
+  draft: any,
+  cachedUser?: any,
+): Promise<boolean> {
   const sessionUser = ctx.state.user;
   if (!sessionUser) {
     ctx.unauthorized("Login required");
     return false;
   }
 
-  const user: any = await strapi.db
-    .query("plugin::users-permissions.user")
-    .findOne({
-      where: { id: sessionUser.id },
-    });
+  const user =
+    cachedUser || draft?._user || (await getFullUser(sessionUser.id));
+  if (!user) {
+    ctx.unauthorized("User not found");
+    return false;
+  }
 
   if (!isPhoneOrEmailVerified(draft, user)) {
     const regType = getUserRegistrationType(user);
@@ -194,7 +514,7 @@ async function ensureStep1Verified(ctx: Context, draft: any): Promise<boolean> {
   return true;
 }
 
-/* ---------------- SUBMISSION VALIDATION ---------------- */
+/* ---------------- SUBMISSION VALIDATION (DIRECT SQL) ---------------- */
 async function validateBeforeSubmission(draft: any, user?: any) {
   if (!draft.clubName || !draft.ownerName)
     return "Please complete owner details";
@@ -214,18 +534,27 @@ async function validateBeforeSubmission(draft: any, user?: any) {
   if (!draft.weekdayScheduling || !draft.clubCategory)
     return "Please configure your club";
 
-  const docs = await strapi.entityService.findMany(GOV_DOC_UID, {
-    filters: { pending_club_owner: { id: draft.id } },
-  });
+  const [docsRes, photosRes] = await Promise.all([
+    strapi.db.connection.raw(
+      `SELECT lnk.club_owner_document_id 
+       FROM club_owner_documents_pending_club_owner_lnk lnk 
+       WHERE lnk.pending_club_owner_id = ? 
+       LIMIT 1`,
+      [draft.id],
+    ),
+    strapi.db.connection.raw(
+      `SELECT lnk.club_photo_id 
+       FROM club_photos_pending_club_owner_lnk lnk 
+       WHERE lnk.pending_club_owner_id = ? 
+       LIMIT 1`,
+      [draft.id],
+    ),
+  ]);
 
-  if (!docs || docs.length === 0)
+  if (!docsRes.rows || docsRes.rows.length === 0)
     return "Please upload at least one government document";
 
-  const photos = await strapi.entityService.findMany(CLUB_PHOTO_UID, {
-    filters: { pending_club_owner: { id: draft.id } },
-  });
-
-  if (!photos || photos.length === 0)
+  if (!photosRes.rows || photosRes.rows.length === 0)
     return "Please upload at least one club photo";
 
   return null;
@@ -247,46 +576,55 @@ async function uploadToFolder(file: any) {
   return uploadedFiles;
 }
 
-/* ---------------- CREATE CLUB OWNER FROM PENDING DRAFT ---------------- */
-export async function createClubOwnerFromPending(userId: number) {
-  const draft: any = await strapi.db.query(PENDING_UID).findOne({
-    where: { user: userId },
-    populate: ["logo", "club_photos", "club_owner_documents"],
-  });
-
+/* ---------------- CREATE CLUB OWNER FROM PENDING DRAFT (DIRECT SQL) ---------------- */
+export async function createClubOwnerFromPending(userId: number, existingDraft?: any) {
+  const draft: any = existingDraft || (await getDraftDirect(userId, true));
   if (!draft) return null;
 
-  const existingClub = await strapi.db.query(CLUB_UID).findOne({
-    where: { user: userId },
-  });
+  const [existingRes, docsRes, photosRes, newClubId, serviceIds, facilityIds] =
+    await Promise.all([
+      strapi.db.connection.raw(
+        `SELECT c.* 
+         FROM club_owners c
+         JOIN up_users_club_owner_lnk lnk ON lnk.club_owner_id = c.id
+         WHERE lnk.user_id = ?
+         LIMIT 1`,
+        [userId],
+      ),
+      strapi.db.connection.raw(
+        `SELECT d.id 
+         FROM club_owner_documents_pending_club_owner_lnk lnk
+         JOIN club_owner_documents d ON d.id = lnk.club_owner_document_id
+         WHERE lnk.pending_club_owner_id = ?`,
+        [draft.id],
+      ),
+      strapi.db.connection.raw(
+        `SELECT p.id 
+         FROM club_photos_pending_club_owner_lnk lnk
+         JOIN club_photos p ON p.id = lnk.club_photo_id
+         WHERE lnk.pending_club_owner_id = ?`,
+        [draft.id],
+      ),
+      generateClubId(),
+      resolveClubServiceIds(
+        draft.club_services && draft.club_services.length > 0
+          ? draft.club_services
+          : draft.services,
+      ),
+      resolveClubFacilityIds(
+        draft.club_facilities && draft.club_facilities.length > 0
+          ? draft.club_facilities
+          : draft.facilities,
+      ),
+    ]);
 
-  if (existingClub) return existingClub;
-
-  const myDocs: any = await strapi.entityService.findMany(GOV_DOC_UID, {
-    filters: { pending_club_owner: { id: draft.id } },
-  });
-
-  const myPhotos: any = await strapi.entityService.findMany(CLUB_PHOTO_UID, {
-    filters: { pending_club_owner: { id: draft.id } },
-  });
+  if (existingRes?.rows?.[0]) return existingRes.rows[0];
 
   const logoId = draft.logo?.id ?? null;
-  const photoIds = (myPhotos || []).map((p: any) => p.id);
-  const docIds = (myDocs || []).map((d: any) => d.id);
+  const photoIds = (photosRes?.rows || []).map((p: any) => p.id);
+  const docIds = (docsRes?.rows || []).map((d: any) => d.id);
   const weekdayScheduling = orderWeekdayScheduling(
     normalizeWeekdayScheduling(draft.weekdayScheduling),
-  );
-  const newClubId = await generateClubId();
-
-  const serviceIds = await resolveClubServiceIds(
-    draft.club_services && draft.club_services.length > 0
-      ? draft.club_services
-      : draft.services,
-  );
-  const facilityIds = await resolveClubFacilityIds(
-    draft.club_facilities && draft.club_facilities.length > 0
-      ? draft.club_facilities
-      : draft.facilities,
   );
 
   const clubOwner = await strapi.entityService.create(CLUB_UID, {
@@ -318,20 +656,17 @@ export async function createClubOwnerFromPending(userId: number) {
     },
   });
 
-  for (const doc of myDocs) {
-    await strapi.entityService.update(GOV_DOC_UID, doc.id, {
-      data: { pending_club_owner: null },
-    });
-  }
-
-  for (const photo of myPhotos) {
-    await strapi.entityService.update(CLUB_PHOTO_UID, photo.id, {
-      data: { pending_club_owner: null },
-    });
-  }
-
-  /* ---------- DELETE PENDING ONBOARDING ---------- */
-  await strapi.entityService.delete(PENDING_UID, draft.id);
+  // Remove pending links in batch
+  await strapi.db.connection.raw(
+    `DELETE FROM club_owner_documents_pending_club_owner_lnk WHERE pending_club_owner_id = ?;
+     DELETE FROM club_photos_pending_club_owner_lnk WHERE pending_club_owner_id = ?;
+     DELETE FROM club_services_pending_club_owners_lnk WHERE pending_club_owner_id = ?;
+     DELETE FROM pending_club_owners_club_facilities_lnk WHERE pending_club_owner_id = ?;
+     DELETE FROM files_related_mph WHERE related_id = ? AND related_type = 'api::pending-club-owner.pending-club-owner';
+     DELETE FROM up_users_pending_club_owner_lnk WHERE pending_club_owner_id = ?;
+     DELETE FROM pending_club_owners WHERE id = ?;`,
+    [draft.id, draft.id, draft.id, draft.id, draft.id, draft.id, draft.id],
+  );
 
   return clubOwner;
 }
@@ -340,38 +675,103 @@ export default {
   /* ===================================================== */
   async me(ctx: Context) {
     try {
-      const user = ctx.state.user;
+      const sessionUser = ctx.state.user;
 
-      if (!user) {
+      if (!sessionUser) {
         return ctx.unauthorized("Login required");
       }
 
-      /* ================= CHECK PENDING CLUB OWNER ================= */
+      const user = await getFullUser(sessionUser.id);
+      if (!user) {
+        return ctx.unauthorized("User not found");
+      }
 
-      const draft: any = await strapi.db.query(PENDING_UID).findOne({
-        where: {
-          user: user.id,
-        },
-        populate: {
-          user: true,
-          logo: true,
-          clubPhotos: true,
-          club_owner_documents: {
-            populate: {
-              File: true,
-            },
-          },
-        },
-      });
+      /* ================= CHECK PENDING CLUB OWNER ================= */
+      const draft: any = await getDraftDirect(user.id);
 
       /* ================= PENDING CLUB OWNER EXISTS ================= */
-
       if (draft) {
         if (draft.weekdayScheduling) {
           draft.weekdayScheduling = orderWeekdayScheduling(
             draft.weekdayScheduling,
           );
         }
+
+        const [docsRes, photosRes] = await Promise.all([
+          strapi.db.connection.raw(
+            `SELECT 
+              d.id,
+              d.document_id,
+              d.document_name,
+              d.created_at,
+              d.updated_at,
+              d.published_at,
+              f.id AS file_id,
+              f.document_id AS file_document_id,
+              f.name AS file_name,
+              f.alternative_text AS file_alternative_text,
+              f.caption AS file_caption,
+              f.width AS file_width,
+              f.height AS file_height,
+              f.formats AS file_formats,
+              f.hash AS file_hash,
+              f.ext AS file_ext,
+              f.mime AS file_mime,
+              f.size AS file_size,
+              f.url AS file_url,
+              f.provider AS file_provider
+            FROM club_owner_documents_pending_club_owner_lnk lnk
+            JOIN club_owner_documents d ON d.id = lnk.club_owner_document_id
+            LEFT JOIN files_related_mph frm ON frm.related_id = d.id 
+              AND frm.related_type = 'api::club-owner-document.club-owner-document' 
+              AND frm.field = 'File'
+            LEFT JOIN files f ON f.id = frm.file_id
+            WHERE lnk.pending_club_owner_id = ?
+            ORDER BY d.created_at DESC`,
+            [draft.id],
+          ),
+          strapi.db.connection.raw(
+            `SELECT 
+              p.id,
+              p.document_id,
+              p.image_info,
+              p.created_at,
+              p.updated_at,
+              p.published_at,
+              f.id AS file_id,
+              f.document_id AS file_document_id,
+              f.name AS file_name,
+              f.alternative_text AS file_alternative_text,
+              f.caption AS file_caption,
+              f.width AS file_width,
+              f.height AS file_height,
+              f.formats AS file_formats,
+              f.hash AS file_hash,
+              f.ext AS file_ext,
+              f.mime AS file_mime,
+              f.size AS file_size,
+              f.url AS file_url,
+              f.provider AS file_provider
+            FROM club_photos_pending_club_owner_lnk lnk
+            JOIN club_photos p ON p.id = lnk.club_photo_id
+            LEFT JOIN files_related_mph frm ON frm.related_id = p.id 
+              AND frm.related_type = 'api::club-photo.club-photo' 
+              AND frm.field = 'images'
+            LEFT JOIN files f ON f.id = frm.file_id
+            WHERE lnk.pending_club_owner_id = ?
+            ORDER BY p.created_at DESC`,
+            [draft.id],
+          ),
+        ]);
+
+        const docs = mapDocumentsWithFiles(docsRes?.rows || []);
+        const photos = groupPhotosWithFiles(photosRes?.rows || []);
+
+        draft.user = user;
+        draft.club_owner_documents = docs;
+        draft.club_photos = photos;
+        draft.clubPhotos = photos;
+
         return ctx.send({
           currentStep: draft.currentStep,
           status: user.verification_status,
@@ -380,7 +780,6 @@ export default {
       }
 
       /* ================= DOES NOT EXIST ================= */
-
       return ctx.send({
         currentStep: 1,
         status: "draft",
@@ -398,26 +797,16 @@ export default {
   /* STEP 1 — CLUB + OWNER + LOGO */
   async clubOwnerDetails(ctx: Context) {
     try {
-      const draft: any = await getEditableDraft(ctx);
+      const files: any = ctx.request.files;
+      const draft: any = await getEditableDraft(ctx, Boolean(files?.logo));
       if (!draft) return;
 
-      const sessionUser = ctx.state.user;
-      if (!sessionUser) {
-        return ctx.unauthorized("Login required");
-      }
-
-      const user: any = await strapi.db
-        .query("plugin::users-permissions.user")
-        .findOne({
-          where: { id: sessionUser.id },
-        });
-
+      const user = draft._user;
       if (!user) {
         return ctx.unauthorized("User not found");
       }
 
       const body = getBody(ctx);
-      const files: any = ctx.request.files;
 
       if (!body.clubName || !body.ownerName) {
         return ctx.badRequest("Club name and Owner name are required");
@@ -459,25 +848,79 @@ export default {
       let logoId = draft.logo?.id ?? null;
 
       if (files?.logo) {
-        if (draft.logo?.id) {
-          await strapi.plugin("upload").service("upload").remove(draft.logo);
+        if (draft.logo) {
+          // Remove old logo asynchronously in background
+          strapi
+            .plugin("upload")
+            .service("upload")
+            .remove(draft.logo)
+            .catch((e: any) =>
+              strapi.log.warn("Failed to remove old logo in background:", e),
+            );
         }
+        await prepareAndOptimizeImage(files.logo, 1600, 85);
         const uploaded = await uploadToFolder(files.logo);
         logoId = uploaded[0].id;
-      }
 
-      await strapi.entityService.update(PENDING_UID, draft.id, {
-        data: {
-          clubName: body.clubName,
-          ownerName: body.ownerName,
-          phoneNumber: submittedPhone,
-          email: submittedEmail,
-          logo: logoId,
-          isPhoneVerified: true,
-          isEmailVerified: true,
-          currentStep: Math.max(draft.currentStep || 1, 2),
-        },
-      });
+        // Manage files_related_mph and draft update concurrently
+        const pLogo = (async () => {
+          await strapi.db.connection.raw(
+            `DELETE FROM files_related_mph 
+             WHERE related_id = ? 
+               AND related_type = 'api::pending-club-owner.pending-club-owner' 
+               AND field = 'logo'`,
+            [draft.id],
+          );
+          await strapi.db.connection.raw(
+            `INSERT INTO files_related_mph (
+              file_id, related_id, related_type, field, "order"
+            ) VALUES (?, ?, 'api::pending-club-owner.pending-club-owner', 'logo', 1)`,
+            [logoId, draft.id],
+          );
+        })();
+
+        const pDraft = strapi.db.connection.raw(
+          `UPDATE pending_club_owners
+           SET club_name = ?,
+               owner_name = ?,
+               phone_number = ?,
+               email = ?,
+               is_phone_verified = true,
+               is_email_verified = true,
+               current_step = GREATEST(COALESCE(current_step, 1), 2),
+               updated_at = NOW()
+           WHERE id = ?`,
+          [
+            body.clubName,
+            body.ownerName,
+            submittedPhone,
+            submittedEmail,
+            draft.id,
+          ],
+        );
+
+        await Promise.all([pLogo, pDraft]);
+      } else {
+        await strapi.db.connection.raw(
+          `UPDATE pending_club_owners
+           SET club_name = ?,
+               owner_name = ?,
+               phone_number = ?,
+               email = ?,
+               is_phone_verified = true,
+               is_email_verified = true,
+               current_step = GREATEST(COALESCE(current_step, 1), 2),
+               updated_at = NOW()
+           WHERE id = ?`,
+          [
+            body.clubName,
+            body.ownerName,
+            submittedPhone,
+            submittedEmail,
+            draft.id,
+          ],
+        );
+      }
 
       return ctx.send({
         nextStep: 2,
@@ -498,15 +941,7 @@ export default {
       const draft: any = await getEditableDraft(ctx);
       if (!draft) return;
 
-      const sessionUser = ctx.state.user;
-      if (!sessionUser) return ctx.unauthorized("Login required");
-
-      const user: any = await strapi.db
-        .query("plugin::users-permissions.user")
-        .findOne({
-          where: { id: sessionUser.id },
-        });
-
+      const user = draft._user;
       if (!user) return ctx.unauthorized("User not found");
 
       const regType = getUserRegistrationType(user);
@@ -552,44 +987,55 @@ export default {
         ? String(rawIdentifier).trim().toLowerCase()
         : normalizePhone(String(rawIdentifier).trim());
 
-      // Save identifier to draft so draft stays in sync
-      const draftUpdateData: any = {};
+      // Save identifier to draft so draft stays in sync via direct SQL
       if (isEmail) {
-        draftUpdateData.email = identifier;
-        if (draft.email !== identifier) {
-          draftUpdateData.isEmailVerified = false;
-        }
+        await strapi.db.connection.raw(
+          `UPDATE pending_club_owners 
+           SET email = ?, 
+               is_email_verified = CASE WHEN email = ? THEN is_email_verified ELSE false END,
+               updated_at = NOW() 
+           WHERE id = ?`,
+          [identifier, identifier, draft.id],
+        );
       } else {
-        draftUpdateData.phoneNumber = identifier;
-        if (draft.phoneNumber !== identifier) {
-          draftUpdateData.isPhoneVerified = false;
-        }
+        await strapi.db.connection.raw(
+          `UPDATE pending_club_owners 
+           SET phone_number = ?, 
+               is_phone_verified = CASE WHEN phone_number = ? THEN is_phone_verified ELSE false END,
+               updated_at = NOW() 
+           WHERE id = ?`,
+          [identifier, identifier, draft.id],
+        );
       }
-      await strapi.entityService.update(PENDING_UID, draft.id, {
-        data: draftUpdateData,
-      });
 
       const otp = generateOtp();
       const otpHash = await bcrypt.hash(otp, 10);
+      const expiresAt = new Date(Date.now() + 2 * 60 * 1000);
+      const docId = Math.random().toString(36).substring(2, 26);
+      const now = new Date();
 
-      await strapi.db.query("api::otp-request.otp-request").deleteMany({
-        where: {
-          identifier,
-          purpose: "club_owner_verification",
-        },
-      });
+      await strapi.db.connection.raw(
+        `DELETE FROM otp_requests 
+         WHERE identifier = ? AND purpose = 'club_owner_verification'`,
+        [identifier],
+      );
 
-      await strapi.entityService.create("api::otp-request.otp-request", {
-        data: {
+      await strapi.db.connection.raw(
+        `INSERT INTO otp_requests (
+          document_id,
           identifier,
-          otp_hash: otpHash,
-          expires_at: new Date(Date.now() + 2 * 60 * 1000),
-          attempts: 0,
-          verified: false,
-          purpose: "club_owner_verification",
-          last_sent_at: new Date(),
-        },
-      });
+          otp_hash,
+          expires_at,
+          attempts,
+          verified,
+          purpose,
+          last_sent_at,
+          created_at,
+          updated_at,
+          published_at
+        ) VALUES (?, ?, ?, ?, 0, false, 'club_owner_verification', ?, ?, ?, ?)`,
+        [docId, identifier, otpHash, expiresAt, now, now, now, now],
+      );
 
       if (isEmail) {
         try {
@@ -656,15 +1102,7 @@ export default {
       const draft: any = await getEditableDraft(ctx);
       if (!draft) return;
 
-      const sessionUser = ctx.state.user;
-      if (!sessionUser) return ctx.unauthorized("Login required");
-
-      const user: any = await strapi.db
-        .query("plugin::users-permissions.user")
-        .findOne({
-          where: { id: sessionUser.id },
-        });
-
+      const user = draft._user;
       if (!user) return ctx.unauthorized("User not found");
 
       const body = getBody(ctx);
@@ -717,69 +1155,73 @@ export default {
         ? identifier.toLowerCase()
         : normalizePhone(identifier);
 
-      const record = await strapi.db
-        .query("api::otp-request.otp-request")
-        .findOne({
-          where: {
-            identifier,
-            purpose: "club_owner_verification",
-          },
-          orderBy: { createdAt: "desc" },
-        });
+      const recordRes = await strapi.db.connection.raw(
+        `SELECT id, otp_hash, expires_at, attempts 
+         FROM otp_requests 
+         WHERE identifier = ? AND purpose = 'club_owner_verification' 
+         ORDER BY created_at DESC 
+         LIMIT 1`,
+        [identifier],
+      );
+
+      const record = recordRes?.rows?.[0];
 
       if (!record) {
         return ctx.badRequest("OTP not found. Please request a new OTP.");
       }
 
       if (new Date(record.expires_at).getTime() < Date.now()) {
-        await strapi.db.query("api::otp-request.otp-request").delete({
-          where: { id: record.id },
-        });
+        await strapi.db.connection.raw(
+          `DELETE FROM otp_requests WHERE id = ?`,
+          [record.id],
+        );
         return ctx.badRequest("OTP expired. Please resend OTP.");
       }
 
       const valid = await bcrypt.compare(otp, record.otp_hash);
       if (!valid) {
-        await strapi.db.query("api::otp-request.otp-request").update({
-          where: { id: record.id },
-          data: { attempts: (record.attempts || 0) + 1 },
-        });
+        await strapi.db.connection.raw(
+          `UPDATE otp_requests SET attempts = attempts + 1, updated_at = NOW() WHERE id = ?`,
+          [record.id],
+        );
         return ctx.badRequest("Invalid OTP");
       }
 
       // Delete consumed OTP
-      await strapi.db.query("api::otp-request.otp-request").delete({
-        where: { id: record.id },
-      });
+      await strapi.db.connection.raw(
+        `DELETE FROM otp_requests WHERE id = ?`,
+        [record.id],
+      );
 
       const hasCompletedStep1Details = Boolean(
         draft.clubName && draft.ownerName,
       );
 
-      // Update pending draft (do NOT modify user record)
-      const updateData: any = {
-        currentStep: hasCompletedStep1Details
-          ? Math.max(draft.currentStep || 1, 2)
-          : (draft.currentStep || 1),
-      };
-
-      if (regType === "email") {
-        updateData.isEmailVerified = true;
-      } else {
-        updateData.isPhoneVerified = true;
-      }
+      const nextStepVal = hasCompletedStep1Details
+        ? Math.max(draft.currentStep || 1, 2)
+        : draft.currentStep || 1;
 
       if (isEmail) {
-        updateData.isEmailVerified = true;
-        updateData.email = identifier;
+        await strapi.db.connection.raw(
+          `UPDATE pending_club_owners 
+           SET is_email_verified = true, 
+               email = ?, 
+               current_step = ?, 
+               updated_at = NOW() 
+           WHERE id = ?`,
+          [identifier, nextStepVal, draft.id],
+        );
       } else {
-        updateData.isPhoneVerified = true;
-        updateData.phoneNumber = identifier;
+        await strapi.db.connection.raw(
+          `UPDATE pending_club_owners 
+           SET is_phone_verified = true, 
+               phone_number = ?, 
+               current_step = ?, 
+               updated_at = NOW() 
+           WHERE id = ?`,
+          [identifier, nextStepVal, draft.id],
+        );
       }
-
-      await strapi.entityService.update(PENDING_UID, draft.id, {
-        data: updateData,
-      });
 
       return ctx.send({
         verified: true,
@@ -802,15 +1244,7 @@ export default {
       const draft: any = await getEditableDraft(ctx);
       if (!draft) return;
 
-      const sessionUser = ctx.state.user;
-      if (!sessionUser) return ctx.unauthorized("Login required");
-
-      const user: any = await strapi.db
-        .query("plugin::users-permissions.user")
-        .findOne({
-          where: { id: sessionUser.id },
-        });
-
+      const user = draft._user;
       if (!user) return ctx.unauthorized("User not found");
 
       const regType = getUserRegistrationType(user);
@@ -856,16 +1290,17 @@ export default {
         ? identifier.toLowerCase()
         : normalizePhone(identifier);
 
-      // Check cooldown (30 seconds)
-      const existing = await strapi.db
-        .query("api::otp-request.otp-request")
-        .findOne({
-          where: {
-            identifier,
-            purpose: "club_owner_verification",
-          },
-          orderBy: { createdAt: "desc" },
-        });
+      // Check cooldown (30 seconds) via direct SQL
+      const existingRes = await strapi.db.connection.raw(
+        `SELECT id, last_sent_at 
+         FROM otp_requests 
+         WHERE identifier = ? AND purpose = 'club_owner_verification' 
+         ORDER BY created_at DESC 
+         LIMIT 1`,
+        [identifier],
+      );
+
+      const existing = existingRes?.rows?.[0];
 
       if (existing?.last_sent_at) {
         const now = Date.now();
@@ -879,25 +1314,32 @@ export default {
 
       const otp = generateOtp();
       const otpHash = await bcrypt.hash(otp, 10);
+      const expiresAt = new Date(Date.now() + 2 * 60 * 1000);
+      const docId = Math.random().toString(36).substring(2, 26);
+      const now = new Date();
 
-      await strapi.db.query("api::otp-request.otp-request").deleteMany({
-        where: {
-          identifier,
-          purpose: "club_owner_verification",
-        },
-      });
+      await strapi.db.connection.raw(
+        `DELETE FROM otp_requests 
+         WHERE identifier = ? AND purpose = 'club_owner_verification'`,
+        [identifier],
+      );
 
-      await strapi.entityService.create("api::otp-request.otp-request", {
-        data: {
+      await strapi.db.connection.raw(
+        `INSERT INTO otp_requests (
+          document_id,
           identifier,
-          otp_hash: otpHash,
-          expires_at: new Date(Date.now() + 2 * 60 * 1000),
-          attempts: 0,
-          verified: false,
-          purpose: "club_owner_verification",
-          last_sent_at: new Date(),
-        },
-      });
+          otp_hash,
+          expires_at,
+          attempts,
+          verified,
+          purpose,
+          last_sent_at,
+          created_at,
+          updated_at,
+          published_at
+        ) VALUES (?, ?, ?, ?, 0, false, 'club_owner_verification', ?, ?, ?, ?)`,
+        [docId, identifier, otpHash, expiresAt, now, now, now, now],
+      );
 
       if (isEmail) {
         try {
@@ -958,13 +1400,15 @@ export default {
 
     const body = getBody(ctx);
 
-    await strapi.entityService.update(PENDING_UID, draft.id, {
-      data: {
-        latitude: body.latitude,
-        longitude: body.longitude,
-        currentStep: Math.max(draft.currentStep || 1, 3),
-      },
-    });
+    await strapi.db.connection.raw(
+      `UPDATE pending_club_owners 
+       SET latitude = ?, 
+           longitude = ?, 
+           current_step = GREATEST(COALESCE(current_step, 1), 3),
+           updated_at = NOW() 
+       WHERE id = ?`,
+      [body.latitude, body.longitude, draft.id],
+    );
 
     ctx.send({ nextStep: 3 });
   },
@@ -978,22 +1422,24 @@ export default {
 
     const body = getBody(ctx);
 
-    await strapi.entityService.update(PENDING_UID, draft.id, {
-      data: {
-        clubAddress: body.clubAddress,
-        city: body.city,
-        state: body.state,
-        pincode: body.pincode,
-        currentStep: Math.max(draft.currentStep || 1, 4),
-      },
-    });
+    await strapi.db.connection.raw(
+      `UPDATE pending_club_owners 
+       SET club_address = ?, 
+           city = ?, 
+           state = ?, 
+           pincode = ?, 
+           current_step = GREATEST(COALESCE(current_step, 1), 4),
+           updated_at = NOW() 
+       WHERE id = ?`,
+      [body.clubAddress, body.city, body.state, body.pincode, draft.id],
+    );
 
     ctx.send({ nextStep: 4 });
   },
 
   /* ===================================================== */
   async configureClub(ctx: Context) {
-    const draft: any = await getEditableDraft(ctx);
+    const draft: any = await getEditableDraft(ctx, false);
     if (!draft) return;
 
     if (!(await ensureStep1Verified(ctx, draft))) return;
@@ -1003,39 +1449,87 @@ export default {
     if (!allowedCategories.includes(body.clubCategory))
       return ctx.badRequest("Invalid club category");
 
-    const serviceIds = await resolveClubServiceIds(
-      body.club_services || body.services,
+    const [serviceIds, facilityIds] = await Promise.all([
+      resolveClubServiceIds(body.club_services || body.services),
+      resolveClubFacilityIds(body.club_facilities || body.facilities),
+    ]);
+
+    const normScheduling = normalizeWeekdayScheduling(body.weekdayScheduling);
+
+    // 1. Update pending draft
+    const pUpdate = strapi.db.connection.raw(
+      `UPDATE pending_club_owners 
+       SET services = ?::jsonb, 
+           facilities = ?::jsonb, 
+           weekday_scheduling = ?::jsonb, 
+           club_category = ?, 
+           current_step = GREATEST(COALESCE(current_step, 1), 5), 
+           updated_at = NOW() 
+       WHERE id = ?`,
+      [
+        JSON.stringify(body.services || null),
+        JSON.stringify(body.facilities || null),
+        JSON.stringify(normScheduling || null),
+        body.clubCategory,
+        draft.id,
+      ],
     );
-    const facilityIds = await resolveClubFacilityIds(
-      body.club_facilities || body.facilities,
-    );
 
-    const updateData: any = {
-      services: body.services,
-      facilities: body.facilities,
-      weekdayScheduling: normalizeWeekdayScheduling(body.weekdayScheduling),
-      clubCategory: body.clubCategory,
-      currentStep: Math.max(draft.currentStep || 1, 5),
-    };
+    // 2. Services batch link
+    const pServices = (async () => {
+      if (
+        serviceIds.length > 0 ||
+        Array.isArray(body.services) ||
+        Array.isArray(body.club_services)
+      ) {
+        await strapi.db.connection.raw(
+          `DELETE FROM club_services_pending_club_owners_lnk WHERE pending_club_owner_id = ?`,
+          [draft.id],
+        );
+        if (serviceIds.length > 0) {
+          const placeholders = serviceIds.map(() => `(?, ?, ?, ?)`).join(", ");
+          const params: any[] = [];
+          serviceIds.forEach((sid: number, i: number) => {
+            params.push(sid, draft.id, i + 1, i + 1);
+          });
+          await strapi.db.connection.raw(
+            `INSERT INTO club_services_pending_club_owners_lnk (
+              club_service_id, pending_club_owner_id, pending_club_owner_ord, club_service_ord
+            ) VALUES ${placeholders}`,
+            params,
+          );
+        }
+      }
+    })();
 
-    if (
-      serviceIds.length > 0 ||
-      Array.isArray(body.services) ||
-      Array.isArray(body.club_services)
-    ) {
-      updateData.club_services = serviceIds;
-    }
-    if (
-      facilityIds.length > 0 ||
-      Array.isArray(body.facilities) ||
-      Array.isArray(body.club_facilities)
-    ) {
-      updateData.club_facilities = facilityIds;
-    }
+    // 3. Facilities batch link
+    const pFacilities = (async () => {
+      if (
+        facilityIds.length > 0 ||
+        Array.isArray(body.facilities) ||
+        Array.isArray(body.club_facilities)
+      ) {
+        await strapi.db.connection.raw(
+          `DELETE FROM pending_club_owners_club_facilities_lnk WHERE pending_club_owner_id = ?`,
+          [draft.id],
+        );
+        if (facilityIds.length > 0) {
+          const placeholders = facilityIds.map(() => `(?, ?, ?, ?)`).join(", ");
+          const params: any[] = [];
+          facilityIds.forEach((fid: number, i: number) => {
+            params.push(draft.id, fid, i + 1, i + 1);
+          });
+          await strapi.db.connection.raw(
+            `INSERT INTO pending_club_owners_club_facilities_lnk (
+              pending_club_owner_id, club_facility_id, club_facility_ord, pending_club_owner_ord
+            ) VALUES ${placeholders}`,
+            params,
+          );
+        }
+      }
+    })();
 
-    await strapi.entityService.update(PENDING_UID, draft.id, {
-      data: updateData,
-    });
+    await Promise.all([pUpdate, pServices, pFacilities]);
 
     ctx.send({ nextStep: 5 });
   },
@@ -1043,7 +1537,7 @@ export default {
   /* ===================================================== */
   /* STEP 5A — VERIFY GOVERNMENT DOCUMENT AUTHENTICITY */
   async verifyGovernmentDoc(ctx: Context) {
-    const draft: any = await getEditableDraft(ctx);
+    const draft: any = await getEditableDraft(ctx, false);
     if (!draft) return;
 
     if (!(await ensureStep1Verified(ctx, draft))) return;
@@ -1081,7 +1575,7 @@ export default {
 
   /* ===================================================== */
   async uploadGovernmentDoc(ctx: Context) {
-    const draft: any = await getEditableDraft(ctx);
+    const draft: any = await getEditableDraft(ctx, false);
     if (!draft) return;
 
     if (!(await ensureStep1Verified(ctx, draft))) return;
@@ -1093,46 +1587,105 @@ export default {
     if (!body.documentName) return ctx.badRequest("Document name required");
 
     /* ---------- CHECK IF SAME DOCUMENT ALREADY EXISTS ---------- */
-    const existingDoc: any = await strapi.entityService.findMany(GOV_DOC_UID, {
-      filters: {
-        pending_club_owner: { id: draft.id },
-        documentName: body.documentName,
-      },
-      populate: ["File"],
-      limit: 1,
-    });
+    const existingRes = await strapi.db.connection.raw(
+      `SELECT 
+        d.id,
+        d.document_id,
+        f.id AS file_id,
+        f.url AS file_url,
+        f.provider,
+        f.hash,
+        f.ext,
+        f.mime
+      FROM club_owner_documents_pending_club_owner_lnk lnk
+      JOIN club_owner_documents d ON d.id = lnk.club_owner_document_id
+      LEFT JOIN files_related_mph frm ON frm.related_id = d.id 
+        AND frm.related_type = 'api::club-owner-document.club-owner-document' 
+        AND frm.field = 'File'
+      LEFT JOIN files f ON f.id = frm.file_id
+      WHERE lnk.pending_club_owner_id = ? AND d.document_name = ?
+      LIMIT 1`,
+      [draft.id, body.documentName],
+    );
+
+    const existingDoc = existingRes?.rows?.[0];
 
     /* ---------- UPLOAD NEW FILE ---------- */
+    await prepareAndOptimizeImage(file, 1600, 85);
     const uploaded = await uploadToFolder(file);
     const fileId = uploaded[0].id;
 
     /* ---------- REPLACE OR CREATE ---------- */
-    if (existingDoc.length > 0) {
-      // remove old file from server
-      if (existingDoc[0].File) {
-        await strapi
+    if (existingDoc) {
+      // remove old file from server in background
+      if (existingDoc.file_id) {
+        strapi
           .plugin("upload")
           .service("upload")
-          .remove(existingDoc[0].File);
+          .remove({
+            id: existingDoc.file_id,
+            provider: existingDoc.provider,
+            url: existingDoc.file_url,
+            hash: existingDoc.hash,
+            ext: existingDoc.ext,
+            mime: existingDoc.mime,
+          })
+          .catch((e: any) =>
+            strapi.log.warn("Failed to remove old doc file in background:", e),
+          );
       }
 
-      // update existing DB record
-      await strapi.entityService.update(GOV_DOC_UID, existingDoc[0].id, {
-        data: {
-          File: fileId,
-        },
-      });
+      // update existing DB record relation in files_related_mph
+      const pLnk = (async () => {
+        await strapi.db.connection.raw(
+          `DELETE FROM files_related_mph 
+           WHERE related_id = ? 
+             AND related_type = 'api::club-owner-document.club-owner-document' 
+             AND field = 'File'`,
+          [existingDoc.id],
+        );
+        await strapi.db.connection.raw(
+          `INSERT INTO files_related_mph (
+            file_id, related_id, related_type, field, "order"
+          ) VALUES (?, ?, 'api::club-owner-document.club-owner-document', 'File', 1)`,
+          [fileId, existingDoc.id],
+        );
+      })();
+
+      const pDoc = strapi.db.connection.raw(
+        `UPDATE club_owner_documents SET updated_at = NOW() WHERE id = ?`,
+        [existingDoc.id],
+      );
+
+      await Promise.all([pLnk, pDoc]);
 
       ctx.send({ message: "Document replaced" });
     } else {
       // create first time
-      await strapi.entityService.create(GOV_DOC_UID, {
-        data: {
-          documentName: body.documentName,
-          File: fileId,
-          pending_club_owner: draft.id,
-        },
-      });
+      const docId = Math.random().toString(36).substring(2, 26);
+      const insertRes = await strapi.db.connection.raw(
+        `INSERT INTO club_owner_documents (
+          document_id, document_name, created_at, updated_at, published_at
+        ) VALUES (?, ?, NOW(), NOW(), NOW())
+        RETURNING id`,
+        [docId, body.documentName],
+      );
+      const newDocId = insertRes.rows[0].id;
+
+      await Promise.all([
+        strapi.db.connection.raw(
+          `INSERT INTO club_owner_documents_pending_club_owner_lnk (
+            club_owner_document_id, pending_club_owner_id, club_owner_document_ord
+          ) VALUES (?, ?, 1)`,
+          [newDocId, draft.id],
+        ),
+        strapi.db.connection.raw(
+          `INSERT INTO files_related_mph (
+            file_id, related_id, related_type, field, "order"
+          ) VALUES (?, ?, 'api::club-owner-document.club-owner-document', 'File', 1)`,
+          [fileId, newDocId],
+        ),
+      ]);
 
       ctx.send({ message: "Document uploaded" });
     }
@@ -1141,29 +1694,40 @@ export default {
   async getMyDocuments(ctx: Context) {
     const user = ctx.state.user;
     if (!user) {
-      console.log("❌ No user found in ctx.state");
       return ctx.unauthorized();
     }
 
-    // get draft
-    const draft: any = await getDraft(user.id);
+    const draft: any = await getDraftDirect(user.id);
     if (!draft) {
-      console.log("No draft found");
       return ctx.send({ data: [] });
     }
 
-    // fetch documents
-    const docs: any = await strapi.entityService.findMany(GOV_DOC_UID, {
-      filters: { pending_club_owner: { id: draft.id } },
-      populate: ["File"],
-      sort: { createdAt: "desc" },
-    });
+    const docsRes = await strapi.db.connection.raw(
+      `SELECT 
+        d.document_id,
+        d.document_name,
+        d.created_at,
+        f.url AS file_url
+      FROM club_owner_documents_pending_club_owner_lnk lnk
+      JOIN club_owner_documents d ON d.id = lnk.club_owner_document_id
+      LEFT JOIN files_related_mph frm ON frm.related_id = d.id 
+        AND frm.related_type = 'api::club-owner-document.club-owner-document' 
+        AND frm.field = 'File'
+      LEFT JOIN files f ON f.id = frm.file_id
+      WHERE lnk.pending_club_owner_id = ?
+      ORDER BY d.created_at DESC`,
+      [draft.id],
+    );
 
-    const response = docs.map((d: any) => ({
-      documentId: d.documentId,
-      name: d.documentName,
-      uploadedAt: d.createdAt,
-      fileUrl: d.File ? `${strapi.config.server.url}${d.File.url}` : null,
+    const response = (docsRes?.rows || []).map((d: any) => ({
+      documentId: d.document_id,
+      name: d.document_name,
+      uploadedAt: d.created_at,
+      fileUrl: d.file_url
+        ? d.file_url.startsWith("http")
+          ? d.file_url
+          : `${strapi.config.server.url}${d.file_url}`
+        : null,
     }));
 
     ctx.send({ data: response });
@@ -1176,9 +1740,13 @@ export default {
 
     if (!(await ensureStep1Verified(ctx, draft))) return;
 
-    await strapi.entityService.update(PENDING_UID, draft.id, {
-      data: { currentStep: Math.max(draft.currentStep || 1, 6) },
-    });
+    await strapi.db.connection.raw(
+      `UPDATE pending_club_owners 
+       SET current_step = GREATEST(COALESCE(current_step, 1), 6),
+           updated_at = NOW() 
+       WHERE id = ?`,
+      [draft.id],
+    );
 
     ctx.send({ nextStep: 6 });
   },
@@ -1186,7 +1754,7 @@ export default {
   /* ===================================================== */
   /* STEP 6A — UPLOAD SINGLE CLUB PHOTO WITH TEXT (CAN CALL MULTIPLE TIMES) */
   async uploadClubPhoto(ctx: Context) {
-    const draft: any = await getEditableDraft(ctx);
+    const draft: any = await getEditableDraft(ctx, false);
     if (!draft) return;
 
     if (!(await ensureStep1Verified(ctx, draft))) return;
@@ -1204,21 +1772,55 @@ export default {
 
     if (!photoFile) return ctx.badRequest("Please upload a club photo");
 
+    await prepareAndOptimizeImage(photoFile, 1600, 85);
     const uploadedPhotos = await uploadToFolder(photoFile);
     const photoIds = uploadedPhotos.map((f: any) => f.id);
 
-    // Create club photo entry in club_photos collection with imageInfo and uploaded images
-    const newPhoto: any = await strapi.entityService.create(CLUB_PHOTO_UID, {
-      data: {
-        imageInfo: body.imageInfo || body.description || "",
-        images: photoIds,
-        pending_club_owner: draft.id,
-      },
-      populate: ["images"],
-    });
+    const docId = Math.random().toString(36).substring(2, 26);
+    const imageInfo = body.imageInfo || body.description || "";
 
-    const fileUrl = newPhoto.images?.[0]
-      ? `${strapi.config.server.url}${newPhoto.images[0].url}`
+    const insertRes = await strapi.db.connection.raw(
+      `INSERT INTO club_photos (
+        document_id, image_info, created_at, updated_at, published_at
+      ) VALUES (?, ?, NOW(), NOW(), NOW())
+      RETURNING id, document_id, image_info, created_at`,
+      [docId, imageInfo],
+    );
+
+    const newPhoto = insertRes.rows[0];
+
+    const pLink = strapi.db.connection.raw(
+      `INSERT INTO club_photos_pending_club_owner_lnk (
+        club_photo_id, pending_club_owner_id, club_photo_ord
+      ) VALUES (?, ?, 1)`,
+      [newPhoto.id, draft.id],
+    );
+
+    const pFiles = (async () => {
+      if (photoIds.length > 0) {
+        const placeholders = photoIds
+          .map(() => `(?, ?, 'api::club-photo.club-photo', 'images', ?)`)
+          .join(", ");
+        const params: any[] = [];
+        photoIds.forEach((pid: number, i: number) => {
+          params.push(pid, newPhoto.id, i + 1);
+        });
+        await strapi.db.connection.raw(
+          `INSERT INTO files_related_mph (
+            file_id, related_id, related_type, field, "order"
+          ) VALUES ${placeholders}`,
+          params,
+        );
+      }
+    })();
+
+    await Promise.all([pLink, pFiles]);
+
+    const firstImg = uploadedPhotos[0];
+    const fileUrl = firstImg?.url
+      ? firstImg.url.startsWith("http")
+        ? firstImg.url
+        : `${strapi.config.server.url}${firstImg.url}`
       : null;
 
     ctx.send({
@@ -1226,10 +1828,10 @@ export default {
       message: "Club photo uploaded successfully",
       photo: {
         id: newPhoto.id,
-        documentId: newPhoto.documentId,
-        imageInfo: newPhoto.imageInfo,
+        documentId: newPhoto.document_id,
+        imageInfo: newPhoto.image_info,
         fileUrl,
-        images: newPhoto.images,
+        images: uploadedPhotos,
       },
     });
   },
@@ -1242,24 +1844,38 @@ export default {
       return ctx.unauthorized();
     }
 
-    const draft: any = await getDraft(user.id);
+    const draft: any = await getDraftDirect(user.id);
     if (!draft) {
       return ctx.send({ data: [] });
     }
 
-    const photos: any = await strapi.entityService.findMany(CLUB_PHOTO_UID, {
-      filters: { pending_club_owner: { id: draft.id } },
-      populate: ["images"],
-      sort: { createdAt: "desc" },
-    });
+    const photosRes = await strapi.db.connection.raw(
+      `SELECT 
+        p.id,
+        p.document_id,
+        p.image_info,
+        p.created_at,
+        f.url AS file_url
+      FROM club_photos_pending_club_owner_lnk lnk
+      JOIN club_photos p ON p.id = lnk.club_photo_id
+      LEFT JOIN files_related_mph frm ON frm.related_id = p.id 
+        AND frm.related_type = 'api::club-photo.club-photo' 
+        AND frm.field = 'images'
+      LEFT JOIN files f ON f.id = frm.file_id
+      WHERE lnk.pending_club_owner_id = ?
+      ORDER BY p.created_at DESC`,
+      [draft.id],
+    );
 
-    const response = (photos || []).map((p: any) => ({
+    const response = (photosRes?.rows || []).map((p: any) => ({
       id: p.id,
-      documentId: p.documentId,
-      imageInfo: p.imageInfo,
-      uploadedAt: p.createdAt,
-      fileUrl: p.images?.[0]
-        ? `${strapi.config.server.url}${p.images[0].url}`
+      documentId: p.document_id,
+      imageInfo: p.image_info,
+      uploadedAt: p.created_at,
+      fileUrl: p.file_url
+        ? p.file_url.startsWith("http")
+          ? p.file_url
+          : `${strapi.config.server.url}${p.file_url}`
         : null,
     }));
 
@@ -1275,27 +1891,74 @@ export default {
     const { id } = ctx.params;
     if (!id) return ctx.badRequest("Photo documentId is required");
 
-    const photo: any = await strapi.db.query(CLUB_PHOTO_UID).findOne({
-      where: {
-        $or: [{ documentId: id }, { id: isNaN(Number(id)) ? -1 : Number(id) }],
-        pending_club_owner: draft.id,
-      },
-      populate: ["images", "pending_club_owner"],
-    });
+    const numId = isNaN(Number(id)) ? -1 : Number(id);
 
-    if (!photo) {
+    const photosRes = await strapi.db.connection.raw(
+      `SELECT 
+        p.id,
+        p.document_id,
+        f.id AS file_id,
+        f.provider,
+        f.url,
+        f.hash,
+        f.ext,
+        f.mime
+      FROM club_photos p
+      JOIN club_photos_pending_club_owner_lnk lnk ON lnk.club_photo_id = p.id
+      LEFT JOIN files_related_mph frm ON frm.related_id = p.id 
+        AND frm.related_type = 'api::club-photo.club-photo' 
+        AND frm.field = 'images'
+      LEFT JOIN files f ON f.id = frm.file_id
+      WHERE lnk.pending_club_owner_id = ? 
+        AND (p.document_id = ? OR p.id = ?)`,
+      [draft.id, String(id), numId],
+    );
+
+    const rows = photosRes?.rows || [];
+    if (rows.length === 0) {
       return ctx.notFound("Club photo not found");
     }
 
-    if (photo.images && Array.isArray(photo.images)) {
-      for (const img of photo.images) {
-        await strapi.plugin("upload").service("upload").remove(img);
-      }
-    } else if (photo.images) {
-      await strapi.plugin("upload").service("upload").remove(photo.images);
+    const photoId = rows[0].id;
+    const fileObjs = rows
+      .filter((r: any) => r.file_id)
+      .map((r: any) => ({
+        id: r.file_id,
+        provider: r.provider,
+        url: r.url,
+        hash: r.hash,
+        ext: r.ext,
+        mime: r.mime,
+      }));
+
+    // Non-blocking file removal
+    if (fileObjs.length > 0) {
+      (async () => {
+        for (const fileObj of fileObjs) {
+          try {
+            await strapi.plugin("upload").service("upload").remove(fileObj);
+          } catch (e) {
+            strapi.log.warn(
+              "Failed to remove club photo file in background:",
+              e,
+            );
+          }
+        }
+      })();
     }
 
-    await strapi.entityService.delete(CLUB_PHOTO_UID, photo.id);
+    await strapi.db.connection.raw(
+      `DELETE FROM club_photos_pending_club_owner_lnk WHERE club_photo_id = ?`,
+      [photoId],
+    );
+    await strapi.db.connection.raw(
+      `DELETE FROM files_related_mph WHERE related_id = ? AND related_type = 'api::club-photo.club-photo'`,
+      [photoId],
+    );
+    await strapi.db.connection.raw(
+      `DELETE FROM club_photos WHERE id = ?`,
+      [photoId],
+    );
 
     ctx.send({ success: true, message: "Club photo deleted successfully" });
   },
@@ -1303,26 +1966,25 @@ export default {
   /* ===================================================== */
   /* STEP 6 FINAL — CONFIRM ONBOARDING & SEND FOR APPROVAL */
   async uploadClubPhotos(ctx: Context) {
-    const draft: any = await getEditableDraft(ctx);
+    const draft: any = await getEditableDraft(ctx, true);
     if (!draft) return;
 
-    const user = ctx.state.user;
-    const fullUser = await strapi.db
-      .query("plugin::users-permissions.user")
-      .findOne({ where: { id: user.id } });
+    const fullUser = draft._user;
 
     const validationError = await validateBeforeSubmission(draft, fullUser);
     if (validationError) return ctx.badRequest(validationError);
 
-    await strapi.entityService.update(PENDING_UID, draft.id, {
-      data: {
-        status: "completed",
-        currentStep: 6,
-      },
-    });
+    await strapi.db.connection.raw(
+      `UPDATE pending_club_owners 
+       SET status = 'completed', 
+           current_step = 6, 
+           updated_at = NOW() 
+       WHERE id = ?`,
+      [draft.id],
+    );
 
     if (fullUser?.verification_status === "approved") {
-      const clubOwner = await createClubOwnerFromPending(user.id);
+      const clubOwner = await createClubOwnerFromPending(fullUser.id, draft);
       return ctx.send({
         success: true,
         message: "Club Owner profile created successfully",
@@ -1331,14 +1993,15 @@ export default {
     }
 
     if (fullUser?.verification_status === "rejected") {
-      await strapi.db.query("plugin::users-permissions.user").update({
-        where: { id: user.id },
-        data: {
-          verification_status: "pending",
-          rejection_reason: null,
-          rejected_by: null,
-        },
-      });
+      await strapi.db.connection.raw(
+        `UPDATE up_users 
+         SET verification_status = 'pending', 
+             rejection_reason = NULL, 
+             rejected_by = NULL, 
+             updated_at = NOW() 
+         WHERE id = ?`,
+        [fullUser.id],
+      );
     }
 
     ctx.send({

@@ -84,6 +84,10 @@ async function getFileBuffer(file) {
 async function compressFile(file, compressionConfig = {}) {
   const fileName = file.name || file.originalFilename || file.hash || "image";
 
+  if (file._skipCompression || file._optimized) {
+    return;
+  }
+
   if (!isRasterImage(file)) {
     const fileMime = file.mime || file.mimetype || file.ext || "unknown";
     const fileSizeKb = file.size ? `${file.size} KB` : "unknown size";
@@ -160,8 +164,8 @@ async function compressFile(file, compressionConfig = {}) {
     ) {
       pipeline = pipeline.jpeg({
         quality: jpegQuality,
-        mozjpeg: true,
-        progressive: true,
+        mozjpeg: false,
+        progressive: false,
       });
     } else if (format === "png" || mime.includes("png")) {
       pipeline = pipeline.png({
