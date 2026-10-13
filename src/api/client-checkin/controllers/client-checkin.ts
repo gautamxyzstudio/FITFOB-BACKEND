@@ -925,57 +925,36 @@ export default factories.createCoreController(
           start_date,
           end_date,
           date,
-          clubOwnerId,
-          club_owner,
-          clubOwner,
-          clubId,
-          ownerDocumentId,
-          ownerId,
-          subscriptionType,
-          status,
-          search,
-          q,
-          sort,
         } = ctx.query as any;
 
-        const where: any = {
-          client_detail: client.id,
-        };
-        const appliedFilters: any = {
-          client: {
-            id: client.id,
-            documentId: client.documentId,
-            clientId: client.clientId,
-            name: client.name,
-          },
-        };
+        let query = `
+          SELECT 
+            cc.id,
+            cc.document_id,
+            cc.subscription_type,
+            cc.checkin_time,
+            cc.checkout_time,
+            co.club_name,
+            logo.url AS club_logo
+          FROM client_checkins cc
+          JOIN client_checkins_client_detail_lnk ccdl ON ccdl.client_checkin_id = cc.id
+          LEFT JOIN client_checkins_club_owner_lnk ccol ON ccol.client_checkin_id = cc.id
+          LEFT JOIN club_owners co ON co.id = ccol.club_owner_id
+          LEFT JOIN LATERAL (
+            SELECT f.url
+            FROM files_related_mph frm
+            JOIN files f ON f.id = frm.file_id
+            WHERE frm.related_id = co.id 
+              AND frm.related_type = 'api::club-owner.club-owner' 
+              AND frm.field = 'logo'
+            ORDER BY frm.id ASC
+            LIMIT 1
+          ) logo ON true
+          WHERE ccdl.client_detail_id = ?
+        `;
+        const params: any[] = [client.id];
 
-        // 1. Target Gym / Club Owner Filter (if client visited specific club)
-        const targetOwnerIdentifier =
-          clubOwnerId ||
-          club_owner ||
-          clubOwner ||
-          clubId ||
-          ownerDocumentId ||
-          ownerId;
-
-        if (targetOwnerIdentifier) {
-          const owner = await findClubOwnerByIdentifier(targetOwnerIdentifier);
-          if (!owner) {
-            return ctx.notFound(
-              `Club owner with identifier '${targetOwnerIdentifier}' not found`,
-            );
-          }
-          where.club_owner = owner.id;
-          appliedFilters.clubOwner = {
-            id: owner.id,
-            documentId: owner.documentId,
-            clubId: owner.clubId,
-            clubName: owner.clubName,
-          };
-        }
-
-        // 2. Date Range Filter
+        // Date Range Filter only
         const rawStartDate = startDate || from || start_date;
         const rawEndDate = endDate || to || end_date;
 
@@ -986,14 +965,10 @@ export default factories.createCoreController(
             dayStart.setHours(0, 0, 0, 0);
             const dayEnd = new Date(targetDate);
             dayEnd.setHours(23, 59, 59, 999);
-            where.checkinTime = {
-              $gte: dayStart,
-              $lte: dayEnd,
-            };
-            appliedFilters.date = date;
+            query += ` AND cc.checkin_time >= ? AND cc.checkin_time <= ?`;
+            params.push(dayStart.toISOString(), dayEnd.toISOString());
           }
         } else if (rawStartDate || rawEndDate) {
-          where.checkinTime = {};
           if (rawStartDate) {
             const s = new Date(rawStartDate);
             if (!isNaN(s.getTime())) {
@@ -1003,8 +978,8 @@ export default factories.createCoreController(
               ) {
                 s.setHours(0, 0, 0, 0);
               }
-              where.checkinTime.$gte = s;
-              appliedFilters.startDate = s.toISOString();
+              query += ` AND cc.checkin_time >= ?`;
+              params.push(s.toISOString());
             }
           }
           if (rawEndDate) {
@@ -1016,87 +991,43 @@ export default factories.createCoreController(
               ) {
                 e.setHours(23, 59, 59, 999);
               }
-              where.checkinTime.$lte = e;
-              appliedFilters.endDate = e.toISOString();
+              query += ` AND cc.checkin_time <= ?`;
+              params.push(e.toISOString());
             }
           }
         }
 
-        // 3. Subscription Type Filter
-        if (
-          subscriptionType &&
-          ["local", "outdoor"].includes(
-            String(subscriptionType).toLowerCase().trim(),
-          )
-        ) {
-          const subType = String(subscriptionType).toLowerCase().trim();
-          where.subscriptionType = subType;
-          appliedFilters.subscriptionType = subType;
-        }
+        query += ` ORDER BY cc.checkin_time DESC, cc.id DESC`;
 
-        // 4. Status Filter
-        if (status) {
-          const s = String(status).toLowerCase().trim();
-          if (s === "active" || s === "checked-in" || s === "checkedin") {
-            where.checkoutTime = { $null: true };
-            appliedFilters.status = "checked-in";
-          } else if (
-            s === "completed" ||
-            s === "checked-out" ||
-            s === "checkedout"
-          ) {
-            where.checkoutTime = { $notNull: true };
-            appliedFilters.status = "checked-out";
+        const knex = strapi.db.connection;
+        const result = await knex.raw(query, params);
+        const rows = result?.rows || [];
+
+        const serverUrl = (strapi.config.get("server.url") as string) || "";
+
+        const formattedList = rows.map((row: any) => {
+          let logoUrl: string | null = null;
+          if (row.club_logo) {
+            logoUrl = String(row.club_logo).startsWith("http")
+              ? String(row.club_logo)
+              : `${serverUrl}${row.club_logo}`;
           }
-        }
 
-        // 5. Keyword Search (Club name, city, owner name, clubId)
-        const searchTerm = search || q;
-        if (searchTerm && String(searchTerm).trim()) {
-          const s = String(searchTerm).trim();
-          appliedFilters.search = s;
-
-          const matchingClubs = await strapi.db.query(CLUB_OWNER_UID).findMany({
-            where: {
-              $or: [
-                { clubName: { $containsi: s } },
-                { ownerName: { $containsi: s } },
-                { clubId: { $containsi: s } },
-                { city: { $containsi: s } },
-              ],
-            },
-            select: ["id"],
-          });
-
-          const clubIds = (matchingClubs || []).map((c: any) => c.id);
-          if (clubIds.length > 0) {
-            where.club_owner = { $in: clubIds };
-          } else {
-            where.id = -1; // No matches found
-          }
-        }
-
-        // 6. Ordering
-        let orderBy: any = { checkinTime: "desc", id: "desc" };
-        if (sort) {
-          const parts = String(sort).split(":");
-          if (parts.length === 2) {
-            orderBy = { [parts[0]]: parts[1].toLowerCase() };
-          } else if (parts.length === 1) {
-            orderBy = { [parts[0]]: "desc" };
-          }
-        }
-
-        // 7. Execute Query (All Check-ins without pagination)
-        const rawCheckins = await strapi.db.query(CHECKIN_UID).findMany({
-          where,
-          populate: POPULATE_CONFIG,
-          orderBy,
+          return {
+            id: row.id,
+            documentId: row.document_id,
+            subscriptionType: row.subscription_type,
+            checkinTime: row.checkin_time
+              ? new Date(row.checkin_time).toISOString()
+              : null,
+            checkoutTime: row.checkout_time
+              ? new Date(row.checkout_time).toISOString()
+              : null,
+            status: row.checkout_time ? "checked-out" : "checked-in",
+            club_name: row.club_name || null,
+            club_logo: logoUrl,
+          };
         });
-
-        const formattedList = (
-          Array.isArray(rawCheckins) ? rawCheckins : []
-        ).map(formatCheckin);
 
         return ctx.send({
           data: formattedList,
