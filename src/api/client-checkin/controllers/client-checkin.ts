@@ -512,7 +512,11 @@ function formatCheckin(item: any) {
           name: item.client_detail.name,
           email: item.client_detail.email,
           gender: item.client_detail.gender,
-          selfieUrl: item.client_detail.selfieUpload?.url || null,
+          selfieUrl:
+            item.client_detail.selfieUpload?.formats?.small?.url ||
+            item.client_detail.selfieUpload?.formats?.thumbnail?.url ||
+            item.client_detail.selfieUpload?.url ||
+            null,
         }
       : null,
     clubOwner: item.club_owner
@@ -522,7 +526,11 @@ function formatCheckin(item: any) {
           clubId: item.club_owner.clubId,
           clubName: item.club_owner.clubName,
           email: item.club_owner.email,
-          logoUrl: item.club_owner.logo?.url || null,
+          logoUrl:
+            item.club_owner.logo?.formats?.small?.url ||
+            item.club_owner.logo?.formats?.thumbnail?.url ||
+            item.club_owner.logo?.url ||
+            null,
         }
       : null,
     localSubscription: item.local_subscription
@@ -931,13 +939,14 @@ export default factories.createCoreController(
             cc.checkin_time,
             cc.checkout_time,
             co.club_name,
-            logo.url AS club_logo
+            logo.url AS club_logo,
+            logo.formats AS club_logo_formats
           FROM client_checkins cc
           JOIN client_checkins_client_detail_lnk ccdl ON ccdl.client_checkin_id = cc.id
           LEFT JOIN client_checkins_club_owner_lnk ccol ON ccol.client_checkin_id = cc.id
           LEFT JOIN club_owners co ON co.id = ccol.club_owner_id
           LEFT JOIN LATERAL (
-            SELECT f.url
+            SELECT f.url, f.formats
             FROM files_related_mph frm
             JOIN files f ON f.id = frm.file_id
             WHERE frm.related_id = co.id 
@@ -1008,11 +1017,24 @@ export default factories.createCoreController(
         const serverUrl = (strapi.config.get("server.url") as string) || "";
 
         const formattedList = rows.map((row: any) => {
+          let logoFormats = row.club_logo_formats;
+          if (typeof logoFormats === "string") {
+            try {
+              logoFormats = JSON.parse(logoFormats);
+            } catch (_) {}
+          }
+
+          const rawLogoUrl =
+            logoFormats?.small?.url ||
+            logoFormats?.thumbnail?.url ||
+            row.club_logo ||
+            null;
+
           let logoUrl: string | null = null;
-          if (row.club_logo) {
-            logoUrl = String(row.club_logo).startsWith("http")
-              ? String(row.club_logo)
-              : `${serverUrl}${row.club_logo}`;
+          if (rawLogoUrl) {
+            logoUrl = String(rawLogoUrl).startsWith("http")
+              ? String(rawLogoUrl)
+              : `${serverUrl}${rawLogoUrl}`;
           }
 
           return {

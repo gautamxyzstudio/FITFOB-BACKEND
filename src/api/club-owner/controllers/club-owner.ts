@@ -267,10 +267,7 @@ async function resolveClientFavorites(ctx: Context): Promise<any[]> {
         .findOne({
           where: isNum
             ? {
-                $or: [
-                  { id: Number(detailStr) },
-                  { documentId: detailStr },
-                ],
+                $or: [{ id: Number(detailStr) }, { documentId: detailStr }],
               }
             : { documentId: detailStr },
           select: ["id", "documentId"],
@@ -652,16 +649,11 @@ export default factories.createCoreController(
         const today = getTodayDateString();
 
         // 2. Fetch club photos, holidays, services, facilities & client favorite status concurrently
-        const [
-          photosRes,
-          holidaysRes,
-          servicesRes,
-          facilitiesRes,
-          isFav,
-        ] = await Promise.all([
-          // Club photos with image urls
-          strapi.db.connection.raw(
-            `SELECT 
+        const [photosRes, holidaysRes, servicesRes, facilitiesRes, isFav] =
+          await Promise.all([
+            // Club photos with image urls
+            strapi.db.connection.raw(
+              `SELECT 
               cp.id,
               cp.image_info,
               f.url,
@@ -674,12 +666,12 @@ export default factories.createCoreController(
             LEFT JOIN files f ON f.id = frm.file_id
             WHERE lnk.club_owner_id = ?
             ORDER BY cp.id DESC`,
-            [ownerId],
-          ),
+              [ownerId],
+            ),
 
-          // Upcoming & today's holidays
-          strapi.db.connection.raw(
-            `SELECT 
+            // Upcoming & today's holidays
+            strapi.db.connection.raw(
+              `SELECT 
               h.id,
               h.document_id,
               h.title,
@@ -693,36 +685,47 @@ export default factories.createCoreController(
             WHERE lnk.club_owner_id = ?
               AND (h.end_date >= ? OR (h.end_date IS NULL AND h.start_date >= ?))
             ORDER BY h.start_date ASC`,
-            [ownerId, today, today],
-          ),
+              [ownerId, today, today],
+            ),
 
-          // Club services relations
-          strapi.db.connection.raw(
-            `SELECT cs.name
+            // Club services relations
+            strapi.db.connection.raw(
+              `SELECT cs.name
             FROM club_services cs
             JOIN club_services_club_owners_lnk lnk ON lnk.club_service_id = cs.id
             WHERE lnk.club_owner_id = ?`,
-            [ownerId],
-          ),
+              [ownerId],
+            ),
 
-          // Club facilities relations
-          strapi.db.connection.raw(
-            `SELECT cf.name
+            // Club facilities relations
+            strapi.db.connection.raw(
+              `SELECT cf.name
             FROM club_facilities cf
             JOIN club_owners_club_facilities_lnk lnk ON lnk.club_facility_id = cf.id
             WHERE lnk.club_owner_id = ?`,
-            [ownerId],
-          ),
+              [ownerId],
+            ),
 
-          // Favorite check
-          checkIsClubFavoritedDirect(ctx, ownerId),
-        ]);
+            // Favorite check
+            checkIsClubFavoritedDirect(ctx, ownerId),
+          ]);
 
-        // 3. Format club_photos: return only url and imageInfo
+        // 3. Format club_photos: return small url (with fallback) and imageInfo
         const club_photos: { url: string; imageInfo: string }[] = [];
         for (const photo of photosRes?.rows || []) {
           if (photo?.url) {
-            const url = formatMediaUrl(photo.url);
+            let formats = photo.formats;
+            if (typeof formats === "string") {
+              try {
+                formats = JSON.parse(formats);
+              } catch (_) {}
+            }
+            const photoUrl =
+              formats?.small?.url ||
+              formats?.thumbnail?.url ||
+              photo.url;
+
+            const url = formatMediaUrl(photoUrl);
             if (url) {
               club_photos.push({
                 url,
@@ -786,7 +789,10 @@ export default factories.createCoreController(
           } catch (_) {}
         }
         const logo = formatMediaUrl(
-          logoFormats?.thumbnail?.url || owner.logo_url || null,
+          logoFormats?.small?.url ||
+            logoFormats?.thumbnail?.url ||
+            owner.logo_url ||
+            null,
         );
 
         // 8. Order weekdayScheduling
@@ -1523,13 +1529,7 @@ export default factories.createCoreController(
             where,
             populate: {
               client_detail: {
-                select: [
-                  "id",
-                  "documentId",
-                  "clientId",
-                  "name",
-                  "gender",
-                ],
+                select: ["id", "documentId", "clientId", "name", "gender"],
                 populate: {
                   selfieUpload: {
                     select: ["id", "url", "name", "formats"],
@@ -1690,18 +1690,15 @@ export default factories.createCoreController(
         // Phase 2: Concurrent direct PostgreSQL queries for lean relations
         // ----------------------------------------------------
         const today = getTodayDateString();
-        const [
-          photosRes,
-          servicesRes,
-          facilitiesRes,
-          holidaysRes,
-        ] = await Promise.all([
-          // 1. Club Photos with images (latest first)
-          strapi.db.connection.raw(
-            `SELECT 
+        const [photosRes, servicesRes, facilitiesRes, holidaysRes] =
+          await Promise.all([
+            // 1. Club Photos with images (latest first)
+            strapi.db.connection.raw(
+              `SELECT 
               cp.id,
               lnk.club_owner_id,
-              f.url
+              f.url,
+              f.formats
             FROM club_photos cp
             JOIN club_photos_club_owner_lnk lnk ON lnk.club_photo_id = cp.id
             LEFT JOIN files_related_mph frm ON frm.related_id = cp.id 
@@ -1710,34 +1707,34 @@ export default factories.createCoreController(
             LEFT JOIN files f ON f.id = frm.file_id
             WHERE lnk.club_owner_id = ANY(?)
             ORDER BY cp.id DESC`,
-            [clubOwnerIds],
-          ),
+              [clubOwnerIds],
+            ),
 
-          // 2. Club Services relations
-          strapi.db.connection.raw(
-            `SELECT 
+            // 2. Club Services relations
+            strapi.db.connection.raw(
+              `SELECT 
               lnk.club_owner_id,
               cs.name
             FROM club_services cs
             JOIN club_services_club_owners_lnk lnk ON lnk.club_service_id = cs.id
             WHERE lnk.club_owner_id = ANY(?)`,
-            [clubOwnerIds],
-          ),
+              [clubOwnerIds],
+            ),
 
-          // 3. Club Facilities relations
-          strapi.db.connection.raw(
-            `SELECT 
+            // 3. Club Facilities relations
+            strapi.db.connection.raw(
+              `SELECT 
               lnk.club_owner_id,
               cf.name
             FROM club_facilities cf
             JOIN club_owners_club_facilities_lnk lnk ON lnk.club_facility_id = cf.id
             WHERE lnk.club_owner_id = ANY(?)`,
-            [clubOwnerIds],
-          ),
+              [clubOwnerIds],
+            ),
 
-          // 4. Upcoming & Today Holidays (skipping past days)
-          strapi.db.connection.raw(
-            `SELECT 
+            // 4. Upcoming & Today Holidays (skipping past days)
+            strapi.db.connection.raw(
+              `SELECT 
               h.id,
               h.document_id,
               h.title,
@@ -1752,9 +1749,9 @@ export default factories.createCoreController(
             WHERE lnk.club_owner_id = ANY(?)
               AND (h.end_date >= ? OR (h.end_date IS NULL AND h.start_date >= ?))
             ORDER BY h.start_date ASC`,
-            [clubOwnerIds, today, today],
-          ),
-        ]);
+              [clubOwnerIds, today, today],
+            ),
+          ]);
 
         // Map photos by owner ID (latest 5 photos max)
         const photosByOwnerId = new Map<number, { url: string }[]>();
@@ -1770,7 +1767,18 @@ export default factories.createCoreController(
           if (existingPhotos.length >= 5) continue;
 
           if (photo.url) {
-            const formattedUrl = formatMediaUrl(photo.url);
+            let formats = photo.formats;
+            if (typeof formats === "string") {
+              try {
+                formats = JSON.parse(formats);
+              } catch (_) {}
+            }
+            const photoUrl =
+              formats?.small?.url ||
+              formats?.thumbnail?.url ||
+              photo.url;
+
+            const formattedUrl = formatMediaUrl(photoUrl);
             if (formattedUrl) {
               existingPhotos.push({ url: formattedUrl });
             }
@@ -1860,6 +1868,5 @@ export default factories.createCoreController(
         return ctx.internalServerError("Failed to search club owners");
       }
     },
-    
   }),
 );

@@ -43,9 +43,11 @@ export default ({ env }) => ({
         delete: {},
       },
 
-      // prevent Windows sharp crash
-      responsiveDimensions: false,
-      breakpoints: {},
+      // Save only 'small' format (500px) - thumbnail and all other formats disabled
+      responsiveDimensions: true,
+      breakpoints: {
+        small: 500,
+      },
     },
   },
 });
