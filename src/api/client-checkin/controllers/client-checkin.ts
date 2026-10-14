@@ -920,11 +920,7 @@ export default factories.createCoreController(
         const {
           startDate,
           endDate,
-          from,
-          to,
-          start_date,
-          end_date,
-          date,
+          subscriptionType,
         } = ctx.query as any;
 
         let query = `
@@ -954,46 +950,52 @@ export default factories.createCoreController(
         `;
         const params: any[] = [client.id];
 
-        // Date Range Filter only
-        const rawStartDate = startDate || from || start_date;
-        const rawEndDate = endDate || to || end_date;
+        // Date Range Filter
+        if (startDate) {
+          const s = new Date(startDate);
+          if (!isNaN(s.getTime())) {
+            if (
+              typeof startDate === "string" &&
+              /^\d{4}-\d{2}-\d{2}$/.test(startDate.trim())
+            ) {
+              s.setHours(0, 0, 0, 0);
+            }
+            query += ` AND cc.checkin_time >= ?`;
+            params.push(s.toISOString());
+          }
+        }
 
-        if (date) {
-          const targetDate = new Date(date);
-          if (!isNaN(targetDate.getTime())) {
-            const dayStart = new Date(targetDate);
-            dayStart.setHours(0, 0, 0, 0);
-            const dayEnd = new Date(targetDate);
-            dayEnd.setHours(23, 59, 59, 999);
-            query += ` AND cc.checkin_time >= ? AND cc.checkin_time <= ?`;
-            params.push(dayStart.toISOString(), dayEnd.toISOString());
-          }
-        } else if (rawStartDate || rawEndDate) {
-          if (rawStartDate) {
-            const s = new Date(rawStartDate);
-            if (!isNaN(s.getTime())) {
-              if (
-                typeof rawStartDate === "string" &&
-                /^\d{4}-\d{2}-\d{2}$/.test(rawStartDate.trim())
-              ) {
-                s.setHours(0, 0, 0, 0);
-              }
-              query += ` AND cc.checkin_time >= ?`;
-              params.push(s.toISOString());
+        if (endDate) {
+          const e = new Date(endDate);
+          if (!isNaN(e.getTime())) {
+            if (
+              typeof endDate === "string" &&
+              /^\d{4}-\d{2}-\d{2}$/.test(endDate.trim())
+            ) {
+              e.setHours(23, 59, 59, 999);
             }
+            query += ` AND cc.checkin_time <= ?`;
+            params.push(e.toISOString());
           }
-          if (rawEndDate) {
-            const e = new Date(rawEndDate);
-            if (!isNaN(e.getTime())) {
-              if (
-                typeof rawEndDate === "string" &&
-                /^\d{4}-\d{2}-\d{2}$/.test(rawEndDate.trim())
-              ) {
-                e.setHours(23, 59, 59, 999);
-              }
-              query += ` AND cc.checkin_time <= ?`;
-              params.push(e.toISOString());
-            }
+        }
+
+        // Subscription Type Filter (local, outdoor, etc.)
+        if (subscriptionType) {
+          const types = (
+            Array.isArray(subscriptionType)
+              ? subscriptionType
+              : String(subscriptionType).split(",")
+          )
+            .map((t: any) => String(t).toLowerCase().trim())
+            .filter((t: string) => Boolean(t) && t !== "all");
+
+          if (types.length === 1) {
+            query += ` AND LOWER(cc.subscription_type) = ?`;
+            params.push(types[0]);
+          } else if (types.length > 1) {
+            const placeholders = types.map(() => "?").join(", ");
+            query += ` AND LOWER(cc.subscription_type) IN (${placeholders})`;
+            params.push(...types);
           }
         }
 
