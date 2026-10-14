@@ -6,8 +6,8 @@ const CLUB_OWNER_UID = "api::club-owner.club-owner" as any;
 
 export interface LogActivityParams {
   clubOwnerId: string | number | { id?: number; documentId?: string };
-  category: "profile" | "membership_plans" | "subscriptions";
-  actionType: "CREATE" | "UPDATE" | "DELETE";
+  category: "profile" | "membership_plans" | "subscriptions" | "holidays" | string;
+  actionType: "CREATE" | "UPDATE" | "DELETE" | string;
   entityName?: string;
   entityId?: string | number;
   description: string;

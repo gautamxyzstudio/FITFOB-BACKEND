@@ -456,6 +456,35 @@ export default factories.createCoreController(
           });
         }
 
+        // 📝 Log Activity
+        try {
+          const activityLogService: any = strapi.service(
+            "api::club-owner-activity-log.club-owner-activity-log",
+          );
+          if (activityLogService?.logActivity) {
+            const targetOwnerId = targetOwner.documentId || targetOwner.id;
+            const closureLabel =
+              created?.closureType === "partial_day"
+                ? `Partial Day (${created?.startTime || ""} - ${created?.endtime || ""})`
+                : "Full Day";
+            const dateRange =
+              created?.startDate === created?.endDate || !created?.endDate
+                ? created?.startDate
+                : `${created?.startDate} to ${created?.endDate}`;
+
+            await activityLogService.logActivity({
+              clubOwnerId: targetOwnerId,
+              category: "holidays",
+              actionType: "CREATE",
+              entityName: "Holiday",
+              entityId: created?.documentId || created?.id,
+              description: `Created holiday '${created?.title || payload.title}' (${closureLabel}, Date: ${dateRange})`,
+            });
+          }
+        } catch (logErr) {
+          strapi.log.warn("[ActivityLog] Failed to log holiday creation:", logErr);
+        }
+
         return ctx.send({
           data: created,
         });
@@ -503,8 +532,9 @@ export default factories.createCoreController(
         const roleName = await getUserRole(user);
         const isAdmin = roleName === "admin" || roleName === "superadmin";
 
+        let owner: any = null;
         if (!isAdmin) {
-          const owner = await getClubOwnerForUser(user);
+          owner = await getClubOwnerForUser(user);
 
           if (!owner) {
             return ctx.forbidden(
@@ -558,6 +588,90 @@ export default factories.createCoreController(
           );
         }
 
+        // 📝 Log Activity
+        const targetOwnerId =
+          owner?.documentId ||
+          owner?.id ||
+          existing.club_owner?.documentId ||
+          existing.club_owner?.id ||
+          existing.club_owner;
+
+        if (targetOwnerId) {
+          try {
+            const activityLogService: any = strapi.service(
+              "api::club-owner-activity-log.club-owner-activity-log",
+            );
+            if (activityLogService?.logActivity) {
+              const changedDetails: string[] = [];
+
+              if (
+                updateData.title !== undefined &&
+                updateData.title !== existing.title
+              ) {
+                changedDetails.push(
+                  `title: '${existing.title ?? ""}' -> '${updateData.title}'`,
+                );
+              }
+              if (
+                updateData.closureType !== undefined &&
+                updateData.closureType !== existing.closureType
+              ) {
+                changedDetails.push(
+                  `closureType: '${existing.closureType}' -> '${updateData.closureType}'`,
+                );
+              }
+              if (
+                updateData.startDate !== undefined &&
+                updateData.startDate !== existing.startDate
+              ) {
+                changedDetails.push(
+                  `startDate: '${existing.startDate}' -> '${updateData.startDate}'`,
+                );
+              }
+              if (
+                updateData.endDate !== undefined &&
+                updateData.endDate !== existing.endDate
+              ) {
+                changedDetails.push(
+                  `endDate: '${existing.endDate}' -> '${updateData.endDate}'`,
+                );
+              }
+              if (
+                updateData.startTime !== undefined &&
+                updateData.startTime !== existing.startTime
+              ) {
+                changedDetails.push(
+                  `startTime: '${existing.startTime}' -> '${updateData.startTime}'`,
+                );
+              }
+              if (
+                updateData.endtime !== undefined &&
+                updateData.endtime !== existing.endtime
+              ) {
+                changedDetails.push(
+                  `endtime: '${existing.endtime}' -> '${updateData.endtime}'`,
+                );
+              }
+
+              const changesStr =
+                changedDetails.length > 0
+                  ? ` (${changedDetails.join(", ")})`
+                  : "";
+
+              await activityLogService.logActivity({
+                clubOwnerId: targetOwnerId,
+                category: "holidays",
+                actionType: "UPDATE",
+                entityName: "Holiday",
+                entityId: existing.documentId || existing.id,
+                description: `Updated holiday '${existing.title || "Holiday"}'${changesStr}`,
+              });
+            }
+          } catch (logErr) {
+            strapi.log.warn("[ActivityLog] Failed to log holiday update:", logErr);
+          }
+        }
+
         return ctx.send({
           success: true,
           message: "Holiday updated successfully",
@@ -607,8 +721,9 @@ export default factories.createCoreController(
         const roleName = await getUserRole(user);
         const isAdmin = roleName === "admin" || roleName === "superadmin";
 
+        let owner: any = null;
         if (!isAdmin) {
-          const owner = await getClubOwnerForUser(user);
+          owner = await getClubOwnerForUser(user);
 
           if (!owner) {
             return ctx.forbidden(
@@ -639,6 +754,43 @@ export default factories.createCoreController(
           }
         } else {
           await strapi.entityService.delete(HOLDIDAY_UID, existing.id);
+        }
+
+        // 📝 Log Activity
+        const targetOwnerId =
+          owner?.documentId ||
+          owner?.id ||
+          existing.club_owner?.documentId ||
+          existing.club_owner?.id ||
+          existing.club_owner;
+
+        if (targetOwnerId) {
+          try {
+            const activityLogService: any = strapi.service(
+              "api::club-owner-activity-log.club-owner-activity-log",
+            );
+            if (activityLogService?.logActivity) {
+              const closureLabel =
+                existing.closureType === "partial_day"
+                  ? `Partial Day (${existing.startTime || ""} - ${existing.endtime || ""})`
+                  : "Full Day";
+              const dateRange =
+                existing.startDate === existing.endDate || !existing.endDate
+                  ? existing.startDate
+                  : `${existing.startDate} to ${existing.endDate}`;
+
+              await activityLogService.logActivity({
+                clubOwnerId: targetOwnerId,
+                category: "holidays",
+                actionType: "DELETE",
+                entityName: "Holiday",
+                entityId: existing.documentId || existing.id,
+                description: `Deleted holiday '${existing.title || "Holiday"}' (${closureLabel}, Date: ${dateRange})`,
+              });
+            }
+          } catch (logErr) {
+            strapi.log.warn("[ActivityLog] Failed to log holiday deletion:", logErr);
+          }
         }
 
         return ctx.send({

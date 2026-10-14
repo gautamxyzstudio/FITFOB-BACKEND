@@ -577,7 +577,10 @@ async function uploadToFolder(file: any) {
 }
 
 /* ---------------- CREATE CLUB OWNER FROM PENDING DRAFT (DIRECT SQL) ---------------- */
-export async function createClubOwnerFromPending(userId: number, existingDraft?: any) {
+export async function createClubOwnerFromPending(
+  userId: number,
+  existingDraft?: any,
+) {
   const draft: any = existingDraft || (await getDraftDirect(userId, true));
   if (!draft) return null;
 
@@ -1188,10 +1191,9 @@ export default {
       }
 
       // Delete consumed OTP
-      await strapi.db.connection.raw(
-        `DELETE FROM otp_requests WHERE id = ?`,
-        [record.id],
-      );
+      await strapi.db.connection.raw(`DELETE FROM otp_requests WHERE id = ?`, [
+        record.id,
+      ]);
 
       const hasCompletedStep1Details = Boolean(
         draft.clubName && draft.ownerName,
@@ -1955,10 +1957,9 @@ export default {
       `DELETE FROM files_related_mph WHERE related_id = ? AND related_type = 'api::club-photo.club-photo'`,
       [photoId],
     );
-    await strapi.db.connection.raw(
-      `DELETE FROM club_photos WHERE id = ?`,
-      [photoId],
-    );
+    await strapi.db.connection.raw(`DELETE FROM club_photos WHERE id = ?`, [
+      photoId,
+    ]);
 
     ctx.send({ success: true, message: "Club photo deleted successfully" });
   },

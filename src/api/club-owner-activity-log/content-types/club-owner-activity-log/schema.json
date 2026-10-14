@@ -31,7 +31,8 @@
       "enum": [
         "profile",
         "membership_plans",
-        "subscriptions"
+        "subscriptions",
+        "holidays"
       ]
     },
     "actionType": {

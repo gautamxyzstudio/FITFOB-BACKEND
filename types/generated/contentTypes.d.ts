@@ -609,7 +609,7 @@ export interface ApiClubOwnerActivityLogClubOwnerActivityLog
   attributes: {
     actionType: Schema.Attribute.Enumeration<['CREATE', 'UPDATE', 'DELETE']>;
     category: Schema.Attribute.Enumeration<
-      ['profile', 'membership_plans', 'subscriptions']
+      ['profile', 'membership_plans', 'subscriptions', 'holidays']
     >;
     club_owner: Schema.Attribute.Relation<
       'manyToOne',
