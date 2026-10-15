@@ -1,5 +1,7 @@
 import { factories } from "@strapi/strapi";
 import { Context } from "koa";
+import bcrypt from "bcryptjs";
+import axios from "axios";
 import {
   normalizeWeekdayScheduling,
   orderWeekdayScheduling,
@@ -8,6 +10,8 @@ import {
   resolveClubServiceIds,
   resolveClubFacilityIds,
 } from "../../../utils/resolveClubRelations";
+import { sendTwilioOtp } from "../../../services/twilio-sms";
+import { getOtpEmailTemplate } from "../../../utils/otpEmailTemplate";
 
 const POPULATE: any = {
   user: true,
@@ -28,6 +32,59 @@ const POPULATE: any = {
 
 const CLUB_OWNER_UID = "api::club-owner.club-owner" as any;
 const HOLDIDAY_UID = "api::holdiday.holdiday" as any;
+
+/* ---------- OTP GENERATOR ---------- */
+const generateOtp = () =>
+  Math.floor(100000 + Math.random() * 900000).toString();
+
+/* ---------- NORMALIZE PHONE ---------- */
+const normalizePhone = (identifier: string) => {
+  if (!identifier) return identifier;
+  if (identifier.includes("@")) return identifier.trim().toLowerCase();
+
+  let num = identifier.replace(/\D/g, "");
+
+  if (num.length === 10) return `+91${num}`;
+  if (num.length === 12 && num.startsWith("91")) return `+${num}`;
+  if (identifier.startsWith("+91")) return identifier;
+
+  return identifier;
+};
+
+/* ---------- REQUEST BODY PARSER HELPER ---------- */
+function getBody(ctx: Context) {
+  const rawBody: any = ctx.request.body || {};
+  let parsed: any = {};
+  if (rawBody.data) {
+    if (typeof rawBody.data === "string") {
+      const str = rawBody.data.trim();
+      try {
+        parsed = JSON.parse(str);
+      } catch {
+        const lastBrace = str.lastIndexOf("}");
+        if (lastBrace !== -1) {
+          try {
+            parsed = JSON.parse(str.substring(0, lastBrace + 1));
+          } catch (_) {}
+        }
+      }
+    } else if (typeof rawBody.data === "object") {
+      parsed = rawBody.data;
+    }
+  }
+  return { ...rawBody, ...parsed };
+}
+
+/* ---------- IDENTIFY USER REGISTRATION TYPE ---------- */
+function getUserRegistrationType(user: any): "email" | "phone" {
+  if (user?.username) {
+    return user.username.includes("@") ? "email" : "phone";
+  }
+  if (user?.email && !user.email.toLowerCase().endsWith("@phone.user")) {
+    return "email";
+  }
+  return "phone";
+}
 
 /* ---------- HELPER: GET TODAY DATE (YYYY-MM-DD) ---------- */
 function getTodayDateString(): string {
@@ -839,6 +896,549 @@ export default factories.createCoreController(
       } catch (err) {
         strapi.log.error("GET CLIENT DETAIL ERROR:", err);
         return ctx.internalServerError("Failed to fetch client detail");
+      }
+    },
+
+    /* =======================================================
+       STEP 1A — SEND OTP FOR EMAIL / PHONE PROFILE UPDATE
+    ======================================================= */
+    async sendDetailsOtp(ctx: Context) {
+      try {
+        const user = ctx.state.user;
+        if (!user) {
+          return ctx.unauthorized("Authentication required");
+        }
+
+        const clubOwner = await getClubOwnerForUser(user);
+        if (!clubOwner) {
+          return ctx.notFound("Club owner profile not found for this account");
+        }
+
+        let fullUser = user;
+        if (!fullUser.username || fullUser.phoneNumber === undefined) {
+          const u = await strapi.db
+            .query("plugin::users-permissions.user")
+            .findOne({
+              where: { id: user.id },
+              select: ["id", "username", "email", "phoneNumber"],
+            });
+          if (u) fullUser = u;
+        }
+
+        const regType = getUserRegistrationType(fullUser);
+        const body = getBody(ctx);
+        const rawIdentifier =
+          body.identifier ||
+          (regType === "email" ? body.phoneNumber : body.email) ||
+          body.phoneNumber ||
+          body.email ||
+          null;
+
+        if (!rawIdentifier) {
+          return ctx.badRequest(
+            regType === "email"
+              ? "Phone number is required to send verification OTP."
+              : "Email address is required to send verification OTP.",
+          );
+        }
+
+        const isEmail = String(rawIdentifier).includes("@");
+
+        if (regType === "email" && isEmail) {
+          return ctx.badRequest(
+            "Your email address is already verified from signup and cannot be changed. Only phone number is editable.",
+          );
+        }
+
+        if (regType === "phone" && !isEmail) {
+          return ctx.badRequest(
+            "Your phone number is already verified from signup and cannot be changed. Only email address is editable.",
+          );
+        }
+
+        const identifier = isEmail
+          ? String(rawIdentifier).trim().toLowerCase()
+          : normalizePhone(String(rawIdentifier).trim());
+
+        if (isEmail) {
+          const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+          if (!emailRegex.test(identifier)) {
+            return ctx.badRequest("Invalid email address format.");
+          }
+        } else {
+          const cleanDigits = identifier.replace(/\D/g, "");
+          if (cleanDigits.length < 10) {
+            return ctx.badRequest("Invalid phone number format.");
+          }
+        }
+
+        // Prevent verifying same current value
+        if (isEmail) {
+          const currentEmail = String(
+            clubOwner.email || user.email || "",
+          )
+            .trim()
+            .toLowerCase();
+          if (identifier === currentEmail) {
+            return ctx.badRequest(
+              "The provided email is already your current email address.",
+            );
+          }
+        } else {
+          const currentPhone = normalizePhone(
+            String(clubOwner.phoneNumber || user.phoneNumber || "").trim(),
+          );
+          if (identifier === currentPhone) {
+            return ctx.badRequest(
+              "The provided phone number is already your current phone number.",
+            );
+          }
+        }
+
+        // Uniqueness check across other club owners
+        if (isEmail) {
+          const existingClub = await strapi.db.query(CLUB_OWNER_UID).findOne({
+            where: {
+              email: identifier,
+              id: { $ne: clubOwner.id },
+            },
+            select: ["id"],
+          });
+
+          if (existingClub) {
+            return ctx.badRequest(
+              "This email address is already in use by another club owner.",
+            );
+          }
+        } else {
+          const existingClub = await strapi.db.query(CLUB_OWNER_UID).findOne({
+            where: {
+              phoneNumber: identifier,
+              id: { $ne: clubOwner.id },
+            },
+            select: ["id"],
+          });
+
+          if (existingClub) {
+            return ctx.badRequest(
+              "This phone number is already in use by another club owner.",
+            );
+          }
+        }
+
+        const otp = generateOtp();
+        const otpHash = await bcrypt.hash(otp, 10);
+        const expiresAt = new Date(Date.now() + 2 * 60 * 1000);
+        const docId = Math.random().toString(36).substring(2, 26);
+        const now = new Date();
+
+        await strapi.db.connection.raw(
+          `DELETE FROM otp_requests 
+           WHERE identifier = ? AND purpose = 'club_owner_verification'`,
+          [identifier],
+        );
+
+        await strapi.db.connection.raw(
+          `INSERT INTO otp_requests (
+            document_id,
+            identifier,
+            otp_hash,
+            expires_at,
+            attempts,
+            verified,
+            purpose,
+            last_sent_at,
+            created_at,
+            updated_at,
+            published_at
+          ) VALUES (?, ?, ?, ?, 0, false, 'club_owner_verification', ?, ?, ?, ?)`,
+          [docId, identifier, otpHash, expiresAt, now, now, now, now],
+        );
+
+        if (isEmail) {
+          try {
+            await axios.post(
+              "https://api.brevo.com/v3/smtp/email",
+              {
+                sender: { name: "FitFob", email: "qaxyzstudio@gmail.com" },
+                to: [{ email: identifier }],
+                subject: "FitFob Club Owner Email Verification OTP",
+                htmlContent: getOtpEmailTemplate(otp, {
+                  title: "FitFob Email Verification Code",
+                  subtext:
+                    "Use the One-Time Password (OTP) below to verify and update your email address for your club profile:",
+                  validityMinutes: 2,
+                }),
+              },
+              { headers: { "api-key": process.env.BREVO_API_KEY } },
+            );
+          } catch (emailError: any) {
+            strapi.log.error(
+              "[CLUB OWNER EMAIL OTP SEND ERROR]",
+              emailError?.response?.data || emailError,
+            );
+            return ctx.badRequest(
+              "Failed to send verification email. Please verify the email address.",
+            );
+          }
+
+          return ctx.send({
+            success: true,
+            verificationType: "email",
+            identifier,
+            message: "OTP sent to your email address to verify.",
+          });
+        } else {
+          try {
+            await sendTwilioOtp(identifier, otp);
+          } catch (smsError: any) {
+            strapi.log.error("[CLUB OWNER PHONE OTP SEND ERROR]", smsError);
+            return ctx.badRequest(
+              "Failed to send OTP to the provided phone number. Please verify the phone number.",
+            );
+          }
+
+          return ctx.send({
+            verificationType: "phone",
+            identifier,
+            message: "OTP sent to your phone number to verify.",
+          });
+        }
+      } catch (err: any) {
+        strapi.log.error("CLUB OWNER SEND OTP ERROR:", err);
+        return ctx.internalServerError(
+          err?.message || "Failed to send verification OTP",
+        );
+      }
+    },
+
+    /* =======================================================
+       STEP 1B — VERIFY OTP AND UPDATE EMAIL / PHONE
+    ======================================================= */
+    async verifyDetailsOtp(ctx: Context) {
+      try {
+        const user = ctx.state.user;
+        if (!user) {
+          return ctx.unauthorized("Authentication required");
+        }
+
+        const clubOwner = await getClubOwnerForUser(user);
+        if (!clubOwner) {
+          return ctx.notFound("Club owner profile not found for this account");
+        }
+
+        let fullUser = user;
+        if (!fullUser.username || fullUser.phoneNumber === undefined) {
+          const u = await strapi.db
+            .query("plugin::users-permissions.user")
+            .findOne({
+              where: { id: user.id },
+              select: ["id", "username", "email", "phoneNumber"],
+            });
+          if (u) fullUser = u;
+        }
+
+        const regType = getUserRegistrationType(fullUser);
+        const body = getBody(ctx);
+        const otp = String(body.otp || "").trim();
+
+        if (!otp) {
+          return ctx.badRequest("OTP is required");
+        }
+
+        const rawIdentifier =
+          body.identifier ||
+          (regType === "email" ? body.phoneNumber : body.email) ||
+          body.phoneNumber ||
+          body.email ||
+          null;
+
+        if (!rawIdentifier) {
+          return ctx.badRequest(
+            regType === "email"
+              ? "Phone number is required to verify OTP"
+              : "Email address is required to verify OTP",
+          );
+        }
+
+        const isEmail = String(rawIdentifier).includes("@");
+
+        if (regType === "email" && isEmail) {
+          return ctx.badRequest(
+            "Your email address is already verified from signup and cannot be changed. Only phone number is editable.",
+          );
+        }
+
+        if (regType === "phone" && !isEmail) {
+          return ctx.badRequest(
+            "Your phone number is already verified from signup and cannot be changed. Only email address is editable.",
+          );
+        }
+
+        const identifier = isEmail
+          ? String(rawIdentifier).trim().toLowerCase()
+          : normalizePhone(String(rawIdentifier).trim());
+
+        const recordRes = await strapi.db.connection.raw(
+          `SELECT id, otp_hash, expires_at, attempts 
+           FROM otp_requests 
+           WHERE identifier = ? AND purpose = 'club_owner_verification' 
+           ORDER BY created_at DESC 
+           LIMIT 1`,
+          [identifier],
+        );
+
+        const record = recordRes?.rows?.[0];
+
+        if (!record) {
+          return ctx.badRequest("OTP not found. Please request a new OTP.");
+        }
+
+        if (new Date(record.expires_at).getTime() < Date.now()) {
+          await strapi.db.connection.raw(
+            `DELETE FROM otp_requests WHERE id = ?`,
+            [record.id],
+          );
+          return ctx.badRequest("OTP expired. Please resend OTP.");
+        }
+
+        const valid = await bcrypt.compare(otp, record.otp_hash);
+        if (!valid) {
+          await strapi.db.connection.raw(
+            `UPDATE otp_requests SET attempts = attempts + 1, updated_at = NOW() WHERE id = ?`,
+            [record.id],
+          );
+          return ctx.badRequest("Invalid OTP");
+        }
+
+        // Delete consumed OTP
+        await strapi.db.connection.raw(
+          `DELETE FROM otp_requests WHERE id = ?`,
+          [record.id],
+        );
+
+        // Update in database: ONLY club_owners (not up_users)
+        if (isEmail) {
+          await strapi.db.connection.raw(
+            `UPDATE club_owners 
+             SET email = ?, 
+                 updated_at = NOW() 
+             WHERE id = ?`,
+            [identifier, clubOwner.id],
+          );
+        } else {
+          await strapi.db.connection.raw(
+            `UPDATE club_owners 
+             SET phone_number = ?, 
+                 updated_at = NOW() 
+             WHERE id = ?`,
+            [identifier, clubOwner.id],
+          );
+        }
+
+        // Invalidate cached club owner on user object
+        if (typeof user === "object" && user !== null) {
+          delete user._cachedClubOwner;
+        }
+
+        // Log Activity
+        try {
+          const activityLogService: any = strapi.service(
+            "api::club-owner-activity-log.club-owner-activity-log",
+          );
+          if (activityLogService?.logActivity) {
+            await activityLogService.logActivity({
+              clubOwnerId: clubOwner.documentId || clubOwner.id,
+              category: "profile",
+              actionType: "UPDATE",
+              entityName: "Club Profile",
+              entityId: clubOwner.documentId || clubOwner.id,
+              description: `Verified and updated ${
+                isEmail ? "email" : "phone number"
+              } for ${clubOwner.clubName || "club"} to ${identifier}`,
+            });
+          }
+        } catch (logErr) {
+          strapi.log.warn(
+            "[ActivityLog] Failed to log verified detail update:",
+            logErr,
+          );
+        }
+
+        return ctx.send({
+          verified: true,
+          verificationType: isEmail ? "email" : "phone",
+          identifier,
+          message: `${
+            isEmail ? "Email address" : "Phone number"
+          } verified and updated successfully.`,
+        });
+      } catch (err: any) {
+        strapi.log.error("CLUB OWNER VERIFY OTP ERROR:", err);
+        return ctx.internalServerError(
+          err?.message || "Failed to verify details OTP",
+        );
+      }
+    },
+
+    /* =======================================================
+       STEP 1C — RESEND OTP FOR EMAIL / PHONE PROFILE UPDATE
+    ======================================================= */
+    async resendDetailsOtp(ctx: Context) {
+      try {
+        const user = ctx.state.user;
+        if (!user) {
+          return ctx.unauthorized("Authentication required");
+        }
+
+        const clubOwner = await getClubOwnerForUser(user);
+        if (!clubOwner) {
+          return ctx.notFound("Club owner profile not found for this account");
+        }
+
+        let fullUser = user;
+        if (!fullUser.username || fullUser.phoneNumber === undefined) {
+          const u = await strapi.db
+            .query("plugin::users-permissions.user")
+            .findOne({
+              where: { id: user.id },
+              select: ["id", "username", "email", "phoneNumber"],
+            });
+          if (u) fullUser = u;
+        }
+
+        const regType = getUserRegistrationType(fullUser);
+        const body = getBody(ctx);
+        const rawIdentifier =
+          body.identifier ||
+          (regType === "email" ? body.phoneNumber : body.email) ||
+          body.phoneNumber ||
+          body.email ||
+          null;
+
+        if (!rawIdentifier) {
+          return ctx.badRequest(
+            regType === "email"
+              ? "Phone number is required to resend OTP"
+              : "Email address is required to resend OTP",
+          );
+        }
+
+        const isEmail = String(rawIdentifier).includes("@");
+
+        if (regType === "email" && isEmail) {
+          return ctx.badRequest(
+            "Your email address is already verified from signup and cannot be changed. Please provide your phone number to resend OTP.",
+          );
+        }
+
+        if (regType === "phone" && !isEmail) {
+          return ctx.badRequest(
+            "Your phone number is already verified from signup and cannot be changed. Please provide your email address to resend OTP.",
+          );
+        }
+
+        const identifier = isEmail
+          ? String(rawIdentifier).trim().toLowerCase()
+          : normalizePhone(String(rawIdentifier).trim());
+
+        // Check cooldown (30 seconds) via direct SQL
+        const existingRes = await strapi.db.connection.raw(
+          `SELECT id, last_sent_at 
+           FROM otp_requests 
+           WHERE identifier = ? AND purpose = 'club_owner_verification' 
+           ORDER BY created_at DESC 
+           LIMIT 1`,
+          [identifier],
+        );
+
+        const existing = existingRes?.rows?.[0];
+
+        if (existing?.last_sent_at) {
+          const now = Date.now();
+          const last = new Date(existing.last_sent_at).getTime();
+          if (now - last < 30000) {
+            return ctx.badRequest(
+              "Please wait 30 seconds before requesting again",
+            );
+          }
+        }
+
+        const otp = generateOtp();
+        const otpHash = await bcrypt.hash(otp, 10);
+        const expiresAt = new Date(Date.now() + 2 * 60 * 1000);
+        const docId = Math.random().toString(36).substring(2, 26);
+        const now = new Date();
+
+        await strapi.db.connection.raw(
+          `DELETE FROM otp_requests 
+           WHERE identifier = ? AND purpose = 'club_owner_verification'`,
+          [identifier],
+        );
+
+        await strapi.db.connection.raw(
+          `INSERT INTO otp_requests (
+            document_id,
+            identifier,
+            otp_hash,
+            expires_at,
+            attempts,
+            verified,
+            purpose,
+            last_sent_at,
+            created_at,
+            updated_at,
+            published_at
+          ) VALUES (?, ?, ?, ?, 0, false, 'club_owner_verification', ?, ?, ?, ?)`,
+          [docId, identifier, otpHash, expiresAt, now, now, now, now],
+        );
+
+        if (isEmail) {
+          try {
+            await axios.post(
+              "https://api.brevo.com/v3/smtp/email",
+              {
+                sender: { name: "FitFob", email: "qaxyzstudio@gmail.com" },
+                to: [{ email: identifier }],
+                subject: "FitFob Club Owner Email Verification OTP",
+                htmlContent: getOtpEmailTemplate(otp, {
+                  title: "FitFob Email Verification Code",
+                  subtext:
+                    "Here is your requested One-Time Password (OTP) to verify your email address for your club profile:",
+                  validityMinutes: 2,
+                }),
+              },
+              { headers: { "api-key": process.env.BREVO_API_KEY } },
+            );
+          } catch (emailError: any) {
+            strapi.log.error(
+              "[CLUB OWNER EMAIL OTP SEND ERROR]",
+              emailError?.response?.data || emailError,
+            );
+            return ctx.badRequest(
+              "Failed to send verification email. Please verify the email address.",
+            );
+          }
+        } else {
+          try {
+            await sendTwilioOtp(identifier, otp);
+          } catch (smsError: any) {
+            strapi.log.error("[CLUB OWNER PHONE OTP SEND ERROR]", smsError);
+            return ctx.badRequest(
+              "Failed to send OTP to the provided phone number. Please verify the phone number.",
+            );
+          }
+        }
+
+        return ctx.send({
+          message: "OTP resent successfully",
+          identifier,
+        });
+      } catch (err: any) {
+        strapi.log.error("CLUB OWNER RESEND OTP ERROR:", err);
+        return ctx.internalServerError(
+          err?.message || "Failed to resend verification OTP",
+        );
       }
     },
 

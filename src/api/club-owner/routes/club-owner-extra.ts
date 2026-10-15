@@ -25,6 +25,30 @@ export default {
       },
     },
     {
+      method: "POST",
+      path: "/club-owner/send-otp",
+      handler: "club-owner.sendDetailsOtp",
+      config: {
+        auth: {},
+      },
+    },
+    {
+      method: "POST",
+      path: "/club-owner/verify-otp",
+      handler: "club-owner.verifyDetailsOtp",
+      config: {
+        auth: {},
+      },
+    },
+    {
+      method: "POST",
+      path: "/club-owner/resend-otp",
+      handler: "club-owner.resendDetailsOtp",
+      config: {
+        auth: {},
+      },
+    },
+    {
       method: "DELETE",
       path: "/club-owners/:id",
       handler: "club-owner.delete",
