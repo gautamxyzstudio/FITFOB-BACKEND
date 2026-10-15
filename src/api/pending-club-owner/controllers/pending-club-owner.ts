@@ -576,8 +576,57 @@ async function uploadToFolder(file: any) {
   return uploadedFiles;
 }
 
+/* ---------------- DELETE PENDING CLUB OWNER & ASSOCIATED LINKS (DIRECT SQL) ---------------- */
+export async function deletePendingClubOwner(draftId: number) {
+  if (!draftId) return;
+  await strapi.db.connection.transaction(async (trx: any) => {
+    await trx.raw(
+      `DELETE FROM club_owner_documents_pending_club_owner_lnk WHERE pending_club_owner_id = ?`,
+      [draftId],
+    );
+    await trx.raw(
+      `DELETE FROM club_photos_pending_club_owner_lnk WHERE pending_club_owner_id = ?`,
+      [draftId],
+    );
+    await trx.raw(
+      `DELETE FROM club_services_pending_club_owners_lnk WHERE pending_club_owner_id = ?`,
+      [draftId],
+    );
+    await trx.raw(
+      `DELETE FROM pending_club_owners_club_facilities_lnk WHERE pending_club_owner_id = ?`,
+      [draftId],
+    );
+    await trx.raw(
+      `DELETE FROM files_related_mph WHERE related_id = ? AND related_type = 'api::pending-club-owner.pending-club-owner'`,
+      [draftId],
+    );
+    await trx.raw(
+      `DELETE FROM up_users_pending_club_owner_lnk WHERE pending_club_owner_id = ?`,
+      [draftId],
+    );
+    await trx.raw(`DELETE FROM pending_club_owners WHERE id = ?`, [draftId]);
+  });
+}
+
+export async function deletePendingClubOwnersForUser(userId: number) {
+  if (!userId) return;
+  const res = await strapi.db.connection.raw(
+    `SELECT pending_club_owner_id FROM up_users_pending_club_owner_lnk WHERE user_id = ?`,
+    [userId],
+  );
+  const rows = res?.rows || [];
+  for (const row of rows) {
+    if (row.pending_club_owner_id) {
+      await deletePendingClubOwner(row.pending_club_owner_id);
+    }
+  }
+}
+
 /* ---------------- CREATE CLUB OWNER FROM PENDING DRAFT (DIRECT SQL) ---------------- */
-export async function createClubOwnerFromPending(userId: number, existingDraft?: any) {
+export async function createClubOwnerFromPending(
+  userId: number,
+  existingDraft?: any,
+) {
   const draft: any = existingDraft || (await getDraftDirect(userId, true));
   if (!draft) return null;
 
@@ -618,7 +667,10 @@ export async function createClubOwnerFromPending(userId: number, existingDraft?:
       ),
     ]);
 
-  if (existingRes?.rows?.[0]) return existingRes.rows[0];
+  if (existingRes?.rows?.[0]) {
+    await deletePendingClubOwner(draft.id);
+    return existingRes.rows[0];
+  }
 
   const logoId = draft.logo?.id ?? null;
   const photoIds = (photosRes?.rows || []).map((p: any) => p.id);
@@ -657,16 +709,7 @@ export async function createClubOwnerFromPending(userId: number, existingDraft?:
   });
 
   // Remove pending links in batch
-  await strapi.db.connection.raw(
-    `DELETE FROM club_owner_documents_pending_club_owner_lnk WHERE pending_club_owner_id = ?;
-     DELETE FROM club_photos_pending_club_owner_lnk WHERE pending_club_owner_id = ?;
-     DELETE FROM club_services_pending_club_owners_lnk WHERE pending_club_owner_id = ?;
-     DELETE FROM pending_club_owners_club_facilities_lnk WHERE pending_club_owner_id = ?;
-     DELETE FROM files_related_mph WHERE related_id = ? AND related_type = 'api::pending-club-owner.pending-club-owner';
-     DELETE FROM up_users_pending_club_owner_lnk WHERE pending_club_owner_id = ?;
-     DELETE FROM pending_club_owners WHERE id = ?;`,
-    [draft.id, draft.id, draft.id, draft.id, draft.id, draft.id, draft.id],
-  );
+  await deletePendingClubOwner(draft.id);
 
   return clubOwner;
 }
@@ -1230,10 +1273,9 @@ export default {
       }
 
       // Delete consumed OTP
-      await strapi.db.connection.raw(
-        `DELETE FROM otp_requests WHERE id = ?`,
-        [record.id],
-      );
+      await strapi.db.connection.raw(`DELETE FROM otp_requests WHERE id = ?`, [
+        record.id,
+      ]);
 
       const hasCompletedStep1Details = Boolean(
         draft.clubName && draft.ownerName,
@@ -2039,10 +2081,9 @@ export default {
       `DELETE FROM files_related_mph WHERE related_id = ? AND related_type = 'api::club-photo.club-photo'`,
       [photoId],
     );
-    await strapi.db.connection.raw(
-      `DELETE FROM club_photos WHERE id = ?`,
-      [photoId],
-    );
+    await strapi.db.connection.raw(`DELETE FROM club_photos WHERE id = ?`, [
+      photoId,
+    ]);
 
     ctx.send({ success: true, message: "Club photo deleted successfully" });
   },

@@ -1,4 +1,7 @@
-import { createClubOwnerFromPending } from "../../pending-club-owner/controllers/pending-club-owner";
+import {
+  createClubOwnerFromPending,
+  deletePendingClubOwnersForUser,
+} from "../../pending-club-owner/controllers/pending-club-owner";
 
 const PENDING_CLUB_OWNER_UID = "api::pending-club-owner.pending-club-owner";
 
@@ -39,6 +42,7 @@ export default {
 
       /* ---------- CREATE CLUB OWNER DETAILS FROM PENDING DRAFT ---------- */
       await createClubOwnerFromPending(user.id);
+      await deletePendingClubOwnersForUser(user.id);
 
       const updatedUser = await strapi.db
         .query("plugin::users-permissions.user")
@@ -52,6 +56,8 @@ export default {
             rejected_by: {
               populate: ["role"],
             },
+            club_owner: true,
+            pending_club_owner: true,
           },
         });
 

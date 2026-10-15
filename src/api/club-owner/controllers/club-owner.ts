@@ -778,9 +778,7 @@ export default factories.createCoreController(
               } catch (_) {}
             }
             const photoUrl =
-              formats?.small?.url ||
-              formats?.thumbnail?.url ||
-              photo.url;
+              formats?.small?.url || formats?.thumbnail?.url || photo.url;
 
             const url = formatMediaUrl(photoUrl);
             if (url) {
@@ -974,9 +972,7 @@ export default factories.createCoreController(
 
         // Prevent verifying same current value
         if (isEmail) {
-          const currentEmail = String(
-            clubOwner.email || user.email || "",
-          )
+          const currentEmail = String(clubOwner.email || user.email || "")
             .trim()
             .toLowerCase();
           if (identifier === currentEmail) {
@@ -2374,9 +2370,7 @@ export default factories.createCoreController(
               } catch (_) {}
             }
             const photoUrl =
-              formats?.small?.url ||
-              formats?.thumbnail?.url ||
-              photo.url;
+              formats?.small?.url || formats?.thumbnail?.url || photo.url;
 
             const formattedUrl = formatMediaUrl(photoUrl);
             if (formattedUrl) {
