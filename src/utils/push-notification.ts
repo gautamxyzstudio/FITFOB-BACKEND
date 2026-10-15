@@ -74,37 +74,35 @@ export async function sendPushNotification(
 
     /* ================= SEND TO EXPO ================= */
 
-    const response = await fetch(
-      "https://exp.host/--/api/v2/push/send",
-      {
-        method: "POST",
-
-        headers: {
-          Accept: "application/json",
-          "Accept-Encoding": "gzip, deflate",
-          "Content-Type": "application/json",
-        },
-
-        body: JSON.stringify(messages),
-      }
+    const results: any[] = [];
+    await Promise.allSettled(
+      messages.map(async (msg) => {
+        try {
+          const res = await fetch("https://exp.host/--/api/v2/push/send", {
+            method: "POST",
+            headers: {
+              Accept: "application/json",
+              "Accept-Encoding": "gzip, deflate",
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify([msg]),
+          });
+          const json = await res.json();
+          results.push({ token: msg.to, status: res.status, response: json });
+        } catch (err: any) {
+          results.push({ token: msg.to, error: err.message || "Failed to send" });
+        }
+      })
     );
 
-    const result = await response.json();
-
-    if (!response.ok) {
-      throw new Error(
-        `Expo Push API failed: ${JSON.stringify(result)}`
-      );
-    }
-
     strapi.log.info(
-      `Expo push processed for user ${userId}`
+      `Expo push processed for user ${userId} (${results.length} token(s))`
     );
 
     return {
       success: true,
       sent: tokens.length,
-      result,
+      results,
     };
   } catch (error) {
     strapi.log.error(

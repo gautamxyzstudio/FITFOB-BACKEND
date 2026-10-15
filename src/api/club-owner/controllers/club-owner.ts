@@ -260,6 +260,166 @@ function extractStringList(jsonField: any, relationItems: any[]): string[] {
   return Array.from(new Set(result));
 }
 
+/* ---------- RESOLVE FACILITY NAMES HELPER ---------- */
+async function resolveFacilityNames(
+  items: any,
+  relationItems?: any[],
+  ownerId?: number,
+): Promise<string[]> {
+  const names = extractStringList(items, relationItems || []);
+
+  // If items contains numeric IDs, resolve their names from club_facilities
+  let rawList = items;
+  if (typeof rawList === "string") {
+    try {
+      rawList = JSON.parse(rawList);
+    } catch {
+      rawList = rawList.split(",").map((s: string) => s.trim());
+    }
+  }
+  if (Array.isArray(rawList)) {
+    const numericIds = rawList
+      .map((x) => (typeof x === "object" && x !== null ? x.id : x))
+      .filter(
+        (x) =>
+          typeof x === "number" || (!isNaN(Number(x)) && typeof x === "string"),
+      )
+      .map((x) => Number(x));
+
+    if (numericIds.length > 0) {
+      try {
+        const found = await strapi.db
+          .query("api::club-facility.club-facility")
+          .findMany({
+            where: { id: { $in: numericIds } },
+            select: ["id", "name"],
+          });
+        if (Array.isArray(found)) {
+          for (const f of found) {
+            if (f?.name && typeof f.name === "string" && f.name.trim()) {
+              names.push(f.name.trim());
+            }
+          }
+        }
+      } catch (_) {}
+    }
+  }
+
+  // Fallback to relation link table if still empty and ownerId is present
+  if (names.length === 0 && ownerId) {
+    try {
+      const res = await strapi.db.connection.raw(
+        `SELECT cf.name FROM club_facilities cf
+         JOIN club_owners_club_facilities_lnk lnk ON lnk.club_facility_id = cf.id
+         WHERE lnk.club_owner_id = ?`,
+        [ownerId],
+      );
+      const rows = res?.rows || res || [];
+      if (Array.isArray(rows)) {
+        for (const r of rows) {
+          if (r?.name && typeof r.name === "string" && r.name.trim()) {
+            names.push(r.name.trim());
+          }
+        }
+      }
+    } catch (_) {}
+  }
+
+  if (names.length === 0 && Array.isArray(rawList) && rawList.length > 0) {
+    for (const item of rawList) {
+      if (item !== null && item !== undefined) {
+        names.push(
+          typeof item === "object"
+            ? item?.name || JSON.stringify(item)
+            : String(item),
+        );
+      }
+    }
+  }
+
+  return Array.from(new Set(names));
+}
+
+/* ---------- RESOLVE SERVICE NAMES HELPER ---------- */
+async function resolveServiceNames(
+  items: any,
+  relationItems?: any[],
+  ownerId?: number,
+): Promise<string[]> {
+  const names = extractStringList(items, relationItems || []);
+
+  // If items contains numeric IDs, resolve their names from club_services
+  let rawList = items;
+  if (typeof rawList === "string") {
+    try {
+      rawList = JSON.parse(rawList);
+    } catch {
+      rawList = rawList.split(",").map((s: string) => s.trim());
+    }
+  }
+  if (Array.isArray(rawList)) {
+    const numericIds = rawList
+      .map((x) => (typeof x === "object" && x !== null ? x.id : x))
+      .filter(
+        (x) =>
+          typeof x === "number" || (!isNaN(Number(x)) && typeof x === "string"),
+      )
+      .map((x) => Number(x));
+
+    if (numericIds.length > 0) {
+      try {
+        const found = await strapi.db
+          .query("api::club-service.club-service")
+          .findMany({
+            where: { id: { $in: numericIds } },
+            select: ["id", "name"],
+          });
+        if (Array.isArray(found)) {
+          for (const s of found) {
+            if (s?.name && typeof s.name === "string" && s.name.trim()) {
+              names.push(s.name.trim());
+            }
+          }
+        }
+      } catch (_) {}
+    }
+  }
+
+  // Fallback to relation link table if still empty and ownerId is present
+  if (names.length === 0 && ownerId) {
+    try {
+      const res = await strapi.db.connection.raw(
+        `SELECT cs.name FROM club_services cs
+         JOIN club_owners_club_services_lnk lnk ON lnk.club_service_id = cs.id
+         WHERE lnk.club_owner_id = ?`,
+        [ownerId],
+      );
+      const rows = res?.rows || res || [];
+      if (Array.isArray(rows)) {
+        for (const r of rows) {
+          if (r?.name && typeof r.name === "string" && r.name.trim()) {
+            names.push(r.name.trim());
+          }
+        }
+      }
+    } catch (_) {}
+  }
+
+  if (names.length === 0 && Array.isArray(rawList) && rawList.length > 0) {
+    for (const item of rawList) {
+      if (item !== null && item !== undefined) {
+        names.push(
+          typeof item === "object"
+            ? item?.name || JSON.stringify(item)
+            : String(item),
+        );
+      }
+    }
+  }
+
+  return Array.from(new Set(names));
+}
+
 /* ---------- RESOLVE CLIENT FAVORITES HELPER ---------- */
 async function resolveClientFavorites(ctx: Context): Promise<any[]> {
   try {
@@ -1473,18 +1633,35 @@ export default factories.createCoreController(
             user: {
               select: ["id", "email"],
             },
+            club_facilities: {
+              select: ["id", "name"],
+            },
+            club_services: {
+              select: ["id", "name"],
+            },
           },
         });
 
         if (!existing) {
           existing = await strapi.entityService.findOne(CLUB_OWNER_UID, id, {
-            populate: ["user"],
+            populate: ["user", "club_facilities", "club_services"],
           });
         }
 
         if (!existing) {
           return ctx.notFound("Club owner not found");
         }
+
+        const oldFacilities = await resolveFacilityNames(
+          existing?.facilities,
+          existing?.club_facilities,
+          existing?.id,
+        );
+        const oldServices = await resolveServiceNames(
+          existing?.services,
+          existing?.club_services,
+          existing?.id,
+        );
 
         // Ownership check: Club owner can only update their own profile, Admin/SuperAdmin can update all
         let userClubOwner: any = null;
@@ -1649,6 +1826,8 @@ export default factories.createCoreController(
                   { key: "state", label: "state" },
                   { key: "pincode", label: "pincode" },
                   { key: "clubCategory", label: "clubCategory" },
+                  { key: "latitude", label: "latitude" },
+                  { key: "longitude", label: "longitude" },
                 ];
 
                 for (const field of simpleFields) {
@@ -1672,25 +1851,46 @@ export default factories.createCoreController(
                   data.facilities !== undefined ||
                   data.club_facilities !== undefined
                 ) {
-                  changedDetails.push("facilities");
+                  const newFacilities = await resolveFacilityNames(
+                    entity?.facilities !== undefined
+                      ? entity.facilities
+                      : data.facilities !== undefined
+                      ? data.facilities
+                      : data.club_facilities,
+                    entity?.club_facilities,
+                    existing?.id || id,
+                  );
+                  const oldFacilitiesStr = oldFacilities.join(", ");
+                  const newFacilitiesStr = newFacilities.join(", ");
+                  if (oldFacilitiesStr !== newFacilitiesStr) {
+                    changedDetails.push(
+                      `facilities: '${oldFacilitiesStr}' -> '${newFacilitiesStr}'`,
+                    );
+                  }
                 }
                 if (
                   data.services !== undefined ||
                   data.club_services !== undefined
                 ) {
-                  changedDetails.push("services");
+                  const newServices = await resolveServiceNames(
+                    entity?.services !== undefined
+                      ? entity.services
+                      : data.services !== undefined
+                      ? data.services
+                      : data.club_services,
+                    entity?.club_services,
+                    existing?.id || id,
+                  );
+                  const oldServicesStr = oldServices.join(", ");
+                  const newServicesStr = newServices.join(", ");
+                  if (oldServicesStr !== newServicesStr) {
+                    changedDetails.push(
+                      `services: '${oldServicesStr}' -> '${newServicesStr}'`,
+                    );
+                  }
                 }
                 if (data.logo !== undefined) {
                   changedDetails.push("logo");
-                }
-                if (
-                  (data.latitude !== undefined &&
-                    String(data.latitude) !==
-                      String(existing.latitude ?? "")) ||
-                  (data.longitude !== undefined &&
-                    String(data.longitude) !== String(existing.longitude ?? ""))
-                ) {
-                  changedDetails.push("location (lat/long)");
                 }
 
                 const handledKeys = new Set([
@@ -1702,9 +1902,12 @@ export default factories.createCoreController(
                   "city",
                   "state",
                   "pincode",
+                  "clubCategory",
                   "weekdayScheduling",
                   "facilities",
+                  "club_facilities",
                   "services",
+                  "club_services",
                   "logo",
                   "latitude",
                   "longitude",

@@ -18,7 +18,8 @@ export interface OpenDaySchedule {
 
 export type DaySchedule = OpenDaySchedule | "closed";
 
-export type WeekdayScheduling = Record<DayOfWeek, DaySchedule> & Record<string, any>;
+export type WeekdayScheduling = Record<DayOfWeek, DaySchedule> &
+  Record<string, any>;
 
 /**
  * Parses diverse time string formats (e.g., "9am", "9pm", "9:30 AM", "09:00", "09:00:00.000")
@@ -72,7 +73,9 @@ export function formatTimeToHHMM(timeStr: any): string | null {
  * Reorders any weekdayScheduling object strictly in Monday-Sunday order
  * with openingTime always before closingTime.
  */
-export function orderWeekdayScheduling(scheduling: any): WeekdayScheduling | null {
+export function orderWeekdayScheduling(
+  scheduling: any,
+): WeekdayScheduling | null {
   if (!scheduling) return null;
 
   let raw = scheduling;
@@ -93,7 +96,11 @@ export function orderWeekdayScheduling(scheduling: any): WeekdayScheduling | nul
   for (const day of DAYS_OF_WEEK) {
     const dayData = raw[day];
 
-    if (!dayData || dayData === "closed" || (typeof dayData === "string" && dayData.toLowerCase() === "closed")) {
+    if (
+      !dayData ||
+      dayData === "closed" ||
+      (typeof dayData === "string" && dayData.toLowerCase() === "closed")
+    ) {
       ordered[day] = "closed";
     } else if (typeof dayData === "object") {
       if (
@@ -105,10 +112,16 @@ export function orderWeekdayScheduling(scheduling: any): WeekdayScheduling | nul
         ordered[day] = "closed";
       } else {
         const openingTime = formatTimeToHHMM(
-          dayData.openingTime || dayData.open || dayData.opening_time || dayData.from
+          dayData.openingTime ||
+            dayData.open ||
+            dayData.opening_time ||
+            dayData.from,
         );
         const closingTime = formatTimeToHHMM(
-          dayData.closingTime || dayData.close || dayData.closing_time || dayData.to
+          dayData.closingTime ||
+            dayData.close ||
+            dayData.closing_time ||
+            dayData.to,
         );
 
         if (!openingTime || !closingTime) {
@@ -140,7 +153,9 @@ export function orderWeekdayScheduling(scheduling: any): WeekdayScheduling | nul
  *    -> Any missing or closed day is marked as "closed" (e.g. "sunday": "closed")
  * 3. Array of days: [{ day: "monday", openingTime: "...", closingTime: "..." }, ...]
  */
-export function normalizeWeekdayScheduling(input: any): WeekdayScheduling | null {
+export function normalizeWeekdayScheduling(
+  input: any,
+): WeekdayScheduling | null {
   if (!input) return null;
 
   let raw = input;
@@ -159,7 +174,10 @@ export function normalizeWeekdayScheduling(input: any): WeekdayScheduling | null
   // Unwrap nested properties if passed under weekdayScheduling or weekday_scheduling
   if (raw.weekdayScheduling && typeof raw.weekdayScheduling === "object") {
     raw = raw.weekdayScheduling;
-  } else if (raw.weekday_scheduling && typeof raw.weekday_scheduling === "object") {
+  } else if (
+    raw.weekday_scheduling &&
+    typeof raw.weekday_scheduling === "object"
+  ) {
     raw = raw.weekday_scheduling;
   }
 
@@ -171,7 +189,9 @@ export function normalizeWeekdayScheduling(input: any): WeekdayScheduling | null
     raw.everyDay ||
     raw.allDays ||
     raw.all_days ||
-    (raw.isEveryday || raw.mode === "everyday" || raw.type === "everyday" ? raw : null);
+    (raw.isEveryday || raw.mode === "everyday" || raw.type === "everyday"
+      ? raw
+      : null);
 
   if (everydayObj && typeof everydayObj === "object") {
     const openRaw =
@@ -205,9 +225,15 @@ export function normalizeWeekdayScheduling(input: any): WeekdayScheduling | null
   // Legacy flat fallback: only openingTime and closingTime provided without day keys
   const hasSpecificDays =
     Array.isArray(raw) ||
-    DAYS_OF_WEEK.some((d) => d in raw || d.charAt(0).toUpperCase() + d.slice(1) in raw);
+    DAYS_OF_WEEK.some(
+      (d) => d in raw || d.charAt(0).toUpperCase() + d.slice(1) in raw,
+    );
 
-  if (!hasSpecificDays && (raw.openingTime || raw.open) && (raw.closingTime || raw.close)) {
+  if (
+    !hasSpecificDays &&
+    (raw.openingTime || raw.open) &&
+    (raw.closingTime || raw.close)
+  ) {
     const openingTime = formatTimeToHHMM(raw.openingTime || raw.open);
     const closingTime = formatTimeToHHMM(raw.closingTime || raw.close);
 
@@ -253,7 +279,10 @@ export function normalizeWeekdayScheduling(input: any): WeekdayScheduling | null
       continue;
     }
 
-    if (typeof dayData === "string" && dayData.toLowerCase().trim() === "closed") {
+    if (
+      typeof dayData === "string" &&
+      dayData.toLowerCase().trim() === "closed"
+    ) {
       result[day] = "closed";
       continue;
     }
