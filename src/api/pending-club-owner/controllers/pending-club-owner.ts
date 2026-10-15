@@ -987,6 +987,48 @@ export default {
         ? String(rawIdentifier).trim().toLowerCase()
         : normalizePhone(String(rawIdentifier).trim());
 
+      // Check if email or phone is already attached with another club in club_owners
+      if (isEmail) {
+        const existingClubRes = await strapi.db.connection.raw(
+          `SELECT id FROM club_owners WHERE LOWER(TRIM(email)) = LOWER(?) LIMIT 1`,
+          [identifier],
+        );
+
+        if (existingClubRes?.rows?.length > 0) {
+          return ctx.badRequest(
+            "This email is already attached with another club.",
+          );
+        }
+      } else {
+        const cleanDigits = identifier.replace(/\D/g, "");
+        const raw10 = cleanDigits.slice(-10);
+        const phoneVariants = Array.from(
+          new Set(
+            [
+              identifier,
+              cleanDigits,
+              `+91${raw10}`,
+              `91${raw10}`,
+              raw10,
+            ].filter(Boolean),
+          ),
+        );
+
+        const existingClubRes = await strapi.db.connection.raw(
+          `SELECT id FROM club_owners 
+           WHERE REPLACE(REPLACE(phone_number, ' ', ''), '-', '') = ANY(?) 
+              OR phone_number = ANY(?) 
+           LIMIT 1`,
+          [phoneVariants, phoneVariants],
+        );
+
+        if (existingClubRes?.rows?.length > 0) {
+          return ctx.badRequest(
+            "This phone number is already attached with another club.",
+          );
+        }
+      }
+
       // Save identifier to draft so draft stays in sync via direct SQL
       if (isEmail) {
         await strapi.db.connection.raw(
@@ -1289,6 +1331,48 @@ export default {
       identifier = isEmail
         ? identifier.toLowerCase()
         : normalizePhone(identifier);
+
+      // Check if email or phone is already attached with another club in club_owners
+      if (isEmail) {
+        const existingClubRes = await strapi.db.connection.raw(
+          `SELECT id FROM club_owners WHERE LOWER(TRIM(email)) = LOWER(?) LIMIT 1`,
+          [identifier],
+        );
+
+        if (existingClubRes?.rows?.length > 0) {
+          return ctx.badRequest(
+            "This email is already attached with another club.",
+          );
+        }
+      } else {
+        const cleanDigits = identifier.replace(/\D/g, "");
+        const raw10 = cleanDigits.slice(-10);
+        const phoneVariants = Array.from(
+          new Set(
+            [
+              identifier,
+              cleanDigits,
+              `+91${raw10}`,
+              `91${raw10}`,
+              raw10,
+            ].filter(Boolean),
+          ),
+        );
+
+        const existingClubRes = await strapi.db.connection.raw(
+          `SELECT id FROM club_owners 
+           WHERE REPLACE(REPLACE(phone_number, ' ', ''), '-', '') = ANY(?) 
+              OR phone_number = ANY(?) 
+           LIMIT 1`,
+          [phoneVariants, phoneVariants],
+        );
+
+        if (existingClubRes?.rows?.length > 0) {
+          return ctx.badRequest(
+            "This phone number is already attached with another club.",
+          );
+        }
+      }
 
       // Check cooldown (30 seconds) via direct SQL
       const existingRes = await strapi.db.connection.raw(

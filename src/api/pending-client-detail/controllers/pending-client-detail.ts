@@ -629,6 +629,48 @@ export default {
         ? String(rawIdentifier).trim().toLowerCase()
         : normalizePhone(String(rawIdentifier).trim());
 
+      // Check if email or phone is already attached with another client in client_details
+      if (isEmail) {
+        const existingClientRes = await strapi.db.connection.raw(
+          `SELECT id FROM client_details WHERE LOWER(TRIM(email)) = LOWER(?) LIMIT 1`,
+          [identifier],
+        );
+
+        if (existingClientRes?.rows?.length > 0) {
+          return ctx.badRequest(
+            "This email is already attached with another client.",
+          );
+        }
+      } else {
+        const cleanDigits = identifier.replace(/\D/g, "");
+        const raw10 = cleanDigits.slice(-10);
+        const phoneVariants = Array.from(
+          new Set(
+            [
+              identifier,
+              cleanDigits,
+              `+91${raw10}`,
+              `91${raw10}`,
+              raw10,
+            ].filter(Boolean),
+          ),
+        );
+
+        const existingClientRes = await strapi.db.connection.raw(
+          `SELECT id FROM client_details 
+           WHERE REPLACE(REPLACE(phone_number, ' ', ''), '-', '') = ANY(?) 
+              OR phone_number = ANY(?) 
+           LIMIT 1`,
+          [phoneVariants, phoneVariants],
+        );
+
+        if (existingClientRes?.rows?.length > 0) {
+          return ctx.badRequest(
+            "This phone number is already attached with another client.",
+          );
+        }
+      }
+
       // Save identifier to draft so draft stays in sync via direct Postgres update
       if (isEmail) {
         await strapi.db.connection.raw(
@@ -923,6 +965,48 @@ export default {
       identifier = isEmail
         ? identifier.toLowerCase()
         : normalizePhone(identifier);
+
+      // Check if email or phone is already attached with another client in client_details
+      if (isEmail) {
+        const existingClientRes = await strapi.db.connection.raw(
+          `SELECT id FROM client_details WHERE LOWER(TRIM(email)) = LOWER(?) LIMIT 1`,
+          [identifier],
+        );
+
+        if (existingClientRes?.rows?.length > 0) {
+          return ctx.badRequest(
+            "This email is already attached with another client.",
+          );
+        }
+      } else {
+        const cleanDigits = identifier.replace(/\D/g, "");
+        const raw10 = cleanDigits.slice(-10);
+        const phoneVariants = Array.from(
+          new Set(
+            [
+              identifier,
+              cleanDigits,
+              `+91${raw10}`,
+              `91${raw10}`,
+              raw10,
+            ].filter(Boolean),
+          ),
+        );
+
+        const existingClientRes = await strapi.db.connection.raw(
+          `SELECT id FROM client_details 
+           WHERE REPLACE(REPLACE(phone_number, ' ', ''), '-', '') = ANY(?) 
+              OR phone_number = ANY(?) 
+           LIMIT 1`,
+          [phoneVariants, phoneVariants],
+        );
+
+        if (existingClientRes?.rows?.length > 0) {
+          return ctx.badRequest(
+            "This phone number is already attached with another client.",
+          );
+        }
+      }
 
       // Check cooldown (30 seconds) directly in PostgreSQL
       const existingRes = await strapi.db.connection.raw(
