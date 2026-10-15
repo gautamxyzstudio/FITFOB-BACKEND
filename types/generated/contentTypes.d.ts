@@ -746,6 +746,8 @@ export interface ApiClubOwnerClubOwner extends Struct.CollectionTypeSchema {
     pincode: Schema.Attribute.String;
     publishedAt: Schema.Attribute.DateTime;
     read_by_admins: Schema.Attribute.JSON;
+    sendNotifications: Schema.Attribute.Boolean &
+      Schema.Attribute.DefaultTo<true>;
     services: Schema.Attribute.JSON;
     state: Schema.Attribute.String;
     updatedAt: Schema.Attribute.DateTime;

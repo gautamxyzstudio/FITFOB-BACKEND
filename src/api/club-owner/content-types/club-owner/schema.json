@@ -141,6 +141,10 @@
       "relation": "manyToMany",
       "target": "api::client-detail.client-detail",
       "mappedBy": "favorites"
+    },
+    "sendNotifications": {
+      "type": "boolean",
+      "default": true
     }
   }
 }
