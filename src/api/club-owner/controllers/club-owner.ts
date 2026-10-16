@@ -2124,65 +2124,33 @@ export default factories.createCoreController(
           return ctx.notFound("Club owner profile not found for this user");
         }
 
-        const {
-          startDate,
-          endDate,
-          from,
-          to,
-          start_date,
-          end_date,
-          date,
-          clientId,
-          client_id,
-          client,
-          clientName,
-          client_name,
-          name,
-          search,
-          q,
-          subscriptionType,
-        } = ctx.query as any;
+        const { startDate, endDate } = ctx.query as any;
 
         const where: any = {
           club_owner: clubOwner.id,
         };
 
-        // 3. Date range: custom range if passed, otherwise defaults to Today
-        const rawStartDate = startDate || from || start_date;
-        const rawEndDate = endDate || to || end_date;
-
-        if (date) {
-          const targetDate = new Date(date);
-          if (!isNaN(targetDate.getTime())) {
-            const dayStart = new Date(targetDate);
-            dayStart.setHours(0, 0, 0, 0);
-            const dayEnd = new Date(targetDate);
-            dayEnd.setHours(23, 59, 59, 999);
-            where.checkinTime = {
-              $gte: dayStart,
-              $lte: dayEnd,
-            };
-          }
-        } else if (rawStartDate || rawEndDate) {
+        // Date range: custom range if passed, otherwise defaults to Today
+        if (startDate || endDate) {
           where.checkinTime = {};
-          if (rawStartDate) {
-            const s = new Date(rawStartDate);
+          if (startDate) {
+            const s = new Date(startDate);
             if (!isNaN(s.getTime())) {
               if (
-                typeof rawStartDate === "string" &&
-                /^\d{4}-\d{2}-\d{2}$/.test(rawStartDate.trim())
+                typeof startDate === "string" &&
+                /^\d{4}-\d{2}-\d{2}$/.test(startDate.trim())
               ) {
                 s.setHours(0, 0, 0, 0);
               }
               where.checkinTime.$gte = s;
             }
           }
-          if (rawEndDate) {
-            const e = new Date(rawEndDate);
+          if (endDate) {
+            const e = new Date(endDate);
             if (!isNaN(e.getTime())) {
               if (
-                typeof rawEndDate === "string" &&
-                /^\d{4}-\d{2}-\d{2}$/.test(rawEndDate.trim())
+                typeof endDate === "string" &&
+                /^\d{4}-\d{2}-\d{2}$/.test(endDate.trim())
               ) {
                 e.setHours(23, 59, 59, 999);
               }
@@ -2214,111 +2182,6 @@ export default factories.createCoreController(
             $gte: startOfDay,
             $lte: endOfDay,
           };
-        }
-
-        // 4. Client filter by clientId or clientName / name / search (handles uppercase, lowercase, and partials)
-        const targetClientId = clientId || client_id || client;
-        const targetClientName =
-          clientName || client_name || name || search || q;
-
-        if (targetClientId || targetClientName) {
-          const clientWhere: any = {};
-
-          if (targetClientId && !targetClientName) {
-            const rawId = String(targetClientId).trim();
-            const isNum = !isNaN(Number(rawId)) && /^\d+$/.test(rawId);
-            const idConditions: any[] = [
-              { clientId: { $containsi: rawId } },
-              { clientId: rawId.toUpperCase() },
-              { clientId: rawId.toLowerCase() },
-              { documentId: rawId },
-            ];
-            if (isNum) {
-              idConditions.push({ id: Number(rawId) });
-            }
-            clientWhere.$or = idConditions;
-          } else if (targetClientName && !targetClientId) {
-            const trimmedName = String(targetClientName).trim();
-            const words = trimmedName.split(/\s+/).filter(Boolean);
-
-            if (words.length > 1) {
-              clientWhere.$and = words.map((w: string) => ({
-                $or: [
-                  { name: { $containsi: w } },
-                  { name: { $containsi: w.toLowerCase() } },
-                  { name: { $containsi: w.toUpperCase() } },
-                ],
-              }));
-            } else {
-              clientWhere.$or = [
-                { name: { $containsi: trimmedName } },
-                { name: { $containsi: trimmedName.toLowerCase() } },
-                { name: { $containsi: trimmedName.toUpperCase() } },
-              ];
-            }
-          } else if (targetClientId && targetClientName) {
-            const rawId = String(targetClientId).trim();
-            const isNum = !isNaN(Number(rawId)) && /^\d+$/.test(rawId);
-            const idConditions: any[] = [
-              { clientId: { $containsi: rawId } },
-              { clientId: rawId.toUpperCase() },
-              { clientId: rawId.toLowerCase() },
-              { documentId: rawId },
-            ];
-            if (isNum) {
-              idConditions.push({ id: Number(rawId) });
-            }
-
-            const trimmedName = String(targetClientName).trim();
-            const words = trimmedName.split(/\s+/).filter(Boolean);
-            const nameCondition =
-              words.length > 1
-                ? {
-                    $and: words.map((w: string) => ({
-                      $or: [
-                        { name: { $containsi: w } },
-                        { name: { $containsi: w.toLowerCase() } },
-                        { name: { $containsi: w.toUpperCase() } },
-                      ],
-                    })),
-                  }
-                : {
-                    $or: [
-                      { name: { $containsi: trimmedName } },
-                      { name: { $containsi: trimmedName.toLowerCase() } },
-                      { name: { $containsi: trimmedName.toUpperCase() } },
-                    ],
-                  };
-
-            clientWhere.$and = [{ $or: idConditions }, nameCondition];
-          }
-
-          const matchedClients = await strapi.db
-            .query("api::client-detail.client-detail")
-            .findMany({
-              where: clientWhere,
-              select: ["id"],
-            });
-
-          if (!matchedClients || matchedClients.length === 0) {
-            return ctx.send({ data: [] });
-          }
-
-          const clientIds = matchedClients.map((c: any) => c.id);
-          where.client_detail =
-            clientIds.length === 1 ? clientIds[0] : { $in: clientIds };
-        }
-
-        // 5. Subscription type filter (optional)
-        if (
-          subscriptionType &&
-          ["local", "outdoor"].includes(
-            String(subscriptionType).toLowerCase().trim(),
-          )
-        ) {
-          where.subscriptionType = String(subscriptionType)
-            .toLowerCase()
-            .trim();
         }
 
         // 6. Fetch check-ins
