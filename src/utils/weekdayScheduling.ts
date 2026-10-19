@@ -341,3 +341,82 @@ export function isValidWeekdayScheduling(scheduling: any): boolean {
 
   return false;
 }
+
+/**
+ * Formats a weekday scheduling object into a human-readable summary string.
+ * Groups consecutive days with identical opening/closing times.
+ * e.g. "Mon-Sun: 06:00-22:00" or "Mon-Sat: 06:00-22:00, Sun: closed"
+ */
+export function formatWeekdaySchedulingToString(scheduling: any): string {
+  if (!scheduling) return "none";
+
+  let raw = scheduling;
+  if (typeof raw === "string") {
+    try {
+      raw = JSON.parse(raw);
+    } catch {
+      return raw.trim() || "none";
+    }
+  }
+
+  if (typeof raw !== "object" || raw === null) return "none";
+
+  const ordered = orderWeekdayScheduling(
+    normalizeWeekdayScheduling(raw) || raw,
+  );
+  if (!ordered || typeof ordered !== "object") return "none";
+
+  const DAY_LABELS: Record<string, string> = {
+    monday: "Mon",
+    tuesday: "Tue",
+    wednesday: "Wed",
+    thursday: "Thu",
+    friday: "Fri",
+    saturday: "Sat",
+    sunday: "Sun",
+  };
+
+  const dayStrings = DAYS_OF_WEEK.map((day) => {
+    const val = ordered[day];
+    if (val && typeof val === "object" && val.openingTime && val.closingTime) {
+      return `${val.openingTime}-${val.closingTime}`;
+    }
+    return "closed";
+  });
+
+  const groups: { startDay: string; endDay: string; timing: string }[] = [];
+  let currentGroup: {
+    startDay: string;
+    endDay: string;
+    timing: string;
+  } | null = null;
+
+  for (let i = 0; i < DAYS_OF_WEEK.length; i++) {
+    const day = DAYS_OF_WEEK[i];
+    const timing = dayStrings[i];
+
+    if (!currentGroup) {
+      currentGroup = { startDay: day, endDay: day, timing };
+    } else if (currentGroup.timing === timing) {
+      currentGroup.endDay = day;
+    } else {
+      groups.push(currentGroup);
+      currentGroup = { startDay: day, endDay: day, timing };
+    }
+  }
+  if (currentGroup) {
+    groups.push(currentGroup);
+  }
+
+  if (groups.length === 0) return "none";
+
+  return groups
+    .map((g) => {
+      const label =
+        g.startDay === g.endDay
+          ? DAY_LABELS[g.startDay]
+          : `${DAY_LABELS[g.startDay]}-${DAY_LABELS[g.endDay]}`;
+      return `${label}: ${g.timing}`;
+    })
+    .join(", ");
+}

@@ -452,7 +452,7 @@ export interface ApiClientActivityLogClientActivityLog
     singularName: 'client-activity-log';
   };
   options: {
-    draftAndPublish: true;
+    draftAndPublish: false;
   };
   attributes: {
     actionType: Schema.Attribute.Enumeration<['buy-membership', 'checkin']>;

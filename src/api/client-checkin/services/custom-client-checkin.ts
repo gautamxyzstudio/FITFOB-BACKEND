@@ -145,7 +145,7 @@ export default () => ({
 
     if (localSub) {
       if (localSub.subscriptionStatus === "active") {
-        await strapi.entityService.create(
+        const checkin = await strapi.entityService.create(
           "api::client-checkin.client-checkin",
           {
             data: {
@@ -157,6 +157,17 @@ export default () => ({
             },
           },
         );
+
+        const gymName = clubOwner.clubName || clubOwner.club_name || "gym";
+        await strapi
+          .service("api::client-activity-log.client-activity-log")
+          .logActivity({
+            clientId: client.id,
+            actionType: "checkin",
+            entityName: "Client Checkin",
+            entityId: checkin?.documentId || checkin?.id,
+            description: `Checked in to ${gymName}`,
+          });
 
         return {
           status: "success",
@@ -244,7 +255,7 @@ export default () => ({
       }
     }
 
-    return await this.createOutdoorCheckin(client, clubOwner.id, outdoorSub);
+    return await this.createOutdoorCheckin(client, clubOwner, outdoorSub);
   },
 
   /* ====================================== */
@@ -290,7 +301,7 @@ export default () => ({
       throw new Error("Outdoor membership has no remaining visits");
     }
 
-    return await this.createOutdoorCheckin(client, clubOwner.id, outdoorSub);
+    return await this.createOutdoorCheckin(client, clubOwner, outdoorSub);
   },
 
   /* ====================================== */
@@ -299,9 +310,23 @@ export default () => ({
 
   async createOutdoorCheckin(
     client: any,
-    clubOwnerId: number,
+    clubOwnerOrId: any,
     outdoorSub: any,
   ) {
+    const clubOwnerId =
+      typeof clubOwnerOrId === "object" ? clubOwnerOrId.id : clubOwnerOrId;
+    let gymName =
+      typeof clubOwnerOrId === "object"
+        ? (clubOwnerOrId.clubName || clubOwnerOrId.club_name)
+        : null;
+
+    if (!gymName && clubOwnerId) {
+      const co = await strapi.db
+        .query("api::club-owner.club-owner")
+        .findOne({ where: { id: clubOwnerId }, select: ["clubName"] });
+      gymName = co?.clubName || null;
+    }
+
     return await strapi.db.connection.transaction(async () => {
       const newUsedVisits = outdoorSub.usedVisits + 1;
       const newRemainingVisits = outdoorSub.remainingVisits - 1;
@@ -327,15 +352,28 @@ export default () => ({
         },
       );
 
-      await strapi.entityService.create("api::client-checkin.client-checkin", {
-        data: {
-          client_detail: client.id,
-          club_owner: clubOwnerId,
-          subscriptionType: "outdoor",
-          checkinTime: new Date(),
-          outdoor_subscription: outdoorSub.id,
+      const checkin = await strapi.entityService.create(
+        "api::client-checkin.client-checkin",
+        {
+          data: {
+            client_detail: client.id,
+            club_owner: clubOwnerId,
+            subscriptionType: "outdoor",
+            checkinTime: new Date(),
+            outdoor_subscription: outdoorSub.id,
+          },
         },
-      });
+      );
+
+      await strapi
+        .service("api::client-activity-log.client-activity-log")
+        .logActivity({
+          clientId: client.id,
+          actionType: "checkin",
+          entityName: "Client Checkin",
+          entityId: checkin?.documentId || checkin?.id,
+          description: `Checked in to ${gymName || "gym"}`,
+        });
 
       return {
         status: "success",

@@ -5,6 +5,7 @@ import axios from "axios";
 import {
   normalizeWeekdayScheduling,
   orderWeekdayScheduling,
+  formatWeekdaySchedulingToString,
 } from "../../../utils/weekdayScheduling";
 import {
   resolveClubServiceIds,
@@ -1845,7 +1846,20 @@ export default factories.createCoreController(
                 }
 
                 if (data.weekdayScheduling !== undefined) {
-                  changedDetails.push("weekdayScheduling");
+                  const oldScheduleStr = formatWeekdaySchedulingToString(
+                    existing?.weekdayScheduling ?? existing?.weekday_scheduling,
+                  );
+                  const newScheduleStr = formatWeekdaySchedulingToString(
+                    entity?.weekdayScheduling ??
+                      entity?.weekday_scheduling ??
+                      updateData.weekdayScheduling ??
+                      data.weekdayScheduling,
+                  );
+                  if (oldScheduleStr !== newScheduleStr) {
+                    changedDetails.push(
+                      `weekdayScheduling: '${oldScheduleStr}' -> '${newScheduleStr}'`,
+                    );
+                  }
                 }
                 if (
                   data.facilities !== undefined ||
