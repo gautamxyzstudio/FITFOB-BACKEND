@@ -49,6 +49,14 @@ export default {
       },
     },
     {
+      method: "PUT",
+      path: "/toggle-send-noyifications/:documentId",
+      handler: "club-owner.toggleSendNotifications",
+      config: {
+        auth: {},
+      },
+    },
+    {
       method: "DELETE",
       path: "/club-owners/:id",
       handler: "club-owner.delete",

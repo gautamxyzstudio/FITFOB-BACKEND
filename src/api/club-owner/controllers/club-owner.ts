@@ -2017,6 +2017,107 @@ export default factories.createCoreController(
     },
 
     /* =======================================================
+       TOGGLE SEND NOTIFICATIONS (ADMIN / SUPERADMIN ONLY)
+       Route: PUT /api/toggle-send-noyifications/:documentId
+    ======================================================= */
+    async toggleSendNotifications(ctx: Context) {
+      try {
+        const user = ctx.state.user;
+
+        if (!user) {
+          return ctx.unauthorized("Authentication required");
+        }
+
+        const roleName = await getUserRole(user);
+        const isAdmin = roleName === "admin" || roleName === "superadmin";
+
+        if (!isAdmin) {
+          return ctx.forbidden(
+            "Access denied. Only Admin and SuperAdmin users can enable or disable notifications for club owners.",
+          );
+        }
+
+        const targetDocumentId =
+          ctx.params.documentId ||
+          ctx.params.documentid ||
+          ctx.params.id ||
+          (ctx.request.body as any)?.documentId ||
+          (ctx.query as any)?.documentId;
+
+        if (!targetDocumentId || String(targetDocumentId).trim() === "") {
+          return ctx.badRequest("Club owner documentId is required");
+        }
+
+        const docIdStr = String(targetDocumentId).trim();
+
+        // 1. Fetch existing club owner using direct PostgreSQL query
+        const selectSql = `
+          SELECT id, document_id, club_name, owner_name, send_notifications 
+          FROM club_owners 
+          WHERE document_id = ? OR CAST(id AS TEXT) = ?
+          LIMIT 1
+        `;
+        const selectRes = await strapi.db.connection.raw(selectSql, [
+          docIdStr,
+          docIdStr,
+        ]);
+        const existing = selectRes?.rows?.[0];
+
+        if (!existing) {
+          return ctx.notFound("Club owner not found with the provided documentId");
+        }
+
+        // 2. Determine target status (explicitly set if provided, otherwise toggle)
+        const body = getBody(ctx);
+        let targetStatus: boolean;
+
+        if (body.sendNotifications !== undefined) {
+          targetStatus = Boolean(body.sendNotifications);
+        } else if (body.send_notifications !== undefined) {
+          targetStatus = Boolean(body.send_notifications);
+        } else if (body.enabled !== undefined) {
+          targetStatus = Boolean(body.enabled);
+        } else if (body.status !== undefined) {
+          targetStatus = Boolean(body.status);
+        } else {
+          targetStatus = !Boolean(existing.send_notifications);
+        }
+
+        // 3. Update notification status in PostgreSQL directly
+        const updateSql = `
+          UPDATE club_owners 
+          SET send_notifications = ?, updated_at = NOW() 
+          WHERE id = ? 
+          RETURNING id, document_id, club_name, owner_name, send_notifications
+        `;
+        const updateRes = await strapi.db.connection.raw(updateSql, [
+          targetStatus,
+          existing.id,
+        ]);
+        const updated = updateRes?.rows?.[0] || {
+          ...existing,
+          send_notifications: targetStatus,
+        };
+
+        return ctx.send({
+          message: `Notifications ${
+            targetStatus ? "enabled" : "disabled"
+          } successfully`,
+          data: {
+            id: updated.id,
+            documentId: updated.document_id,
+            clubName: updated.club_name,
+            ownerName: updated.owner_name,
+            sendNotifications: updated.send_notifications,
+          },
+        });
+      } catch (err: any) {
+        strapi.log.error("TOGGLE SEND NOTIFICATIONS ERROR:", err);
+        return ctx.internalServerError("Failed to update notification status");
+      }
+    },
+
+    /* =======================================================
        GET LOGGED-IN CLUB OWNER
     ======================================================= */
     async getMyClubOwner(ctx: Context) {
