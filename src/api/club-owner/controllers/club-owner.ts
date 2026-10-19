@@ -2265,8 +2265,23 @@ export default factories.createCoreController(
           );
         }
 
-        const maxRadiusKm =
-          radius && !isNaN(Number(radius)) ? Number(radius) : 10;
+        let maxRadiusKm = 10;
+        if (
+          radius !== undefined &&
+          radius !== null &&
+          String(radius).trim() !== ""
+        ) {
+          const parsedRadius = Number(radius);
+          if (isNaN(parsedRadius) || parsedRadius <= 0) {
+            return ctx.badRequest(
+              "Please provide a valid radius greater than 0 km.",
+            );
+          }
+          if (parsedRadius > 30) {
+            return ctx.badRequest("Radius cannot exceed 30 km.");
+          }
+          maxRadiusKm = parsedRadius;
+        }
 
         const rawClubName = clubName || club_name || name || search || q;
         const targetClubName = rawClubName ? String(rawClubName).trim() : "";

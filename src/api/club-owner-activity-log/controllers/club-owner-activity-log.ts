@@ -134,6 +134,7 @@ export default factories.createCoreController(
        1. GET MY ACTIVITY LOGS (STRICTLY CLUB OWNER ONLY)
        Route: GET /api/club-owner-activity-logs/me
     ======================================================= */
+    
     async getMyLogs(ctx: Context) {
       try {
         const user = ctx.state.user;
@@ -254,141 +255,63 @@ export default factories.createCoreController(
           );
         }
 
-        const {
-          category,
-          actionType,
-          search,
-          startDate,
-          endDate,
-          clubId,
-          documentId,
-          club_owner,
-          ownerId,
-        } = ctx.query as any;
+        const { documentId, ownerDocumentId } = (ctx.query as any) || {};
+        const paramDocId = (ctx.params as any)?.documentId || (ctx.params as any)?.id;
 
-        const where: any = {};
+        const targetDocumentId = documentId || ownerDocumentId || paramDocId;
 
-        // Filter by clubId or documentId or ownerId if provided
-        const targetIdentifier = clubId || documentId || club_owner || ownerId;
+        if (!targetDocumentId || !String(targetDocumentId).trim()) {
+          return ctx.badRequest("Please provide owner documentId");
+        }
 
-        if (targetIdentifier) {
-          const owner = await findClubOwnerByIdentifier(
-            String(targetIdentifier),
+        const docId = String(targetDocumentId).trim();
+
+        // 1. Fetch club owner details directly via PostgreSQL
+        const ownerRes = await strapi.db.connection.raw(
+          `SELECT id, document_id, club_id, club_name, owner_name 
+           FROM club_owners 
+           WHERE document_id = ? 
+           LIMIT 1`,
+          [docId],
+        );
+
+        const owner = ownerRes?.rows?.[0];
+        if (!owner) {
+          return ctx.notFound(
+            `Club owner with documentId '${docId}' not found`,
           );
-          if (!owner) {
-            return ctx.notFound(
-              `Club owner with identifier '${targetIdentifier}' not found`,
-            );
-          }
-          where.club_owner = owner.id;
         }
 
-        // Category filter
-        if (category) {
-          where.category = String(category).trim();
-        }
+        // 2. Fetch all activity logs of that club owner in DESC order directly via PostgreSQL
+        const logsRes = await strapi.db.connection.raw(
+          `SELECT 
+            al.created_at AS "createdAt",
+            al.description,
+            al.entity_name AS "entityName",
+            al.action_type AS "actionType"
+          FROM club_owner_activity_logs al
+          JOIN club_owner_activity_logs_club_owner_lnk lnk ON lnk.club_owner_activity_log_id = al.id
+          WHERE lnk.club_owner_id = ?
+          ORDER BY al.created_at DESC`,
+          [owner.id],
+        );
 
-        // Action type filter
-        if (actionType) {
-          where.actionType = String(actionType).trim().toUpperCase();
-        }
+        const rawLogs = logsRes?.rows || [];
 
-        // Date range filter
-        if (startDate || endDate) {
-          where.createdAt = {};
-          if (startDate) {
-            where.createdAt.$gte = new Date(startDate);
-          }
-          if (endDate) {
-            const end = new Date(endDate);
-            end.setHours(23, 59, 59, 999);
-            where.createdAt.$lte = end;
-          }
-        }
+        const data = rawLogs.map((row: any) => ({
+          createdAt: row.createdAt,
+          description: row.description,
+          entityName: row.entityName,
+          actionType: row.actionType,
+          clubOwnerDocumentId: owner.document_id,
+        }));
 
-        // Search in description or entityName
-        if (search && String(search).trim()) {
-          const s = String(search).trim();
-          where.$or = [
-            { description: { $containsi: s } },
-            { entityName: { $containsi: s } },
-          ];
-        }
-
-        const logs: any[] = await strapi.db.query(ACTIVITY_LOG_UID).findMany({
-          where,
-          orderBy: { createdAt: "desc" },
-          populate: {
-            club_owner: {
-              select: ["id", "documentId", "clubId", "clubName", "ownerName"],
-            },
-          },
-        });
-
-        return ctx.send({
-          total: logs.length,
-          data: logs,
-        });
+        return ctx.send(data);
       } catch (error) {
         strapi.log.error("FIND ACTIVITY LOGS ERROR:", error);
         return ctx.internalServerError("Failed to fetch activity logs");
       }
     },
 
-    async findOne(ctx: Context) {
-      try {
-        const user = ctx.state.user;
-        const { id } = ctx.params;
-
-        if (!user) {
-          return ctx.unauthorized("Authentication required");
-        }
-
-        if (id === "me" || id === "my-logs") {
-          return (this as any).getMyLogs(ctx);
-        }
-
-        const roleName = await getUserRole(user);
-        const isNumeric = !isNaN(Number(id)) && /^\d+$/.test(String(id));
-
-        const where: any = isNumeric
-          ? { id: Number(id) }
-          : { documentId: String(id).trim() };
-
-        const log: any = await strapi.db.query(ACTIVITY_LOG_UID).findOne({
-          where,
-          populate: {
-            club_owner: {
-              select: ["id", "documentId", "clubId", "clubName", "ownerName"],
-            },
-          },
-        });
-
-        if (!log) {
-          return ctx.notFound("Activity log not found");
-        }
-
-        // Ownership enforcement for club owners
-        if (roleName === "clubowner") {
-          const owner = await getClubOwnerForUser(user);
-          if (
-            !owner ||
-            (log.club_owner?.id !== owner.id &&
-              log.club_owner?.documentId !== owner.documentId)
-          ) {
-            return ctx.forbidden(
-              "Access denied. You are not authorized to view activity logs of another club.",
-            );
-          }
-        } else if (roleName !== "admin" && roleName !== "superadmin") {
-          return ctx.forbidden("Access denied");
-        }
-
-        return ctx.send({ data: log });
-      } catch (error) {
-        strapi.log.error("FIND ONE ACTIVITY LOG ERROR:", error);
-        return ctx.internalServerError("Failed to fetch activity log");
-      }
-    },
   }),
 );

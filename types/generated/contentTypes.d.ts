@@ -443,6 +443,42 @@ export interface AdminUser extends Struct.CollectionTypeSchema {
   };
 }
 
+export interface ApiClientActivityLogClientActivityLog
+  extends Struct.CollectionTypeSchema {
+  collectionName: 'client_activity_logs';
+  info: {
+    displayName: 'client-activity-logs';
+    pluralName: 'client-activity-logs';
+    singularName: 'client-activity-log';
+  };
+  options: {
+    draftAndPublish: true;
+  };
+  attributes: {
+    actionType: Schema.Attribute.Enumeration<['buy-membership', 'checkin']>;
+    client_detail: Schema.Attribute.Relation<
+      'manyToOne',
+      'api::client-detail.client-detail'
+    >;
+    createdAt: Schema.Attribute.DateTime;
+    createdBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
+      Schema.Attribute.Private;
+    description: Schema.Attribute.Text;
+    entityId: Schema.Attribute.String;
+    entityName: Schema.Attribute.String;
+    locale: Schema.Attribute.String & Schema.Attribute.Private;
+    localizations: Schema.Attribute.Relation<
+      'oneToMany',
+      'api::client-activity-log.client-activity-log'
+    > &
+      Schema.Attribute.Private;
+    publishedAt: Schema.Attribute.DateTime;
+    updatedAt: Schema.Attribute.DateTime;
+    updatedBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
+      Schema.Attribute.Private;
+  };
+}
+
 export interface ApiClientCheckinClientCheckin
   extends Struct.CollectionTypeSchema {
   collectionName: 'client_checkins';
@@ -502,6 +538,10 @@ export interface ApiClientDetailClientDetail
     draftAndPublish: false;
   };
   attributes: {
+    client_activity_logs: Schema.Attribute.Relation<
+      'oneToMany',
+      'api::client-activity-log.client-activity-log'
+    >;
     client_checkins: Schema.Attribute.Relation<
       'oneToMany',
       'api::client-checkin.client-checkin'
@@ -1872,6 +1912,7 @@ declare module '@strapi/strapi' {
       'admin::transfer-token': AdminTransferToken;
       'admin::transfer-token-permission': AdminTransferTokenPermission;
       'admin::user': AdminUser;
+      'api::client-activity-log.client-activity-log': ApiClientActivityLogClientActivityLog;
       'api::client-checkin.client-checkin': ApiClientCheckinClientCheckin;
       'api::client-detail.client-detail': ApiClientDetailClientDetail;
       'api::club-facility.club-facility': ApiClubFacilityClubFacility;

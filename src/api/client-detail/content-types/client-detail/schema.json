@@ -97,6 +97,12 @@
       "relation": "manyToMany",
       "target": "api::club-owner.club-owner",
       "inversedBy": "favorited_by"
+    },
+    "client_activity_logs": {
+      "type": "relation",
+      "relation": "oneToMany",
+      "target": "api::client-activity-log.client-activity-log",
+      "mappedBy": "client_detail"
     }
   }
 }

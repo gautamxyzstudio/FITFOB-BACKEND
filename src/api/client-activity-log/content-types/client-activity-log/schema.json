@@ -1,0 +1,37 @@
+{
+  "kind": "collectionType",
+  "collectionName": "client_activity_logs",
+  "info": {
+    "singularName": "client-activity-log",
+    "pluralName": "client-activity-logs",
+    "displayName": "client-activity-logs"
+  },
+  "options": {
+    "draftAndPublish": true
+  },
+  "pluginOptions": {},
+  "attributes": {
+    "client_detail": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::client-detail.client-detail",
+      "inversedBy": "client_activity_logs"
+    },
+    "entityName": {
+      "type": "string"
+    },
+    "entityId": {
+      "type": "string"
+    },
+    "actionType": {
+      "type": "enumeration",
+      "enum": [
+        "buy-membership",
+        "checkin"
+      ]
+    },
+    "description": {
+      "type": "text"
+    }
+  }
+}
