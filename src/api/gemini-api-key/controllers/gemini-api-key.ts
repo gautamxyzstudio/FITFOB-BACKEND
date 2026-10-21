@@ -174,28 +174,79 @@ export default factories.createCoreController(
     
     async update(ctx) {
       if (!(await ensureAdmin(ctx))) return;
+
       const body = ctx.request.body || {};
       const rawKey = body?.data?.key ?? body?.key;
+      const rawIsActive = body?.data?.isActive ?? body?.isActive;
 
-      if (!rawKey || typeof rawKey !== "string" || !rawKey.trim()) {
+      // Ensure at least one field to update is provided
+      if (rawKey === undefined && rawIsActive === undefined) {
         return ctx.badRequest(
-          'API key is required. Please provide a valid non-empty "key" string in the request body.'
+          'At least one field ("key" or "isActive") must be provided in the request body.'
         );
       }
 
-      const trimmedKey = rawKey.trim();
+      let encryptedKey: string | undefined;
+      if (rawKey !== undefined) {
+        if (typeof rawKey !== "string" || !rawKey.trim()) {
+          return ctx.badRequest(
+            'Invalid "key" provided. Please provide a valid non-empty string for the API key.'
+          );
+        }
+        encryptedKey = encrypt(rawKey.trim());
+      }
 
-      // 3. Encrypt the key
-      const encryptedKey = encrypt(trimmedKey);
+      let parsedIsActive: boolean | undefined;
+      if (rawIsActive !== undefined) {
+        if (typeof rawIsActive === "boolean") {
+          parsedIsActive = rawIsActive;
+        } else if (typeof rawIsActive === "string") {
+          const lower = rawIsActive.trim().toLowerCase();
+          if (lower === "true" || lower === "1") {
+            parsedIsActive = true;
+          } else if (lower === "false" || lower === "0") {
+            parsedIsActive = false;
+          } else {
+            return ctx.badRequest(
+              'Invalid value for "isActive". It must be a boolean (true or false).'
+            );
+          }
+        } else if (typeof rawIsActive === "number") {
+          if (rawIsActive === 1) parsedIsActive = true;
+          else if (rawIsActive === 0) parsedIsActive = false;
+          else {
+            return ctx.badRequest(
+              'Invalid value for "isActive". It must be a boolean (true or false).'
+            );
+          }
+        } else {
+          return ctx.badRequest(
+            'Invalid value for "isActive". It must be a boolean (true or false).'
+          );
+        }
+      }
 
-      // 4. Update ctx.request.body so Strapi core controller persists the encrypted string
+      // Update ctx.request.body so Strapi core controller persists the changes
+      const existingData =
+        typeof body?.data === "object" && body.data !== null ? body.data : {};
+
+      const updateData: Record<string, any> = {
+        ...existingData,
+      };
+
+      if (encryptedKey !== undefined) {
+        updateData.key = encryptedKey;
+      }
+
+      if (parsedIsActive !== undefined) {
+        updateData.isActive = parsedIsActive;
+      }
+
       ctx.request.body = {
         ...(typeof body === "object" && body !== null ? body : {}),
-        data: {
-          ...(body?.data || {}),
-          key: encryptedKey,
-        },
+        data: updateData,
       };
+
       return await super.update(ctx);
     },
 
@@ -203,5 +254,6 @@ export default factories.createCoreController(
       if (!(await ensureAdmin(ctx))) return;
       return await super.delete(ctx);
     },
+    
   })
 );

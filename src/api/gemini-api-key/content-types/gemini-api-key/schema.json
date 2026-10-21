@@ -13,6 +13,10 @@
   "attributes": {
     "key": {
       "type": "text"
+    },
+    "isActive": {
+      "type": "boolean",
+      "default": true
     }
   }
 }
