@@ -103,6 +103,12 @@
       "relation": "oneToMany",
       "target": "api::client-activity-log.client-activity-log",
       "mappedBy": "client_detail"
+    },
+    "membership_payments": {
+      "type": "relation",
+      "relation": "oneToMany",
+      "target": "api::membership-payment.membership-payment",
+      "mappedBy": "client_detail"
     }
   }
 }

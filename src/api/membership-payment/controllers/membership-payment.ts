@@ -1,0 +1,7 @@
+/**
+ * membership-payment controller
+ */
+
+import { factories } from '@strapi/strapi';
+
+export default factories.createCoreController('api::membership-payment.membership-payment');

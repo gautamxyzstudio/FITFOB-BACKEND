@@ -1,9 +1,11 @@
 import { factories } from "@strapi/strapi";
 
 const LOCAL_SUB_UID = "api::local-subscription.local-subscription" as any;
-const LOCAL_PLAN_UID = "api::local-membership-plan.local-membership-plan" as any;
+const LOCAL_PLAN_UID =
+  "api::local-membership-plan.local-membership-plan" as any;
 const CLIENT_UID = "api::client-detail.client-detail" as any;
 const CLUB_OWNER_UID = "api::club-owner.club-owner" as any;
+import { createMembershipOrder } from "../../../utils/payment";
 
 /* ---------- ROLE HELPER ---------- */
 async function getUserRole(user: any): Promise<string> {
@@ -44,10 +46,7 @@ function extractLogoUrl(logo: any): string | null {
   if (!logo) return null;
   if (typeof logo === "string") return logo;
   return (
-    logo.url ||
-    logo.formats?.thumbnail?.url ||
-    logo.formats?.small?.url ||
-    null
+    logo.url || logo.formats?.thumbnail?.url || logo.formats?.small?.url || null
   );
 }
 
@@ -83,14 +82,7 @@ async function getClientDetailForUser(user: any) {
   // 1. Direct lookup by user foreign key (fast indexed query)
   let client: any = await strapi.db.query(CLIENT_UID).findOne({
     where: { user: userId },
-    select: [
-      "id",
-      "documentId",
-      "clientId",
-      "name",
-      "phoneNumber",
-      "email",
-    ],
+    select: ["id", "documentId", "clientId", "name", "phoneNumber", "email"],
   });
 
   // 2. Fallback via user table
@@ -185,14 +177,7 @@ async function resolveClientDetail(identifier: string | number) {
     where: {
       $or: whereConditions,
     },
-    select: [
-      "id",
-      "documentId",
-      "clientId",
-      "name",
-      "phoneNumber",
-      "email",
-    ],
+    select: ["id", "documentId", "clientId", "name", "phoneNumber", "email"],
   });
 
   return client || null;
@@ -220,10 +205,7 @@ async function resolveClubOwner(identifier: string | number) {
   }
 
   // 2. Query via db layer with numeric ID and string support
-  const whereConditions: any[] = [
-    { documentId: rawStr },
-    { clubId: rawStr },
-  ];
+  const whereConditions: any[] = [{ documentId: rawStr }, { clubId: rawStr }];
 
   if (isNumeric) {
     whereConditions.push({ id: Number(rawStr) });
@@ -272,9 +254,14 @@ async function resolveLocalPlan(identifier: string | number) {
         },
       });
       if (planDoc) {
-        if (planDoc.club_owner && (!planDoc.club_owner.documentId || !planDoc.club_owner.id)) {
+        if (
+          planDoc.club_owner &&
+          (!planDoc.club_owner.documentId || !planDoc.club_owner.id)
+        ) {
           const ownerIdentifier =
-            planDoc.club_owner.documentId || planDoc.club_owner.id || planDoc.club_owner;
+            planDoc.club_owner.documentId ||
+            planDoc.club_owner.id ||
+            planDoc.club_owner;
           const fullOwner = await resolveClubOwner(ownerIdentifier);
           if (fullOwner) planDoc.club_owner = fullOwner;
         }
@@ -327,11 +314,13 @@ export default factories.createCoreController(
     async buy(ctx) {
       try {
         const user = ctx.state.user;
+
         if (!user) {
           return ctx.unauthorized("Authentication required");
         }
 
         const roleName = await getUserRole(user);
+
         if (roleName !== "client") {
           return ctx.forbidden(
             "Access denied. Only registered clients can buy memberships online.",
@@ -423,7 +412,8 @@ export default factories.createCoreController(
         if (existingSub) {
           const isDatePassed =
             existingSub.endDate &&
-            new Date(existingSub.endDate).setHours(23, 59, 59, 999) < Date.now();
+            new Date(existingSub.endDate).setHours(23, 59, 59, 999) <
+              Date.now();
 
           if (isDatePassed) {
             try {
@@ -446,80 +436,34 @@ export default factories.createCoreController(
           }
         }
 
-        /* ---------- CREATE APP SUBSCRIPTION ---------- */
-        let createdSub: any = null;
+        /* ---------- CREATE RAZORPAY PAYMENT LINK ---------- */
 
-        if ((strapi as any).documents) {
-          try {
-            createdSub = await (strapi as any).documents(LOCAL_SUB_UID).create({
-              data: {
-                client_detail: clientDocId,
-                club_owner: clubOwnerDocId,
-                local_membership_plan: planDocId,
-                membershipType: "app",
-                startDate: startDate.toISOString(),
-                endDate,
-                subscriptionStatus: "active",
-              },
-              populate: {
-                club_owner: true,
-                local_membership_plan: true,
-                client_detail: true,
-              },
-            });
-          } catch (docErr) {
-            strapi.log.warn("Documents API create fallback in buy:", docErr);
-          }
+        const amountRupees = Number(plan.price);
+
+        if (!Number.isFinite(amountRupees) || amountRupees <= 0) {
+          return ctx.badRequest("Invalid local membership plan price.");
         }
 
-        if (!createdSub) {
-          createdSub = await strapi.entityService.create(LOCAL_SUB_UID, {
-            data: {
-              client_detail: clientId,
-              club_owner: clubOwnerId,
-              local_membership_plan: planId,
-              membershipType: "app",
-              startDate: startDate.toISOString(),
-              endDate,
-              subscriptionStatus: "active",
-            },
-            populate: {
-              club_owner: true,
-              local_membership_plan: true,
-              client_detail: true,
-            },
-          });
-        }
-
-        // Relational guarantee: ensure relations are linked and populated
-        if ((!createdSub?.club_owner || !createdSub?.local_membership_plan) && createdSub?.id) {
-          await strapi.db.query(LOCAL_SUB_UID).update({
-            where: { id: createdSub.id },
-            data: {
-              club_owner: clubOwnerId,
-              local_membership_plan: planId,
-              client_detail: clientId,
-            },
-          });
-
-          createdSub = await strapi.db.query(LOCAL_SUB_UID).findOne({
-            where: { id: createdSub.id },
-            populate: {
-              club_owner: true,
-              local_membership_plan: true,
-              client_detail: true,
-            },
-          });
-        }
-
-        if (createdSub?.club_owner) {
-          createdSub.club_owner = formatClubOwner(createdSub.club_owner);
-        }
+        const paymentData = await createMembershipOrder({
+          amountRupees,
+          clientId,
+          clientDocumentId: clientDocId,
+          planDocumentId: planDocId,
+          subscriptionType: "local",
+        });
 
         return ctx.send(
           {
-            message: "Membership purchased successfully via app",
-            data: createdSub,
+            message: "Payment link created successfully.",
+            data: {
+              ...paymentData,
+              plan: {
+                documentId: planDocId,
+                planName: plan.planName,
+                monthDuration,
+                endDate,
+              },
+            },
           },
           201,
         );
@@ -547,10 +491,7 @@ export default factories.createCoreController(
         const roleName = await getUserRole(user);
         const isAdmin = roleName === "admin" || roleName === "superadmin";
 
-        if (
-          roleName !== "clubowner" &&
-          !isAdmin
-        ) {
+        if (roleName !== "clubowner" && !isAdmin) {
           return ctx.forbidden(
             "Access denied. Only ClubOwner, Admin, or SuperAdmin can create offline memberships.",
           );
@@ -559,12 +500,8 @@ export default factories.createCoreController(
         const body = ctx.request.body;
         const payload = body?.data ? body.data : body || {};
 
-        const {
-          client_detail,
-          local_membership_plan,
-          club_owner,
-          ownerId,
-        } = payload;
+        const { client_detail, local_membership_plan, club_owner, ownerId } =
+          payload;
 
         if (!client_detail) {
           return ctx.badRequest(
@@ -703,7 +640,8 @@ export default factories.createCoreController(
         if (existingSub) {
           const isDatePassed =
             existingSub.endDate &&
-            new Date(existingSub.endDate).setHours(23, 59, 59, 999) < Date.now();
+            new Date(existingSub.endDate).setHours(23, 59, 59, 999) <
+              Date.now();
 
           if (isDatePassed) {
             try {
@@ -772,7 +710,10 @@ export default factories.createCoreController(
         }
 
         // Relational guarantee: ensure relations are linked and populated
-        if ((!createdSub?.club_owner || !createdSub?.local_membership_plan) && createdSub?.id) {
+        if (
+          (!createdSub?.club_owner || !createdSub?.local_membership_plan) &&
+          createdSub?.id
+        ) {
           await strapi.db.query(LOCAL_SUB_UID).update({
             where: { id: createdSub.id },
             data: {
@@ -1234,7 +1175,9 @@ export default factories.createCoreController(
                 updateData.subscriptionStatus !== existing.subscriptionStatus
               ) {
                 changedDetails.push(
-                  `status: '${existing.subscriptionStatus ?? ""}' -> '${updateData.subscriptionStatus}'`,
+                  `status: '${existing.subscriptionStatus ?? ""}' -> '${
+                    updateData.subscriptionStatus
+                  }'`,
                 );
               }
 
@@ -1243,7 +1186,9 @@ export default factories.createCoreController(
                 String(updateData.endDate) !== String(existing.endDate)
               ) {
                 changedDetails.push(
-                  `endDate: '${existing.endDate ?? ""}' -> '${updateData.endDate}'`,
+                  `endDate: '${existing.endDate ?? ""}' -> '${
+                    updateData.endDate
+                  }'`,
                 );
               }
 
@@ -1391,6 +1336,5 @@ export default factories.createCoreController(
         return ctx.internalServerError("Failed to delete subscription");
       }
     },
-    
-  })
+  }),
 );

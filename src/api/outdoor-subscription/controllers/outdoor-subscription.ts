@@ -1,7 +1,6 @@
 import { factories } from "@strapi/strapi";
 
-const OUTDOOR_SUB_UID =
-  "api::outdoor-subscription.outdoor-subscription" as any;
+const OUTDOOR_SUB_UID = "api::outdoor-subscription.outdoor-subscription" as any;
 const OUTDOOR_PLAN_UID =
   "api::outdoor-membership-plan.outdoor-membership-plan" as any;
 const CLIENT_UID = "api::client-detail.client-detail" as any;
@@ -204,31 +203,27 @@ export default factories.createCoreController(
 
         if ((strapi as any).documents && clientDocId && planDocId) {
           try {
-            existingSub = await (strapi as any).documents(OUTDOOR_SUB_UID).findFirst({
-              filters: {
-                $and: [
-                  {
-                    client_detail: {
-                      $or: [
-                        { documentId: clientDocId },
-                        { id: clientId },
-                      ],
+            existingSub = await (strapi as any)
+              .documents(OUTDOOR_SUB_UID)
+              .findFirst({
+                filters: {
+                  $and: [
+                    {
+                      client_detail: {
+                        $or: [{ documentId: clientDocId }, { id: clientId }],
+                      },
                     },
-                  },
-                  {
-                    outdoor_membership_plan: {
-                      $or: [
-                        { documentId: planDocId },
-                        { id: planId },
-                      ],
+                    {
+                      outdoor_membership_plan: {
+                        $or: [{ documentId: planDocId }, { id: planId }],
+                      },
                     },
-                  },
-                  {
-                    subscriptionStatus: "active",
-                  },
-                ],
-              },
-            });
+                    {
+                      subscriptionStatus: "active",
+                    },
+                  ],
+                },
+              });
           } catch (_) {}
         }
 
@@ -307,7 +302,10 @@ export default factories.createCoreController(
                 },
               });
           } catch (docErr) {
-            strapi.log.warn("Documents API create fallback in outdoor buy:", docErr);
+            strapi.log.warn(
+              "Documents API create fallback in outdoor buy:",
+              docErr,
+            );
           }
         }
 
@@ -433,31 +431,27 @@ export default factories.createCoreController(
 
         if ((strapi as any).documents && clientDocId && planDocId) {
           try {
-            existingSub = await (strapi as any).documents(OUTDOOR_SUB_UID).findFirst({
-              filters: {
-                $and: [
-                  {
-                    client_detail: {
-                      $or: [
-                        { documentId: clientDocId },
-                        { id: clientId },
-                      ],
+            existingSub = await (strapi as any)
+              .documents(OUTDOOR_SUB_UID)
+              .findFirst({
+                filters: {
+                  $and: [
+                    {
+                      client_detail: {
+                        $or: [{ documentId: clientDocId }, { id: clientId }],
+                      },
                     },
-                  },
-                  {
-                    outdoor_membership_plan: {
-                      $or: [
-                        { documentId: planDocId },
-                        { id: planId },
-                      ],
+                    {
+                      outdoor_membership_plan: {
+                        $or: [{ documentId: planDocId }, { id: planId }],
+                      },
                     },
-                  },
-                  {
-                    subscriptionStatus: "active",
-                  },
-                ],
-              },
-            });
+                    {
+                      subscriptionStatus: "active",
+                    },
+                  ],
+                },
+              });
           } catch (_) {}
         }
 
@@ -838,5 +832,5 @@ export default factories.createCoreController(
         return ctx.internalServerError("Failed to delete outdoor pass");
       }
     },
-  })
+  }),
 );

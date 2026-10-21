@@ -1,0 +1,69 @@
+{
+  "kind": "collectionType",
+  "collectionName": "membership_payments",
+  "info": {
+    "singularName": "membership-payment",
+    "pluralName": "membership-payments",
+    "displayName": "membership-payments"
+  },
+  "options": {
+    "draftAndPublish": false
+  },
+  "pluginOptions": {},
+  "attributes": {
+    "razorpayOrderId": {
+      "type": "string",
+      "unique": true
+    },
+    "razorpayPaymentLinkId": {
+      "type": "string",
+      "unique": true
+    },
+    "razorpayPaymentId": {
+      "type": "string"
+    },
+    "amount": {
+      "type": "decimal",
+      "required": true
+    },
+    "currency": {
+      "type": "string",
+      "default": "INR"
+    },
+    "paymentStatus": {
+      "type": "enumeration",
+      "enum": ["pending", "paid", "failed"],
+      "default": "pending",
+      "required": true
+    },
+    "subscriptionType": {
+      "type": "enumeration",
+      "enum": ["local", "outdoor"],
+      "required": true
+    },
+    "client_detail": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::client-detail.client-detail",
+      "inversedBy": "membership_payments"
+    },
+    "local_subscription": {
+      "type": "relation",
+      "relation": "oneToOne",
+      "target": "api::local-subscription.local-subscription",
+      "inversedBy": "membership_payment"
+    },
+    "outdoor_subscription": {
+      "type": "relation",
+      "relation": "oneToOne",
+      "target": "api::outdoor-subscription.outdoor-subscription",
+      "inversedBy": "membership_payment"
+    },
+    "localPlanDocumentId": {
+      "type": "string"
+    },
+    "outdoorPlanDocumentId": {
+      "type": "string"
+    }
+  }
+}

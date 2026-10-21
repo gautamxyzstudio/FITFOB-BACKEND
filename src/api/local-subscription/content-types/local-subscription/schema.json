@@ -31,11 +31,11 @@
     },
     "membershipType": {
       "type": "enumeration",
+      "default": "app",
       "enum": [
         "local",
         "app"
-      ],
-      "default": "app"
+      ]
     },
     "startDate": {
       "type": "datetime"
@@ -45,17 +45,23 @@
     },
     "subscriptionStatus": {
       "type": "enumeration",
+      "default": "active",
       "enum": [
         "active",
         "expired",
         "cancelled"
-      ],
-      "default": "active"
+      ]
     },
     "client_checkins": {
       "type": "relation",
       "relation": "oneToMany",
       "target": "api::client-checkin.client-checkin",
+      "mappedBy": "local_subscription"
+    },
+    "membership_payment": {
+      "type": "relation",
+      "relation": "oneToOne",
+      "target": "api::membership-payment.membership-payment",
       "mappedBy": "local_subscription"
     }
   }

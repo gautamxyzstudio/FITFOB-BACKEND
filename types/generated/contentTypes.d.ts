@@ -574,6 +574,10 @@ export interface ApiClientDetailClientDetail
     > &
       Schema.Attribute.Private;
     longitude: Schema.Attribute.String;
+    membership_payments: Schema.Attribute.Relation<
+      'oneToMany',
+      'api::membership-payment.membership-payment'
+    >;
     name: Schema.Attribute.String;
     outdoor_subscriptions: Schema.Attribute.Relation<
       'oneToMany',
@@ -1058,6 +1062,10 @@ export interface ApiLocalSubscriptionLocalSubscription
       'api::local-subscription.local-subscription'
     > &
       Schema.Attribute.Private;
+    membership_payment: Schema.Attribute.Relation<
+      'oneToOne',
+      'api::membership-payment.membership-payment'
+    >;
     membershipType: Schema.Attribute.Enumeration<['local', 'app']> &
       Schema.Attribute.DefaultTo<'app'>;
     publishedAt: Schema.Attribute.DateTime;
@@ -1066,6 +1074,58 @@ export interface ApiLocalSubscriptionLocalSubscription
       ['active', 'expired', 'cancelled']
     > &
       Schema.Attribute.DefaultTo<'active'>;
+    updatedAt: Schema.Attribute.DateTime;
+    updatedBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
+      Schema.Attribute.Private;
+  };
+}
+
+export interface ApiMembershipPaymentMembershipPayment
+  extends Struct.CollectionTypeSchema {
+  collectionName: 'membership_payments';
+  info: {
+    displayName: 'membership-payments';
+    pluralName: 'membership-payments';
+    singularName: 'membership-payment';
+  };
+  options: {
+    draftAndPublish: false;
+  };
+  attributes: {
+    amount: Schema.Attribute.Decimal & Schema.Attribute.Required;
+    client_detail: Schema.Attribute.Relation<
+      'manyToOne',
+      'api::client-detail.client-detail'
+    >;
+    createdAt: Schema.Attribute.DateTime;
+    createdBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
+      Schema.Attribute.Private;
+    currency: Schema.Attribute.String & Schema.Attribute.DefaultTo<'INR'>;
+    local_subscription: Schema.Attribute.Relation<
+      'oneToOne',
+      'api::local-subscription.local-subscription'
+    >;
+    locale: Schema.Attribute.String & Schema.Attribute.Private;
+    localizations: Schema.Attribute.Relation<
+      'oneToMany',
+      'api::membership-payment.membership-payment'
+    > &
+      Schema.Attribute.Private;
+    localPlanDocumentId: Schema.Attribute.String;
+    outdoor_subscription: Schema.Attribute.Relation<
+      'oneToOne',
+      'api::outdoor-subscription.outdoor-subscription'
+    >;
+    outdoorPlanDocumentId: Schema.Attribute.String;
+    paymentStatus: Schema.Attribute.Enumeration<['pending', 'paid', 'failed']> &
+      Schema.Attribute.Required &
+      Schema.Attribute.DefaultTo<'pending'>;
+    publishedAt: Schema.Attribute.DateTime;
+    razorpayOrderId: Schema.Attribute.String & Schema.Attribute.Unique;
+    razorpayPaymentId: Schema.Attribute.String;
+    razorpayPaymentLinkId: Schema.Attribute.String & Schema.Attribute.Unique;
+    subscriptionType: Schema.Attribute.Enumeration<['local', 'outdoor']> &
+      Schema.Attribute.Required;
     updatedAt: Schema.Attribute.DateTime;
     updatedBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
       Schema.Attribute.Private;
@@ -1182,6 +1242,10 @@ export interface ApiOutdoorSubscriptionOutdoorSubscription
       'api::outdoor-subscription.outdoor-subscription'
     > &
       Schema.Attribute.Private;
+    membership_payment: Schema.Attribute.Relation<
+      'oneToOne',
+      'api::membership-payment.membership-payment'
+    >;
     membershipType: Schema.Attribute.Enumeration<['local', 'app']> &
       Schema.Attribute.DefaultTo<'app'>;
     outdoor_membership_plan: Schema.Attribute.Relation<
@@ -1955,6 +2019,7 @@ declare module '@strapi/strapi' {
       'api::holdiday.holdiday': ApiHoldidayHoldiday;
       'api::local-membership-plan.local-membership-plan': ApiLocalMembershipPlanLocalMembershipPlan;
       'api::local-subscription.local-subscription': ApiLocalSubscriptionLocalSubscription;
+      'api::membership-payment.membership-payment': ApiMembershipPaymentMembershipPayment;
       'api::otp-request.otp-request': ApiOtpRequestOtpRequest;
       'api::outdoor-membership-plan.outdoor-membership-plan': ApiOutdoorMembershipPlanOutdoorMembershipPlan;
       'api::outdoor-subscription.outdoor-subscription': ApiOutdoorSubscriptionOutdoorSubscription;
