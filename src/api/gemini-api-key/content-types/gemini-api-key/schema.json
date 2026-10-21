@@ -1,0 +1,18 @@
+{
+  "kind": "singleType",
+  "collectionName": "gemini_api_keys",
+  "info": {
+    "singularName": "gemini-api-key",
+    "pluralName": "gemini-api-keys",
+    "displayName": "gemini-api-key"
+  },
+  "options": {
+    "draftAndPublish": false
+  },
+  "pluginOptions": {},
+  "attributes": {
+    "key": {
+      "type": "text"
+    }
+  }
+}
