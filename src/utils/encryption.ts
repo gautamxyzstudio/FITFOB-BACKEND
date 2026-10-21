@@ -8,12 +8,10 @@ const TAG_LENGTH = 16; // 16-byte auth tag
  * Derives a 32-byte (256-bit) encryption key from the environment secret
  */
 export function getEncryptionKey(): Buffer {
-  const secret =
-    process.env.GEMINI_ENCRYPTION_KEY ||
-    process.env.ENCRYPTION_KEY ||
-    process.env.ADMIN_JWT_SECRET ||
-    process.env.JWT_SECRET ||
-    "fitfob-secure-gemini-key-secret";
+  const secret = process.env.GEMINI_ENCRYPTION_KEY;
+  if (!secret) {
+    throw new Error("GEMINI_ENCRYPTION_KEY is not defined in the environment variables");
+  }
 
   return crypto.createHash("sha256").update(secret).digest();
 }
