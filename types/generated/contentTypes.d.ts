@@ -911,6 +911,34 @@ export interface ApiDeviceTokenDeviceToken extends Struct.CollectionTypeSchema {
   };
 }
 
+export interface ApiGeminiApiKeyGeminiApiKey extends Struct.SingleTypeSchema {
+  collectionName: 'gemini_api_keys';
+  info: {
+    displayName: 'gemini-api-key';
+    pluralName: 'gemini-api-keys';
+    singularName: 'gemini-api-key';
+  };
+  options: {
+    draftAndPublish: false;
+  };
+  attributes: {
+    createdAt: Schema.Attribute.DateTime;
+    createdBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
+      Schema.Attribute.Private;
+    key: Schema.Attribute.Text;
+    locale: Schema.Attribute.String & Schema.Attribute.Private;
+    localizations: Schema.Attribute.Relation<
+      'oneToMany',
+      'api::gemini-api-key.gemini-api-key'
+    > &
+      Schema.Attribute.Private;
+    publishedAt: Schema.Attribute.DateTime;
+    updatedAt: Schema.Attribute.DateTime;
+    updatedBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
+      Schema.Attribute.Private;
+  };
+}
+
 export interface ApiHoldidayHoldiday extends Struct.CollectionTypeSchema {
   collectionName: 'holdidays';
   info: {
@@ -1922,6 +1950,7 @@ declare module '@strapi/strapi' {
       'api::club-photo.club-photo': ApiClubPhotoClubPhoto;
       'api::club-service.club-service': ApiClubServiceClubService;
       'api::device-token.device-token': ApiDeviceTokenDeviceToken;
+      'api::gemini-api-key.gemini-api-key': ApiGeminiApiKeyGeminiApiKey;
       'api::holdiday.holdiday': ApiHoldidayHoldiday;
       'api::local-membership-plan.local-membership-plan': ApiLocalMembershipPlanLocalMembershipPlan;
       'api::local-subscription.local-subscription': ApiLocalSubscriptionLocalSubscription;

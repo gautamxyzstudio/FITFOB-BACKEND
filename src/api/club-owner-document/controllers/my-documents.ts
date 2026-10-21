@@ -65,5 +65,6 @@ export default factories.createCoreController(
         return ctx.internalServerError("Failed to get club owner documents");
       }
     },
+
   }),
 );
