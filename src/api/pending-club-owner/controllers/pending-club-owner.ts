@@ -1666,8 +1666,6 @@ export default {
     const draft: any = await getEditableDraft(ctx, false);
     if (!draft) return;
 
-    if (!(await ensureStep1Verified(ctx, draft))) return;
-
     const files: any = ctx.request.files;
     const rawFile = files?.file || files?.governmentDoc || files?.governmentId;
 
