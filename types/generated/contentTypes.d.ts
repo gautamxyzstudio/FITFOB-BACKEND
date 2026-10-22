@@ -1124,7 +1124,9 @@ export interface ApiMembershipPaymentMembershipPayment
     razorpayOrderId: Schema.Attribute.String & Schema.Attribute.Unique;
     razorpayPaymentId: Schema.Attribute.String;
     razorpayPaymentLinkId: Schema.Attribute.String & Schema.Attribute.Unique;
-    subscriptionType: Schema.Attribute.Enumeration<['local', 'outdoor']> &
+    subscriptionType: Schema.Attribute.Enumeration<
+      ['local', 'outdoor', 'both']
+    > &
       Schema.Attribute.Required;
     updatedAt: Schema.Attribute.DateTime;
     updatedBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &

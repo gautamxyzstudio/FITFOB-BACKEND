@@ -26,10 +26,7 @@
     "membershipType": {
       "type": "enumeration",
       "default": "app",
-      "enum": [
-        "local",
-        "app"
-      ]
+      "enum": ["local", "app"]
     },
     "totalVisitsAllowed": {
       "type": "integer"
@@ -44,11 +41,7 @@
     "subscriptionStatus": {
       "type": "enumeration",
       "default": "active",
-      "enum": [
-        "active",
-        "cancelled",
-        "expired"
-      ]
+      "enum": ["active", "cancelled", "expired"]
     },
     "client_checkins": {
       "type": "relation",

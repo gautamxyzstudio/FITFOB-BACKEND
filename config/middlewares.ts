@@ -55,6 +55,7 @@ export default [
       formLimit: "256mb",
       jsonLimit: "256mb",
       textLimit: "256mb",
+      includeUnparsed: true,
       formidable: {
         maxFileSize: 250 * 1024 * 1024, // 250MB
         multiples: true, // ⭐ THIS is the real fix

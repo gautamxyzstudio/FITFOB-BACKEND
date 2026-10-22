@@ -306,175 +306,7 @@ export default factories.createCoreController(
   "api::local-subscription.local-subscription",
   ({ strapi }) => ({
     /* =======================================================
-       1. BUY LOCAL MEMBERSHIP (CLIENT - ONLINE / APP)
-       membershipType: "app"
-       startDate: automatically set to now
-       endDate: calculated based on plan.monthDuration
-    ======================================================= */
-    async buy(ctx) {
-      try {
-        const user = ctx.state.user;
-
-        if (!user) {
-          return ctx.unauthorized("Authentication required");
-        }
-
-        const roleName = await getUserRole(user);
-
-        if (roleName !== "client") {
-          return ctx.forbidden(
-            "Access denied. Only registered clients can buy memberships online.",
-          );
-        }
-
-        const clientRecord = await getClientDetailForUser(user);
-        if (!clientRecord || !clientRecord.documentId) {
-          return ctx.badRequest(
-            "Client profile not found for this account. Please complete client profile registration first.",
-          );
-        }
-
-        const clientDocId = clientRecord.documentId;
-        const clientId = clientRecord.id;
-
-        const body = ctx.request.body;
-        const payload = body?.data ? body.data : body || {};
-
-        const { local_membership_plan } = payload;
-
-        if (!local_membership_plan) {
-          return ctx.badRequest(
-            "local_membership_plan is required (provide plan documentId)",
-          );
-        }
-
-        // Resolve plan
-        const plan = await resolveLocalPlan(local_membership_plan);
-        if (!plan) {
-          return ctx.notFound("Local membership plan not found");
-        }
-
-        if (plan.isActive === false) {
-          return ctx.badRequest(
-            "This local membership plan is currently inactive and cannot be purchased.",
-          );
-        }
-
-        if (!plan.club_owner) {
-          return ctx.badRequest(
-            "This membership plan is not associated with any club.",
-          );
-        }
-
-        let ownerRecord = plan.club_owner;
-        if (!ownerRecord.documentId || !ownerRecord.id) {
-          const ownerIdentifier =
-            ownerRecord.documentId || ownerRecord.id || ownerRecord;
-          const resolvedOwner = await resolveClubOwner(ownerIdentifier);
-          if (resolvedOwner) {
-            ownerRecord = resolvedOwner;
-          }
-        }
-
-        const clubOwnerDocId = ownerRecord.documentId;
-        const clubOwnerId = ownerRecord.id || ownerRecord;
-        const planDocId = plan.documentId;
-        const planId = plan.id;
-
-        const startDate = new Date();
-        const monthDuration = Number(plan.monthDuration) || 1;
-        const endDate = calculateEndDate(startDate, monthDuration);
-
-        /* ---------- CHECK EXISTING ACTIVE SUBSCRIPTION ---------- */
-        const existingSub: any = await strapi.db.query(LOCAL_SUB_UID).findOne({
-          where: {
-            $and: [
-              {
-                $or: [
-                  { client_detail: clientId },
-                  { client_detail: { id: clientId } },
-                  { client_detail: { documentId: clientDocId } },
-                ],
-              },
-              {
-                $or: [
-                  { local_membership_plan: planId },
-                  { local_membership_plan: { id: planId } },
-                  { local_membership_plan: { documentId: planDocId } },
-                ],
-              },
-              { subscriptionStatus: "active" },
-            ],
-          },
-          orderBy: { id: "desc" },
-        });
-
-        if (existingSub) {
-          const isDatePassed =
-            existingSub.endDate &&
-            new Date(existingSub.endDate).setHours(23, 59, 59, 999) <
-              Date.now();
-
-          if (isDatePassed) {
-            try {
-              if ((strapi as any).documents && existingSub.documentId) {
-                await (strapi as any).documents(LOCAL_SUB_UID).update({
-                  documentId: existingSub.documentId,
-                  data: { subscriptionStatus: "expired" },
-                });
-              } else {
-                await strapi.db.query(LOCAL_SUB_UID).update({
-                  where: { id: existingSub.id },
-                  data: { subscriptionStatus: "expired" },
-                });
-              }
-            } catch (_) {}
-          } else {
-            return ctx.badRequest(
-              "You already have an active subscription for this membership plan.",
-            );
-          }
-        }
-
-        /* ---------- CREATE RAZORPAY PAYMENT LINK ---------- */
-
-        const amountRupees = Number(plan.price);
-
-        if (!Number.isFinite(amountRupees) || amountRupees <= 0) {
-          return ctx.badRequest("Invalid local membership plan price.");
-        }
-
-        const paymentData = await createMembershipOrder({
-          amountRupees,
-          clientId,
-          clientDocumentId: clientDocId,
-          planDocumentId: planDocId,
-          subscriptionType: "local",
-        });
-
-        return ctx.send(
-          {
-            message: "Payment link created successfully.",
-            data: {
-              ...paymentData,
-              plan: {
-                documentId: planDocId,
-                planName: plan.planName,
-                monthDuration,
-                endDate,
-              },
-            },
-          },
-          201,
-        );
-      } catch (error) {
-        strapi.log.error("BUY LOCAL SUBSCRIPTION ERROR:", error);
-        return ctx.internalServerError("Failed to purchase membership");
-      }
-    },
-
-    /* =======================================================
-       2. MANUAL / OFFLINE MEMBERSHIP CREATION (CLUB OWNER / ADMIN)
+       MANUAL / OFFLINE MEMBERSHIP CREATION (CLUB OWNER / ADMIN)
        membershipType: "local"
        startDate: automatically set to now
        endDate: calculated based on plan.monthDuration
@@ -780,7 +612,7 @@ export default factories.createCoreController(
     },
 
     /* =======================================================
-       3. GET MY SUBSCRIPTIONS
+       GET MY SUBSCRIPTIONS
        - Client: returns all their own local subscriptions
        - ClubOwner: returns all local subscriptions for their gym
     ======================================================= */
@@ -897,7 +729,7 @@ export default factories.createCoreController(
     },
 
     /* =======================================================
-       4. FIND ALL / FILTER LOCAL SUBSCRIPTIONS
+       FIND ALL / FILTER LOCAL SUBSCRIPTIONS
     ======================================================= */
     async find(ctx) {
       try {
@@ -1001,7 +833,7 @@ export default factories.createCoreController(
     },
 
     /* =======================================================
-       5. GET SINGLE LOCAL SUBSCRIPTION
+       GET SINGLE LOCAL SUBSCRIPTION
     ======================================================= */
     async findOne(ctx) {
       try {
@@ -1068,7 +900,7 @@ export default factories.createCoreController(
     },
 
     /* =======================================================
-       6. UPDATE LOCAL SUBSCRIPTION (STATUS / END DATE)
+       UPDATE LOCAL SUBSCRIPTION (STATUS / END DATE)
     ======================================================= */
     async update(ctx) {
       try {
@@ -1232,7 +1064,7 @@ export default factories.createCoreController(
     },
 
     /* =======================================================
-       7. DELETE LOCAL SUBSCRIPTION
+       DELETE LOCAL SUBSCRIPTION
     ======================================================= */
     async delete(ctx) {
       try {

@@ -12,8 +12,9 @@ type CreateMembershipOrderParams = {
   amountRupees: number;
   clientId: number;
   clientDocumentId?: string;
-  planDocumentId?: string;
-  subscriptionType: "local" | "outdoor";
+  localPlanDocumentId?: string;
+  outdoorPlanDocumentId?: string;
+  subscriptionType: "local" | "outdoor" | "both";
 };
 
 export async function createMembershipOrder(
@@ -23,7 +24,8 @@ export async function createMembershipOrder(
     amountRupees,
     clientId,
     clientDocumentId,
-    planDocumentId,
+    localPlanDocumentId,
+    outdoorPlanDocumentId,
     subscriptionType,
   } = params;
 
@@ -38,24 +40,43 @@ export async function createMembershipOrder(
     throw new Error("Razorpay credentials are not configured.");
   }
 
-  // Razorpay expects the amount in paise.
+  if (subscriptionType === "local" && !localPlanDocumentId) {
+    throw new Error("Local membership plan is required.");
+  }
+
+  if (subscriptionType === "outdoor" && !outdoorPlanDocumentId) {
+    throw new Error("Outdoor membership plan is required.");
+  }
+
+  if (
+    subscriptionType === "both" &&
+    (!localPlanDocumentId || !outdoorPlanDocumentId)
+  ) {
+    throw new Error(
+      "Both local and outdoor membership plans are required.",
+    );
+  }
+
   const amountPaise = Math.round(amountRupees * 100);
 
-  // Create a Razorpay Payment Link instead of an Order.
- const paymentLink = await (razorpay as any).paymentLink.create({
+  const paymentLink = await (razorpay as any).paymentLink.create({
     amount: amountPaise,
     currency: "INR",
     reference_id: `${subscriptionType}_${Date.now()}`,
-    description: `${subscriptionType} membership payment`,
+    description:
+      subscriptionType === "both"
+        ? "Local and outdoor membership payment"
+        : `${subscriptionType} membership payment`,
     reminder_enable: false,
+    expire_by: Math.floor(Date.now() / 1000) + 16 * 60,
     notes: {
       clientDocumentId: clientDocumentId || "",
-      planDocumentId: planDocumentId || "",
+      localPlanDocumentId: localPlanDocumentId || "",
+      outdoorPlanDocumentId: outdoorPlanDocumentId || "",
       subscriptionType,
     },
   });
 
-  // Save the payment as pending until payment is verified.
   const payment = await strapi.entityService.create(PAYMENT_UID, {
     data: {
       razorpayPaymentLinkId: paymentLink.id,
@@ -64,9 +85,8 @@ export async function createMembershipOrder(
       paymentStatus: "pending",
       subscriptionType,
       client_detail: clientId,
-      ...(subscriptionType === "local"
-        ? { localPlanDocumentId: planDocumentId }
-        : { outdoorPlanDocumentId: planDocumentId }),
+      ...(localPlanDocumentId ? { localPlanDocumentId } : {}),
+      ...(outdoorPlanDocumentId ? { outdoorPlanDocumentId } : {}),
     },
   });
 

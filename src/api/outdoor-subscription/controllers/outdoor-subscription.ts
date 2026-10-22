@@ -1,5 +1,5 @@
 import { factories } from "@strapi/strapi";
-
+import { createMembershipOrder } from "../../../utils/payment";
 const OUTDOOR_SUB_UID = "api::outdoor-subscription.outdoor-subscription" as any;
 const OUTDOOR_PLAN_UID =
   "api::outdoor-membership-plan.outdoor-membership-plan" as any;
@@ -143,224 +143,7 @@ export default factories.createCoreController(
   "api::outdoor-subscription.outdoor-subscription",
   ({ strapi }) => ({
     /* =======================================================
-       1. BUY OUTDOOR MEMBERSHIP (CLIENT - ONLINE / APP)
-       membershipType: "app"
-       totalVisitsAllowed: plan.visitAllowed
-       usedVisits: 0
-       remainingVisits: plan.visitAllowed
-    ======================================================= */
-    async buy(ctx) {
-      try {
-        const user = ctx.state.user;
-        if (!user) {
-          return ctx.unauthorized("Authentication required");
-        }
-
-        const roleName = await getUserRole(user);
-        if (roleName !== "client") {
-          return ctx.forbidden(
-            "Access denied. Only registered clients can buy outdoor passes online.",
-          );
-        }
-
-        const clientRecord = await getClientDetailForUser(user.id);
-        if (!clientRecord) {
-          return ctx.badRequest(
-            "Client profile not found for this account. Please complete client profile registration first.",
-          );
-        }
-
-        const body = ctx.request.body;
-        const payload = body?.data ? body.data : body || {};
-
-        const { outdoor_membership_plan } = payload;
-
-        if (!outdoor_membership_plan) {
-          return ctx.badRequest(
-            "outdoor_membership_plan is required (provide plan documentId or numeric id)",
-          );
-        }
-
-        const plan = await resolveOutdoorPlan(outdoor_membership_plan);
-        if (!plan) {
-          return ctx.notFound("Outdoor membership plan not found");
-        }
-
-        if (plan.isActive === false) {
-          return ctx.badRequest(
-            "This outdoor membership plan is currently inactive and cannot be purchased.",
-          );
-        }
-
-        const visits = Number(plan.visitAllowed) || 0;
-        const clientId = clientRecord.id;
-        const clientDocId = clientRecord.documentId;
-        const planId = plan.id;
-        const planDocId = plan.documentId;
-
-        /* ---------- CHECK EXISTING ACTIVE SUBSCRIPTION (SAME PLAN) ---------- */
-        let existingSub: any = null;
-
-        if ((strapi as any).documents && clientDocId && planDocId) {
-          try {
-            existingSub = await (strapi as any)
-              .documents(OUTDOOR_SUB_UID)
-              .findFirst({
-                filters: {
-                  $and: [
-                    {
-                      client_detail: {
-                        $or: [{ documentId: clientDocId }, { id: clientId }],
-                      },
-                    },
-                    {
-                      outdoor_membership_plan: {
-                        $or: [{ documentId: planDocId }, { id: planId }],
-                      },
-                    },
-                    {
-                      subscriptionStatus: "active",
-                    },
-                  ],
-                },
-              });
-          } catch (_) {}
-        }
-
-        if (!existingSub) {
-          existingSub = await strapi.db.query(OUTDOOR_SUB_UID).findOne({
-            where: {
-              $and: [
-                {
-                  $or: [
-                    { client_detail: clientId },
-                    { client_detail: { id: clientId } },
-                    { client_detail: { documentId: clientDocId } },
-                  ],
-                },
-                {
-                  $or: [
-                    { outdoor_membership_plan: planId },
-                    { outdoor_membership_plan: { id: planId } },
-                    { outdoor_membership_plan: { documentId: planDocId } },
-                  ],
-                },
-                { subscriptionStatus: "active" },
-              ],
-            },
-            orderBy: { id: "desc" },
-          });
-        }
-
-        if (existingSub) {
-          const isVisitsExhausted =
-            existingSub.remainingVisits !== undefined &&
-            existingSub.remainingVisits !== null &&
-            Number(existingSub.remainingVisits) <= 0;
-
-          if (isVisitsExhausted) {
-            try {
-              if ((strapi as any).documents && existingSub.documentId) {
-                await (strapi as any).documents(OUTDOOR_SUB_UID).update({
-                  documentId: existingSub.documentId,
-                  data: { subscriptionStatus: "expired" },
-                });
-              } else {
-                await strapi.db.query(OUTDOOR_SUB_UID).update({
-                  where: { id: existingSub.id },
-                  data: { subscriptionStatus: "expired" },
-                });
-              }
-            } catch (_) {}
-          } else {
-            return ctx.badRequest(
-              "You already have an active subscription for this membership plan.",
-            );
-          }
-        }
-
-        /* ---------- CREATE APP OUTDOOR SUBSCRIPTION ---------- */
-        let createdSub: any = null;
-
-        if ((strapi as any).documents) {
-          try {
-            createdSub = await (strapi as any)
-              .documents(OUTDOOR_SUB_UID)
-              .create({
-                data: {
-                  client_detail: clientDocId || clientId,
-                  outdoor_membership_plan: planDocId || planId,
-                  membershipType: "app",
-                  totalVisitsAllowed: visits,
-                  usedVisits: 0,
-                  remainingVisits: visits,
-                  subscriptionStatus: "active",
-                },
-                populate: {
-                  client_detail: true,
-                  outdoor_membership_plan: true,
-                },
-              });
-          } catch (docErr) {
-            strapi.log.warn(
-              "Documents API create fallback in outdoor buy:",
-              docErr,
-            );
-          }
-        }
-
-        if (!createdSub) {
-          createdSub = await strapi.entityService.create(OUTDOOR_SUB_UID, {
-            data: {
-              client_detail: clientId,
-              outdoor_membership_plan: planId,
-              membershipType: "app",
-              totalVisitsAllowed: visits,
-              usedVisits: 0,
-              remainingVisits: visits,
-              subscriptionStatus: "active",
-            },
-            populate: {
-              client_detail: true,
-              outdoor_membership_plan: true,
-            },
-          });
-        }
-
-        // Relational guarantee
-        if (!createdSub?.client_detail && createdSub?.id) {
-          await strapi.db.query(OUTDOOR_SUB_UID).update({
-            where: { id: createdSub.id },
-            data: {
-              client_detail: clientId,
-              outdoor_membership_plan: planId,
-            },
-          });
-
-          createdSub = await strapi.db.query(OUTDOOR_SUB_UID).findOne({
-            where: { id: createdSub.id },
-            populate: {
-              client_detail: true,
-              outdoor_membership_plan: true,
-            },
-          });
-        }
-
-        return ctx.send(
-          {
-            message: "Outdoor pass purchased successfully via app",
-            data: createdSub,
-          },
-          201,
-        );
-      } catch (error) {
-        strapi.log.error("BUY OUTDOOR SUBSCRIPTION ERROR:", error);
-        return ctx.internalServerError("Failed to purchase outdoor pass");
-      }
-    },
-
-    /* =======================================================
-       2. MANUAL / OFFLINE OUTDOOR PASS CREATION (ADMIN / OWNER)
+       MANUAL / OFFLINE OUTDOOR PASS CREATION (ADMIN / OWNER)
        membershipType: "local"
     ======================================================= */
     async create(ctx) {
@@ -585,7 +368,7 @@ export default factories.createCoreController(
     },
 
     /* =======================================================
-       3. GET MY OUTDOOR SUBSCRIPTIONS (CLIENT)
+       GET MY OUTDOOR SUBSCRIPTIONS (CLIENT)
     ======================================================= */
     async getMySubscriptions(ctx) {
       try {
@@ -631,7 +414,7 @@ export default factories.createCoreController(
     },
 
     /* =======================================================
-       4. FIND ALL / FILTER OUTDOOR SUBSCRIPTIONS
+       FIND ALL / FILTER OUTDOOR SUBSCRIPTIONS
     ======================================================= */
     async find(ctx) {
       try {
@@ -684,7 +467,7 @@ export default factories.createCoreController(
     },
 
     /* =======================================================
-       5. GET SINGLE OUTDOOR SUBSCRIPTION
+       GET SINGLE OUTDOOR SUBSCRIPTION
     ======================================================= */
     async findOne(ctx) {
       try {
@@ -720,7 +503,7 @@ export default factories.createCoreController(
     },
 
     /* =======================================================
-       6. UPDATE OUTDOOR SUBSCRIPTION (ADMIN / SUPERADMIN ONLY)
+       UPDATE OUTDOOR SUBSCRIPTION (ADMIN / SUPERADMIN ONLY)
     ======================================================= */
     async update(ctx) {
       try {
@@ -791,7 +574,7 @@ export default factories.createCoreController(
     },
 
     /* =======================================================
-       7. DELETE OUTDOOR SUBSCRIPTION (ADMIN / SUPERADMIN ONLY)
+       DELETE OUTDOOR SUBSCRIPTION (ADMIN / SUPERADMIN ONLY)
     ======================================================= */
     async delete(ctx) {
       try {

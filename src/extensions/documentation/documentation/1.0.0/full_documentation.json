@@ -14,7 +14,7 @@
       "name": "Apache 2.0",
       "url": "https://www.apache.org/licenses/LICENSE-2.0.html"
     },
-    "x-generation-date": "2026-10-21T13:27:19.740Z"
+    "x-generation-date": "2026-10-22T09:42:21.583Z"
   },
   "x-strapi-config": {
     "plugins": [
@@ -17403,7 +17403,8 @@
                                                   "type": "string",
                                                   "enum": [
                                                     "local",
-                                                    "outdoor"
+                                                    "outdoor",
+                                                    "both"
                                                   ]
                                                 },
                                                 "client_detail": {
@@ -23124,7 +23125,8 @@
                                                   "type": "string",
                                                   "enum": [
                                                     "local",
-                                                    "outdoor"
+                                                    "outdoor",
+                                                    "both"
                                                   ]
                                                 },
                                                 "client_detail": {
@@ -29427,7 +29429,8 @@
                                             "type": "string",
                                             "enum": [
                                               "local",
-                                              "outdoor"
+                                              "outdoor",
+                                              "both"
                                             ]
                                           },
                                           "client_detail": {
@@ -33830,7 +33833,8 @@
                                               "type": "string",
                                               "enum": [
                                                 "local",
-                                                "outdoor"
+                                                "outdoor",
+                                                "both"
                                               ]
                                             },
                                             "client_detail": {
@@ -41529,7 +41533,8 @@
                                             "type": "string",
                                             "enum": [
                                               "local",
-                                              "outdoor"
+                                              "outdoor",
+                                              "both"
                                             ]
                                           },
                                           "client_detail": {
@@ -45827,7 +45832,8 @@
                                             "type": "string",
                                             "enum": [
                                               "local",
-                                              "outdoor"
+                                              "outdoor",
+                                              "both"
                                             ]
                                           },
                                           "client_detail": {
@@ -51710,7 +51716,8 @@
                                             "type": "string",
                                             "enum": [
                                               "local",
-                                              "outdoor"
+                                              "outdoor",
+                                              "both"
                                             ]
                                           },
                                           "client_detail": {
@@ -57591,7 +57598,8 @@
                                             "type": "string",
                                             "enum": [
                                               "local",
-                                              "outdoor"
+                                              "outdoor",
+                                              "both"
                                             ]
                                           },
                                           "client_detail": {
@@ -63480,7 +63488,8 @@
                                               "type": "string",
                                               "enum": [
                                                 "local",
-                                                "outdoor"
+                                                "outdoor",
+                                                "both"
                                               ]
                                             },
                                             "client_detail": {
@@ -70789,7 +70798,8 @@
                                             "type": "string",
                                             "enum": [
                                               "local",
-                                              "outdoor"
+                                              "outdoor",
+                                              "both"
                                             ]
                                           },
                                           "client_detail": {
@@ -75821,7 +75831,8 @@
                                             "type": "string",
                                             "enum": [
                                               "local",
-                                              "outdoor"
+                                              "outdoor",
+                                              "both"
                                             ]
                                           },
                                           "client_detail": {
@@ -81524,7 +81535,8 @@
                                             "type": "string",
                                             "enum": [
                                               "local",
-                                              "outdoor"
+                                              "outdoor",
+                                              "both"
                                             ]
                                           },
                                           "client_detail": {
@@ -88829,7 +88841,8 @@
                                                   "type": "string",
                                                   "enum": [
                                                     "local",
-                                                    "outdoor"
+                                                    "outdoor",
+                                                    "both"
                                                   ]
                                                 },
                                                 "client_detail": {
@@ -90377,7 +90390,8 @@
                 "type": "string",
                 "enum": [
                   "local",
-                  "outdoor"
+                  "outdoor",
+                  "both"
                 ]
               },
               "client_detail": {
@@ -90524,7 +90538,8 @@
             "type": "string",
             "enum": [
               "local",
-              "outdoor"
+              "outdoor",
+              "both"
             ]
           },
           "client_detail": {
@@ -94684,7 +94699,8 @@
                                                   "type": "string",
                                                   "enum": [
                                                     "local",
-                                                    "outdoor"
+                                                    "outdoor",
+                                                    "both"
                                                   ]
                                                 },
                                                 "client_detail": {
@@ -101311,7 +101327,8 @@
                                               "type": "string",
                                               "enum": [
                                                 "local",
-                                                "outdoor"
+                                                "outdoor",
+                                                "both"
                                               ]
                                             },
                                             "client_detail": {
@@ -107129,7 +107146,8 @@
                                                   "type": "string",
                                                   "enum": [
                                                     "local",
-                                                    "outdoor"
+                                                    "outdoor",
+                                                    "both"
                                                   ]
                                                 },
                                                 "client_detail": {
@@ -113353,7 +113371,8 @@
                                             "type": "string",
                                             "enum": [
                                               "local",
-                                              "outdoor"
+                                              "outdoor",
+                                              "both"
                                             ]
                                           },
                                           "client_detail": {
@@ -119626,7 +119645,8 @@
                                             "type": "string",
                                             "enum": [
                                               "local",
-                                              "outdoor"
+                                              "outdoor",
+                                              "both"
                                             ]
                                           },
                                           "client_detail": {

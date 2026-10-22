@@ -38,7 +38,7 @@
     },
     "subscriptionType": {
       "type": "enumeration",
-      "enum": ["local", "outdoor"],
+      "enum": ["local", "outdoor","both"],
       "required": true
     },
     "client_detail": {
