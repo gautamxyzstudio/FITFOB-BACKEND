@@ -12,13 +12,11 @@ const OUTDOOR_PLAN_TABLE = "outdoor_membership_plans";
 const LOCAL_SUB_TABLE = "local_subscriptions";
 const OUTDOOR_SUB_TABLE = "outdoor_subscriptions";
 
-const LOCAL_SUB_CLIENT_LINK_TABLE =
-  "local_subscriptions_client_detail_lnk";
+const LOCAL_SUB_CLIENT_LINK_TABLE = "local_subscriptions_client_detail_lnk";
 const LOCAL_SUB_PLAN_LINK_TABLE =
   "local_subscriptions_local_membership_plan_lnk";
 
-const OUTDOOR_SUB_CLIENT_LINK_TABLE =
-  "outdoor_subscriptions_client_detail_lnk";
+const OUTDOOR_SUB_CLIENT_LINK_TABLE = "outdoor_subscriptions_client_detail_lnk";
 const OUTDOOR_SUB_PLAN_LINK_TABLE =
   "outdoor_subscriptions_outdoor_membership_plan_lnk";
 
@@ -29,7 +27,9 @@ function normalizeRole(user: any): string {
   const value =
     typeof role === "string" ? role : role?.name ?? role?.type ?? "";
 
-  return String(value).toLowerCase().replace(/[\s_-]/g, "");
+  return String(value)
+    .toLowerCase()
+    .replace(/[\s_-]/g, "");
 }
 
 function isValidPlanDate(validUpto: unknown): boolean {
@@ -81,7 +81,8 @@ async function findPlan(
   const value = String(identifier).trim();
   if (!value) return null;
 
-  return strapi.db.connection(table)
+  return strapi.db
+    .connection(table)
     .where(function () {
       this.where("document_id", value);
 
@@ -96,19 +97,9 @@ async function findClientByUserId(userId: number): Promise<any | null> {
   const knex = strapi.db.connection;
 
   return knex(`${CLIENT_TABLE} as c`)
-    .join(
-      `${CLIENT_USER_LINK_TABLE} as l`,
-      "l.client_detail_id",
-      "c.id",
-    )
+    .join(`${CLIENT_USER_LINK_TABLE} as l`, "l.client_detail_id", "c.id")
     .where("l.user_id", userId)
-    .select(
-      "c.id",
-      "c.document_id",
-      "c.client_id",
-      "c.name",
-      "c.email",
-    )
+    .select("c.id", "c.document_id", "c.client_id", "c.name", "c.email")
     .first();
 }
 
@@ -120,12 +111,7 @@ async function findClubOwnerForLocalPlan(
   return knex(`${LOCAL_PLAN_OWNER_LINK_TABLE} as l`)
     .join(CLUB_OWNER_TABLE + " as c", "c.id", "l.club_owner_id")
     .where("l.local_membership_plan_id", localPlanId)
-    .select(
-      "c.id",
-      "c.document_id",
-      "c.owner_name",
-      "c.club_name",
-    )
+    .select("c.id", "c.document_id", "c.owner_name", "c.club_name")
     .first();
 }
 
@@ -222,11 +208,7 @@ export default {
       }
 
       const subscriptionType: SubscriptionType =
-        wantsLocal && wantsOutdoor
-          ? "both"
-          : wantsLocal
-            ? "local"
-            : "outdoor";
+        wantsLocal && wantsOutdoor ? "both" : wantsLocal ? "local" : "outdoor";
 
       // 4. Find the client using the actual user-client linking table.
       const client = await findClientByUserId(user.id);
@@ -296,10 +278,7 @@ export default {
 
       // 6. Fetch and validate the outdoor plan.
       if (wantsOutdoor) {
-        outdoorPlan = await findPlan(
-          OUTDOOR_PLAN_TABLE,
-          outdoorIdentifier,
-        );
+        outdoorPlan = await findPlan(OUTDOOR_PLAN_TABLE, outdoorIdentifier);
 
         if (!outdoorPlan) {
           return ctx.badRequest("Outdoor membership plan not found.");
@@ -356,20 +335,17 @@ export default {
         return ctx.badRequest("Invalid total membership amount.");
       }
 
-      // 8. Create one Razorpay Payment Link and one pending payment.
+      // 8. Create one Razorpay Order and one pending payment.
       const payment = await createMembershipOrder({
         amountRupees,
         clientId: client.id,
         clientDocumentId: client.document_id,
-        localPlanDocumentId: wantsLocal
-          ? localPlan.document_id
-          : undefined,
+        localPlanDocumentId: wantsLocal ? localPlan.document_id : undefined,
         outdoorPlanDocumentId: wantsOutdoor
           ? outdoorPlan.document_id
           : undefined,
         subscriptionType,
       });
-
       // 9. Return checkout details.
       ctx.status = 200;
       ctx.body = {
@@ -400,7 +376,7 @@ export default {
                 }
               : null,
           },
-          totalAmount: amountRupees,
+          totalAmountInRupees: amountRupees,
         },
       };
     } catch (error) {

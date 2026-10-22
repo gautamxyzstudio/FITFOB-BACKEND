@@ -1,4 +1,3 @@
-
 import Razorpay from "razorpay";
 
 const PAYMENT_UID = "api::membership-payment.membership-payment";
@@ -33,10 +32,7 @@ export async function createMembershipOrder(
     throw new Error("Invalid membership plan price.");
   }
 
-  if (
-    !process.env.RAZORPAY_KEY_ID ||
-    !process.env.RAZORPAY_KEY_SECRET
-  ) {
+  if (!process.env.RAZORPAY_KEY_ID || !process.env.RAZORPAY_KEY_SECRET) {
     throw new Error("Razorpay credentials are not configured.");
   }
 
@@ -52,23 +48,15 @@ export async function createMembershipOrder(
     subscriptionType === "both" &&
     (!localPlanDocumentId || !outdoorPlanDocumentId)
   ) {
-    throw new Error(
-      "Both local and outdoor membership plans are required.",
-    );
+    throw new Error("Both local and outdoor membership plans are required.");
   }
 
   const amountPaise = Math.round(amountRupees * 100);
 
-  const paymentLink = await (razorpay as any).paymentLink.create({
+  const order = await razorpay.orders.create({
     amount: amountPaise,
     currency: "INR",
-    reference_id: `${subscriptionType}_${Date.now()}`,
-    description:
-      subscriptionType === "both"
-        ? "Local and outdoor membership payment"
-        : `${subscriptionType} membership payment`,
-    reminder_enable: false,
-    expire_by: Math.floor(Date.now() / 1000) + 16 * 60,
+    receipt: `fitfob_${Date.now()}`,
     notes: {
       clientDocumentId: clientDocumentId || "",
       localPlanDocumentId: localPlanDocumentId || "",
@@ -79,7 +67,7 @@ export async function createMembershipOrder(
 
   const payment = await strapi.entityService.create(PAYMENT_UID, {
     data: {
-      razorpayPaymentLinkId: paymentLink.id,
+      razorpayOrderId: order.id,
       amount: amountRupees,
       currency: "INR",
       paymentStatus: "pending",
@@ -92,10 +80,9 @@ export async function createMembershipOrder(
 
   return {
     paymentId: payment.id,
-    razorpayPaymentLinkId: paymentLink.id,
-    paymentUrl: paymentLink.short_url,
-    amount: amountRupees,
-    amountPaise,
+    razorpayOrderId: order.id,
+    razorpayKeyId: process.env.RAZORPAY_KEY_ID,
+    totalAmountInPaise: amountPaise,
     currency: "INR",
     subscriptionType,
   };
