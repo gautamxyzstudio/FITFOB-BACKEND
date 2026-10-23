@@ -230,7 +230,7 @@ export default {
         return;
       }
 
-      /* ---------- 11. HANDLE WEBHOOK RETRIES ---------- */
+      /* ---------- 11. PROCESS PAYMENT WITH CONCURRENCY LOCK ---------- */
 
       const subscriptionType = payment.subscriptionType;
 
@@ -240,203 +240,219 @@ export default {
         return;
       }
 
-      const needsLocal =
-        subscriptionType === "local" || subscriptionType === "both";
+      const result = await strapi.db.transaction(async ({ trx }) => {
+        // Only one webhook can process this payment at a time.
+        await trx.raw("SELECT pg_advisory_xact_lock(?, ?)", [
+          123456,
+          payment.id,
+        ]);
 
-      const needsOutdoor =
-        subscriptionType === "outdoor" || subscriptionType === "both";
-
-      // If already linked, reuse the existing subscription.
-      // This prevents normal webhook retries from creating duplicates.
-      let localSubscription = payment.local_subscription;
-      let outdoorSubscription = payment.outdoor_subscription;
-
-      const localAlreadyProcessed = !needsLocal || Boolean(localSubscription);
-
-      const outdoorAlreadyProcessed =
-        !needsOutdoor || Boolean(outdoorSubscription);
-
-      if (localAlreadyProcessed && outdoorAlreadyProcessed) {
-        await strapi.db.query(PAYMENT_UID).update({
+        // IMPORTANT: Re-fetch after acquiring the lock.
+        // The second webhook must read the first webhook's committed changes.
+        const lockedPayment = await strapi.db.query(PAYMENT_UID).findOne({
           where: { id: payment.id },
+          populate: {
+            client_detail: true,
+            local_subscription: true,
+            outdoor_subscription: true,
+          },
+        });
+
+        if (!lockedPayment) {
+          throw new Error("Membership payment record not found after locking");
+        }
+
+        const lockedType = lockedPayment.subscriptionType;
+
+        if (!["local", "outdoor", "both"].includes(lockedType)) {
+          throw new Error("Unsupported subscription type");
+        }
+
+        const needsLocal = lockedType === "local" || lockedType === "both";
+
+        const needsOutdoor = lockedType === "outdoor" || lockedType === "both";
+
+        let localSubscription = lockedPayment.local_subscription;
+        let outdoorSubscription = lockedPayment.outdoor_subscription;
+
+        // A previous webhook may already have activated this purchase.
+        const localAlreadyProcessed = !needsLocal || Boolean(localSubscription);
+
+        const outdoorAlreadyProcessed =
+          !needsOutdoor || Boolean(outdoorSubscription);
+
+        if (localAlreadyProcessed && outdoorAlreadyProcessed) {
+          await strapi.db.query(PAYMENT_UID).update({
+            where: { id: lockedPayment.id },
+            data: {
+              paymentStatus: "paid",
+              razorpayPaymentId: razorpayPayment.id,
+            },
+          });
+
+          return {
+            message: "Membership purchase already processed",
+          };
+        }
+
+        /* ---------- 12. VERIFY CLIENT ---------- */
+
+        const client = lockedPayment.client_detail;
+
+        if (!client?.documentId) {
+          throw new Error("Client profile missing");
+        }
+
+        /* ---------- 13. CREATE LOCAL SUBSCRIPTION ---------- */
+
+        if (needsLocal && !localSubscription) {
+          if (!lockedPayment.localPlanDocumentId) {
+            throw new Error("Local plan reference missing");
+          }
+
+          const localPlan = await (strapi as any)
+            .documents(LOCAL_PLAN_UID)
+            .findOne({
+              documentId: lockedPayment.localPlanDocumentId,
+              populate: { club_owner: true },
+            });
+
+          if (!localPlan?.documentId || !localPlan?.club_owner) {
+            throw new Error("Local plan or club owner not found");
+          }
+
+          const startDate = new Date();
+          const monthDuration = Number(localPlan.monthDuration) || 1;
+          const endDate = calculateEndDate(startDate, monthDuration);
+
+          localSubscription = await (strapi as any)
+            .documents(LOCAL_SUB_UID)
+            .create({
+              data: {
+                client_detail: client.documentId,
+                club_owner:
+                  localPlan.club_owner.documentId ?? localPlan.club_owner.id,
+                local_membership_plan: localPlan.documentId,
+                membershipType: "app",
+                startDate: startDate.toISOString(),
+                endDate,
+                subscriptionStatus: "active",
+                membership_payment:
+                  lockedPayment.documentId ?? lockedPayment.id,
+              },
+            });
+
+          if (!localSubscription?.id) {
+            throw new Error("Local subscription creation failed");
+          }
+
+          await strapi.db.query(PAYMENT_UID).update({
+            where: { id: lockedPayment.id },
+            data: {
+              local_subscription: localSubscription.id,
+              razorpayPaymentId: razorpayPayment.id,
+            },
+          });
+
+          strapi.log.info(
+            `Local subscription created for payment ${lockedPayment.id}`,
+          );
+        }
+
+        /* ---------- 14. CREATE OUTDOOR SUBSCRIPTION ---------- */
+
+        if (needsOutdoor && !outdoorSubscription) {
+          if (!lockedPayment.outdoorPlanDocumentId) {
+            throw new Error("Outdoor plan reference missing");
+          }
+
+          const outdoorPlan = await (strapi as any)
+            .documents(OUTDOOR_PLAN_UID)
+            .findOne({
+              documentId: lockedPayment.outdoorPlanDocumentId,
+            });
+
+          if (!outdoorPlan?.documentId) {
+            throw new Error("Outdoor membership plan not found");
+          }
+
+          const visits = Number(outdoorPlan.visitAllowed);
+
+          if (!Number.isInteger(visits) || visits <= 0) {
+            throw new Error("Outdoor plan has an invalid visit allowance");
+          }
+
+          outdoorSubscription = await (strapi as any)
+            .documents(OUTDOOR_SUB_UID)
+            .create({
+              data: {
+                client_detail: client.documentId,
+                outdoor_membership_plan: outdoorPlan.documentId,
+                membershipType: "app",
+                totalVisitsAllowed: visits,
+                usedVisits: 0,
+                remainingVisits: visits,
+                subscriptionStatus: "active",
+                membership_payment:
+                  lockedPayment.documentId ?? lockedPayment.id,
+              },
+            });
+
+          if (!outdoorSubscription?.id) {
+            throw new Error("Outdoor subscription creation failed");
+          }
+
+          await strapi.db.query(PAYMENT_UID).update({
+            where: { id: lockedPayment.id },
+            data: {
+              outdoor_subscription: outdoorSubscription.id,
+              razorpayPaymentId: razorpayPayment.id,
+            },
+          });
+
+          strapi.log.info(
+            `Outdoor subscription created for payment ${lockedPayment.id}`,
+          );
+        }
+
+        /* ---------- 15. MARK PAYMENT PAID ---------- */
+
+        if (
+          (needsLocal && !localSubscription) ||
+          (needsOutdoor && !outdoorSubscription)
+        ) {
+          throw new Error(
+            "Membership activation incomplete; webhook retry required",
+          );
+        }
+
+        await strapi.db.query(PAYMENT_UID).update({
+          where: { id: lockedPayment.id },
           data: {
             paymentStatus: "paid",
             razorpayPaymentId: razorpayPayment.id,
-          },
-        });
-
-        ctx.status = 200;
-        ctx.body = { message: "Membership purchase already processed" };
-        return;
-      }
-
-      /* ---------- 12. VERIFY CLIENT ---------- */
-
-      const client = payment.client_detail;
-
-      if (!client?.id || !client?.documentId) {
-        ctx.status = 500;
-        ctx.body = { message: "Client profile missing" };
-        return;
-      }
-
-      /* ---------- 13. CREATE LOCAL SUBSCRIPTION IF REQUIRED ---------- */
-
-      if (needsLocal && !localSubscription) {
-        if (!payment.localPlanDocumentId) {
-          ctx.status = 500;
-          ctx.body = { message: "Local plan reference missing" };
-          return;
-        }
-
-        const localPlan = await (strapi as any)
-          .documents(LOCAL_PLAN_UID)
-          .findOne({
-            documentId: payment.localPlanDocumentId,
-            populate: { club_owner: true },
-          });
-
-        if (!localPlan?.documentId || !localPlan?.club_owner) {
-          ctx.status = 500;
-          ctx.body = {
-            message: "Local plan or club owner not found",
-          };
-          return;
-        }
-
-        const startDate = new Date();
-        const monthDuration = Number(localPlan.monthDuration) || 1;
-        const endDate = calculateEndDate(startDate, monthDuration);
-
-        localSubscription = await (strapi as any)
-          .documents(LOCAL_SUB_UID)
-          .create({
-            data: {
-              client_detail: client.documentId,
-              club_owner:
-                localPlan.club_owner.documentId ?? localPlan.club_owner.id,
-              local_membership_plan: localPlan.documentId,
-              membershipType: "app",
-              startDate: startDate.toISOString(),
-              endDate,
-              subscriptionStatus: "active",
-              membership_payment: payment.documentId ?? payment.id,
-            },
-          });
-
-        // Persist this relation immediately. If the next operation fails,
-        // a retry can see that the local subscription was already created.
-        await strapi.db.query(PAYMENT_UID).update({
-          where: { id: payment.id },
-          data: {
-            local_subscription: localSubscription.id,
-            razorpayPaymentId: razorpayPayment.id,
-          },
-        });
-
-        strapi.log.info(`Local subscription created for payment ${payment.id}`);
-      }
-
-      /* ---------- 14. CREATE OUTDOOR SUBSCRIPTION IF REQUIRED ---------- */
-
-      if (needsOutdoor && !outdoorSubscription) {
-        if (!payment.outdoorPlanDocumentId) {
-          ctx.status = 500;
-          ctx.body = { message: "Outdoor plan reference missing" };
-          return;
-        }
-
-        const outdoorPlan = await (strapi as any)
-          .documents(OUTDOOR_PLAN_UID)
-          .findOne({
-            documentId: payment.outdoorPlanDocumentId,
-          });
-
-        if (!outdoorPlan?.documentId) {
-          ctx.status = 500;
-          ctx.body = { message: "Outdoor membership plan not found" };
-          return;
-        }
-
-        const visits = Number(outdoorPlan.visitAllowed);
-
-        if (!Number.isInteger(visits) || visits <= 0) {
-          ctx.status = 500;
-          ctx.body = {
-            message: "Outdoor plan has an invalid visit allowance",
-          };
-          return;
-        }
-
-        outdoorSubscription = await (strapi as any)
-          .documents(OUTDOOR_SUB_UID)
-          .create({
-            data: {
-              client_detail: client.documentId,
-              outdoor_membership_plan: outdoorPlan.documentId,
-              membershipType: "app",
-              totalVisitsAllowed: visits,
-              usedVisits: 0,
-              remainingVisits: visits,
-              subscriptionStatus: "active",
-              membership_payment: payment.documentId ?? payment.id,
-            },
-          });
-
-        // Persist the outdoor relation before marking the payment as paid.
-        await strapi.db.query(PAYMENT_UID).update({
-          where: { id: payment.id },
-          data: {
-            outdoor_subscription: outdoorSubscription.id,
-            razorpayPaymentId: razorpayPayment.id,
+            ...(needsLocal ? { local_subscription: localSubscription.id } : {}),
+            ...(needsOutdoor
+              ? { outdoor_subscription: outdoorSubscription.id }
+              : {}),
           },
         });
 
         strapi.log.info(
-          `Outdoor subscription created for payment ${payment.id}`,
-        );
-      }
-
-      /* ---------- 15. MARK PAYMENT PAID AFTER ALL REQUIRED SUBSCRIPTIONS ---------- */
-
-      if (
-        (needsLocal && !localSubscription) ||
-        (needsOutdoor && !outdoorSubscription)
-      ) {
-        strapi.log.error(
-          `Payment ${payment.id}: one or more required subscriptions are missing`,
+          `✅ Membership purchase activated | Type: ${lockedType} | 💳 Payment ID: ${lockedPayment.id}`,
         );
 
-        ctx.status = 500;
-        ctx.body = {
-          message: "Membership activation incomplete; webhook retry required",
+        return {
+          message:
+            lockedType === "both"
+              ? "✅ Local and outdoor memberships activated successfully"
+              : `✅ ${lockedType} membership activated successfully`,
         };
-        return;
-      }
-
-      await strapi.db.query(PAYMENT_UID).update({
-        where: { id: payment.id },
-        data: {
-          paymentStatus: "paid",
-          razorpayPaymentId: razorpayPayment.id,
-          ...(needsLocal ? { local_subscription: localSubscription.id } : {}),
-          ...(needsOutdoor
-            ? { outdoor_subscription: outdoorSubscription.id }
-            : {}),
-        },
       });
 
-      strapi.log.info(
-        `✅ Membership purchase activated | Type: ${subscriptionType} | 💳 Payment ID: ${payment.id}`,
-      );
-
+      // Send success only after the transaction has committed.
       ctx.status = 200;
-      ctx.body = {
-        message:
-          subscriptionType === "both"
-            ? "✅ Local and outdoor memberships activated successfully"
-            : `✅ ${subscriptionType} membership activated successfully`,
-      };
+      ctx.body = result;
     } catch (error) {
       strapi.log.error("Razorpay webhook processing failed", error);
 
