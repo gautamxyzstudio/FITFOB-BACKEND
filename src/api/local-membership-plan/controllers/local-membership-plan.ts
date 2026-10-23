@@ -383,8 +383,7 @@ export default factories.createCoreController(
 
         return ctx.send(
           {
-            message: "Local membership plan created successfully",
-            data: createdPlan,
+            message: "Local membership plan created successfully"
           },
           201,
         );
@@ -1115,8 +1114,7 @@ export default factories.createCoreController(
         }
 
         return ctx.send({
-          message: "Local membership plan deleted successfully",
-          deleted: existing,
+          message: "Local membership plan deleted successfully"
         });
       } catch (error) {
         strapi.log.error("DELETE LOCAL MEMBERSHIP PLAN ERROR:", error);
@@ -1143,8 +1141,6 @@ export default factories.createCoreController(
           return ctx.notFound("Club owner profile not found for this account");
         }
 
-        const formattedOwner = formatClubOwner(clubOwner);
-
         // Direct SQL query using foreign key
         const rawPlans: any[] = await strapi.db.query(LOCAL_PLAN_UID).findMany({
           where: {
@@ -1154,16 +1150,10 @@ export default factories.createCoreController(
         });
 
         const plans = (Array.isArray(rawPlans) ? rawPlans : []).map(
-          (plan: any) => ({
-            ...plan,
-            club_owner: formattedOwner,
-          }),
+          ({ club_owner, ...plan }: any) => plan,
         );
 
-        return ctx.send({
-          total: plans.length,
-          data: plans,
-        });
+        return ctx.send(plans);
       } catch (error) {
         strapi.log.error("GET MY LOCAL PLANS ERROR:", error);
         return ctx.internalServerError("Failed to fetch membership plans");
@@ -1313,7 +1303,6 @@ export default factories.createCoreController(
           message: `Local membership plan ${
             updated.isActive ? "activated" : "deactivated"
           } successfully`,
-          data: updated,
         });
       } catch (error) {
         strapi.log.error("TOGGLE LOCAL PLAN STATUS ERROR:", error);
