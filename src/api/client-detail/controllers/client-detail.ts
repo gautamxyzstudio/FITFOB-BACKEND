@@ -57,6 +57,172 @@ async function getUserRole(user: any): Promise<string> {
   return role;
 }
 
+/* ---------- MEDIA URL FORMATTER ---------- */
+function formatMediaUrl(url: string | null): string | null {
+  if (!url) return null;
+  return url.startsWith("http")
+    ? url
+    : `${strapi.config.server.url || ""}${url}`;
+}
+
+/* ---------- HELPER: GET SMALL OR ORIGINAL IMAGE URL ---------- */
+function getSmallOrOriginalImageUrl(media: any): string | null {
+  if (!media) return null;
+  if (Array.isArray(media)) {
+    if (media.length === 0) return null;
+    return getSmallOrOriginalImageUrl(media[0]);
+  }
+  if (typeof media === "string") return formatMediaUrl(media);
+
+  const target = media.data ? media.data : media;
+  const item = target.attributes ? target.attributes : target;
+
+  let formats = item.formats;
+  if (typeof formats === "string") {
+    try {
+      formats = JSON.parse(formats);
+    } catch (_) {}
+  }
+
+  const rawUrl = formats?.small?.url || item.url || null;
+  return formatMediaUrl(rawUrl);
+}
+
+/* ---------- HELPER: SANITIZE USER (NO PASSWORDS/TOKENS) ---------- */
+function sanitizeUser(user: any): any {
+  if (!user || typeof user !== "object") return user;
+  const {
+    password,
+    resetPasswordToken,
+    confirmationToken,
+    mfa_secret,
+    mfa_temp_secret,
+    mfa_temp_token,
+    ...safeUser
+  } = user;
+
+  if (safeUser.approved_by && typeof safeUser.approved_by === "object") {
+    const { password: _p1, ...safeApprovedBy } = safeUser.approved_by;
+    safeUser.approved_by = safeApprovedBy;
+  }
+  if (safeUser.rejected_by && typeof safeUser.rejected_by === "object") {
+    const { password: _p2, ...safeRejectedBy } = safeUser.rejected_by;
+    safeUser.rejected_by = safeRejectedBy;
+  }
+
+  return safeUser;
+}
+
+/* ---------- HELPER: FORMAT CLIENT DETAIL MEDIA & SENSITIVE DATA ---------- */
+function formatClientDetailMedia(item: any): any {
+  if (!item || typeof item !== "object") return item;
+
+  // 1. Sanitize user sensitive fields (no password)
+  if (item.user) {
+    item.user = sanitizeUser(item.user);
+  }
+
+  // 2. Format selfieUpload photo
+  if (item.selfieUpload) {
+    item.selfieUpload = getSmallOrOriginalImageUrl(item.selfieUpload);
+  }
+
+  // 3. Format governmentId photo
+  if (item.governmentId) {
+    item.governmentId = getSmallOrOriginalImageUrl(item.governmentId);
+  }
+
+  // 4. Format local_subscriptions to strictly only send requested fields
+  if (Array.isArray(item.local_subscriptions)) {
+    item.local_subscriptions = item.local_subscriptions.map((sub: any) => {
+      if (!sub || typeof sub !== "object") return sub;
+      const plan =
+        sub.local_membership_plan?.data?.attributes ||
+        sub.local_membership_plan?.attributes ||
+        sub.local_membership_plan;
+      const club =
+        sub.club_owner?.data?.attributes ||
+        sub.club_owner?.attributes ||
+        sub.club_owner;
+
+      const rawPrice = plan?.price;
+      const price =
+        typeof rawPrice === "string"
+          ? parseFloat(rawPrice)
+          : (rawPrice ?? null);
+
+      return {
+        documentId: sub.documentId || sub.document_id || null,
+        startDate: sub.startDate || sub.start_date || null,
+        endDate: sub.endDate || sub.end_date || null,
+        subscriptionStatus:
+          sub.subscriptionStatus || sub.subscription_status || null,
+        planName: plan?.planName || plan?.plan_name || null,
+        monthDuration: plan?.monthDuration ?? plan?.month_duration ?? null,
+        price,
+        clubName: club?.clubName || club?.club_name || null,
+      };
+    });
+  }
+
+  // 5. Format outdoor_subscriptions to strictly only send requested fields
+  if (Array.isArray(item.outdoor_subscriptions)) {
+    item.outdoor_subscriptions = item.outdoor_subscriptions.map((sub: any) => {
+      if (!sub || typeof sub !== "object") return sub;
+      const plan =
+        sub.outdoor_membership_plan?.data?.attributes ||
+        sub.outdoor_membership_plan?.attributes ||
+        sub.outdoor_membership_plan;
+
+      const rawPrice = plan?.price;
+      const price =
+        typeof rawPrice === "string"
+          ? parseFloat(rawPrice)
+          : (rawPrice ?? null);
+
+      return {
+        documentId: sub.documentId || sub.document_id || null,
+        totalVisitsAllowed:
+          sub.totalVisitsAllowed ?? sub.total_visits_allowed ?? null,
+        usedVisits: sub.usedVisits ?? sub.used_visits ?? 0,
+        remainingVisits: sub.remainingVisits ?? sub.remaining_visits ?? 0,
+        subscriptionStatus:
+          sub.subscriptionStatus || sub.subscription_status || null,
+        planName: plan?.planName || plan?.plan_name || null,
+        price,
+      };
+    });
+  }
+
+  // 6. Format any nested club_owner logos in client_checkins
+  if (Array.isArray(item.client_checkins)) {
+    item.client_checkins = item.client_checkins.map((chk: any) => {
+      if (!chk || typeof chk !== "object") return chk;
+      if (
+        chk.club_owner &&
+        typeof chk.club_owner === "object" &&
+        chk.club_owner.logo
+      ) {
+        chk.club_owner.logo = getSmallOrOriginalImageUrl(chk.club_owner.logo);
+      }
+      return chk;
+    });
+  }
+
+  // 6. Format any nested club_owner logos in favorites
+  if (Array.isArray(item.favorites)) {
+    item.favorites = item.favorites.map((fav: any) => {
+      if (!fav || typeof fav !== "object") return fav;
+      if (fav.logo) {
+        fav.logo = getSmallOrOriginalImageUrl(fav.logo);
+      }
+      return fav;
+    });
+  }
+
+  return item;
+}
+
 export default factories.createCoreController(
   "api::client-detail.client-detail",
   ({ strapi }) => ({
@@ -335,6 +501,8 @@ export default factories.createCoreController(
             ? item.read_by_admins.includes(user.id)
             : item.read_by_admins.length > 0
           : Boolean(item.read_by_admins?.length > 0);
+
+        formatClientDetailMedia(item);
 
         ctx.body = {
           ...item,

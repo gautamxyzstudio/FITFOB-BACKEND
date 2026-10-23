@@ -1035,6 +1035,7 @@ export default factories.createCoreController(
           // Active local membership plans
           strapi.db.connection.raw(
             `SELECT 
+              lmp.document_id,
               lmp.plan_name,
               lmp.price,
               lmp.month_duration,
@@ -1099,6 +1100,7 @@ export default factories.createCoreController(
 
         // 6. Format active membership plans
         const membershipPlans = (plansRes?.rows || []).map((p: any) => ({
+          documentId:p.document_id,
           planName: p.plan_name,
           price:
             typeof p.price === "string" ? parseFloat(p.price) : p.price,
