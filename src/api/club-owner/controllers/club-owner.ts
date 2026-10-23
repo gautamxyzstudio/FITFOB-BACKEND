@@ -213,6 +213,106 @@ function formatMediaUrl(url: string | null): string | null {
     : `${strapi.config.server.url || ""}${url}`;
 }
 
+/* ---------- HELPER: GET SMALL OR ORIGINAL IMAGE URL ---------- */
+function getSmallOrOriginalImageUrl(media: any): string | null {
+  if (!media) return null;
+  if (typeof media === "string") return formatMediaUrl(media);
+
+  const target = media.data ? media.data : media;
+  const item = target.attributes ? target.attributes : target;
+
+  let formats = item.formats;
+  if (typeof formats === "string") {
+    try {
+      formats = JSON.parse(formats);
+    } catch (_) {}
+  }
+
+  const rawUrl = formats?.small?.url || item.url || null;
+  return formatMediaUrl(rawUrl);
+}
+
+/* ---------- HELPER: FORMAT CLUB OWNER MEDIA/IMAGES ---------- */
+function formatClubOwnerMedia(entity: any): any {
+  if (!entity || typeof entity !== "object") return entity;
+
+  // Sanitize user sensitive fields (password, tokens, secrets)
+  if (entity.user && typeof entity.user === "object") {
+    const {
+      password,
+      resetPasswordToken,
+      confirmationToken,
+      mfa_secret,
+      mfa_temp_secret,
+      mfa_temp_token,
+      ...safeUser
+    } = entity.user;
+    entity.user = safeUser;
+  }
+
+  // 1. Logo
+  if (entity.logo) {
+    entity.logo = getSmallOrOriginalImageUrl(entity.logo);
+  }
+
+  // 2. Club photos
+  if (Array.isArray(entity.club_photos)) {
+    entity.club_photos = entity.club_photos.map((photo: any) => {
+      if (!photo || typeof photo !== "object") return photo;
+      let photoUrl: string | null = null;
+      if (Array.isArray(photo.images) && photo.images.length > 0) {
+        photoUrl = getSmallOrOriginalImageUrl(photo.images[0]);
+      } else if (photo.images) {
+        photoUrl = getSmallOrOriginalImageUrl(photo.images);
+      } else if (photo.url) {
+        photoUrl = getSmallOrOriginalImageUrl(photo.url);
+      }
+      return {
+        documentId: photo.documentId,
+        imageInfo: photo.imageInfo || "",
+        url: photoUrl,
+      };
+    });
+  }
+
+  // 3. Club services
+  if (Array.isArray(entity.club_services)) {
+    entity.club_services = entity.club_services.map((service: any) => {
+      if (!service || typeof service !== "object") return service;
+      return {
+        ...service,
+        logo: getSmallOrOriginalImageUrl(service.logo),
+      };
+    });
+  }
+
+  // 4. Club facilities
+  if (Array.isArray(entity.club_facilities)) {
+    entity.club_facilities = entity.club_facilities.map((facility: any) => {
+      if (!facility || typeof facility !== "object") return facility;
+      return {
+        ...facility,
+        logo: getSmallOrOriginalImageUrl(facility.logo),
+      };
+    });
+  }
+
+  // 5. Club owner documents
+  if (Array.isArray(entity.club_owner_documents)) {
+    entity.club_owner_documents = entity.club_owner_documents.map((doc: any) => {
+      if (!doc || typeof doc !== "object") return doc;
+      const fileUrl = getSmallOrOriginalImageUrl(doc.File || doc.file);
+      return {
+        documentId: doc.documentId,
+        documentName: doc.documentName || doc.document_name || "",
+        fileUrl,
+      };
+    });
+  }
+
+  return entity;
+}
+
 /* ---------- EXTRACT FLAT STRING LIST (SERVICES / FACILITIES) ---------- */
 function extractStringList(jsonField: any, relationItems: any[]): string[] {
   const result: string[] = [];
@@ -802,6 +902,8 @@ export default factories.createCoreController(
           );
         }
 
+        formatClubOwnerMedia(entity);
+
         ctx.body = entity;
       } catch (err) {
         strapi.log.error("GET CLUB OWNER ERROR:", err);
@@ -866,12 +968,18 @@ export default factories.createCoreController(
         const ownerId = owner.id;
         const today = getTodayDateString();
 
-        // 2. Fetch club photos, holidays, services, facilities & client favorite status concurrently
-        const [photosRes, holidaysRes, servicesRes, facilitiesRes, isFav] =
-          await Promise.all([
-            // Club photos with image urls
-            strapi.db.connection.raw(
-              `SELECT 
+        // 2. Fetch club photos, holidays, services, facilities, active membership plans & client favorite status concurrently
+        const [
+          photosRes,
+          holidaysRes,
+          servicesRes,
+          facilitiesRes,
+          plansRes,
+          isFav,
+        ] = await Promise.all([
+          // Club photos with image urls
+          strapi.db.connection.raw(
+            `SELECT 
               cp.id,
               cp.image_info,
               f.url,
@@ -884,12 +992,12 @@ export default factories.createCoreController(
             LEFT JOIN files f ON f.id = frm.file_id
             WHERE lnk.club_owner_id = ?
             ORDER BY cp.id DESC`,
-              [ownerId],
-            ),
+            [ownerId],
+          ),
 
-            // Upcoming & today's holidays
-            strapi.db.connection.raw(
-              `SELECT 
+          // Upcoming & today's holidays
+          strapi.db.connection.raw(
+            `SELECT 
               h.id,
               h.document_id,
               h.title,
@@ -903,30 +1011,46 @@ export default factories.createCoreController(
             WHERE lnk.club_owner_id = ?
               AND (h.end_date >= ? OR (h.end_date IS NULL AND h.start_date >= ?))
             ORDER BY h.start_date ASC`,
-              [ownerId, today, today],
-            ),
+            [ownerId, today, today],
+          ),
 
-            // Club services relations
-            strapi.db.connection.raw(
-              `SELECT cs.name
+          // Club services relations
+          strapi.db.connection.raw(
+            `SELECT cs.name
             FROM club_services cs
             JOIN club_services_club_owners_lnk lnk ON lnk.club_service_id = cs.id
             WHERE lnk.club_owner_id = ?`,
-              [ownerId],
-            ),
+            [ownerId],
+          ),
 
-            // Club facilities relations
-            strapi.db.connection.raw(
-              `SELECT cf.name
+          // Club facilities relations
+          strapi.db.connection.raw(
+            `SELECT cf.name
             FROM club_facilities cf
             JOIN club_owners_club_facilities_lnk lnk ON lnk.club_facility_id = cf.id
             WHERE lnk.club_owner_id = ?`,
-              [ownerId],
-            ),
+            [ownerId],
+          ),
 
-            // Favorite check
-            checkIsClubFavoritedDirect(ctx, ownerId),
-          ]);
+          // Active local membership plans
+          strapi.db.connection.raw(
+            `SELECT 
+              lmp.plan_name,
+              lmp.price,
+              lmp.month_duration,
+              lmp.is_active,
+              lmp.valid_upto
+            FROM local_membership_plans lmp
+            JOIN local_membership_plans_club_owner_lnk lnk ON lnk.local_membership_plan_id = lmp.id
+            WHERE lnk.club_owner_id = ?
+              AND lmp.is_active = true
+            ORDER BY lmp.id ASC`,
+            [ownerId],
+          ),
+
+          // Favorite check
+          checkIsClubFavoritedDirect(ctx, ownerId),
+        ]);
 
         // 3. Format club_photos: return small url (with fallback) and imageInfo
         const club_photos: { url: string; imageInfo: string }[] = [];
@@ -973,7 +1097,17 @@ export default factories.createCoreController(
           endtime: h.endtime || null,
         }));
 
-        // 6. Optional distance calculation if user coordinates are provided
+        // 6. Format active membership plans
+        const membershipPlans = (plansRes?.rows || []).map((p: any) => ({
+          planName: p.plan_name,
+          price:
+            typeof p.price === "string" ? parseFloat(p.price) : p.price,
+          monthDuration: p.month_duration,
+          isActive: p.is_active,
+          validUpto: p.valid_upto || "unlimited",
+        }));
+
+        // 7. Optional distance calculation if user coordinates are provided
         const rawLat = latitude ?? lat;
         const rawLon = longitude ?? lon ?? lng;
         let distance: number | null = null;
@@ -997,7 +1131,7 @@ export default factories.createCoreController(
           distance = Number(dist.toFixed(2));
         }
 
-        // 7. Format logo
+        // 8. Format logo
         let logoFormats = owner.logo_formats;
         if (typeof logoFormats === "string") {
           try {
@@ -1011,7 +1145,7 @@ export default factories.createCoreController(
             null,
         );
 
-        // 8. Order weekdayScheduling
+        // 9. Order weekdayScheduling
         let weekdaySchedulingData = owner.weekday_scheduling;
         if (typeof weekdaySchedulingData === "string") {
           try {
@@ -1022,7 +1156,7 @@ export default factories.createCoreController(
           ? orderWeekdayScheduling(weekdaySchedulingData)
           : null;
 
-        // 9. Exact payload format requested by client (membership plans completely removed)
+        // 10. Exact payload format requested by client
         const responseData = {
           id: owner.id,
           documentId: owner.document_id,
@@ -1049,6 +1183,7 @@ export default factories.createCoreController(
           isFav,
           club_photos,
           holidays,
+          membershipPlans,
         };
 
         return ctx.send(responseData);
