@@ -2619,11 +2619,16 @@ export default factories.createCoreController(
         // Phase 2: Concurrent direct PostgreSQL queries for lean relations
         // ----------------------------------------------------
         const today = getTodayDateString();
-        const [photosRes, servicesRes, facilitiesRes, holidaysRes] =
-          await Promise.all([
-            // 1. Club Photos with images (latest first)
-            strapi.db.connection.raw(
-              `SELECT 
+        const [
+          photosRes,
+          servicesRes,
+          facilitiesRes,
+          holidaysRes,
+          plansRes,
+        ] = await Promise.all([
+          // 1. Club Photos with images (latest first)
+          strapi.db.connection.raw(
+            `SELECT 
               cp.id,
               lnk.club_owner_id,
               f.url,
@@ -2636,34 +2641,34 @@ export default factories.createCoreController(
             LEFT JOIN files f ON f.id = frm.file_id
             WHERE lnk.club_owner_id = ANY(?)
             ORDER BY cp.id DESC`,
-              [clubOwnerIds],
-            ),
+            [clubOwnerIds],
+          ),
 
-            // 2. Club Services relations
-            strapi.db.connection.raw(
-              `SELECT 
+          // 2. Club Services relations
+          strapi.db.connection.raw(
+            `SELECT 
               lnk.club_owner_id,
               cs.name
             FROM club_services cs
             JOIN club_services_club_owners_lnk lnk ON lnk.club_service_id = cs.id
             WHERE lnk.club_owner_id = ANY(?)`,
-              [clubOwnerIds],
-            ),
+            [clubOwnerIds],
+          ),
 
-            // 3. Club Facilities relations
-            strapi.db.connection.raw(
-              `SELECT 
+          // 3. Club Facilities relations
+          strapi.db.connection.raw(
+            `SELECT 
               lnk.club_owner_id,
               cf.name
             FROM club_facilities cf
             JOIN club_owners_club_facilities_lnk lnk ON lnk.club_facility_id = cf.id
             WHERE lnk.club_owner_id = ANY(?)`,
-              [clubOwnerIds],
-            ),
+            [clubOwnerIds],
+          ),
 
-            // 4. Upcoming & Today Holidays (skipping past days)
-            strapi.db.connection.raw(
-              `SELECT 
+          // 4. Upcoming & Today Holidays (skipping past days)
+          strapi.db.connection.raw(
+            `SELECT 
               h.id,
               h.document_id,
               h.title,
@@ -2678,9 +2683,27 @@ export default factories.createCoreController(
             WHERE lnk.club_owner_id = ANY(?)
               AND (h.end_date >= ? OR (h.end_date IS NULL AND h.start_date >= ?))
             ORDER BY h.start_date ASC`,
-              [clubOwnerIds, today, today],
-            ),
-          ]);
+            [clubOwnerIds, today, today],
+          ),
+
+          // 5. Active local membership plans
+          strapi.db.connection.raw(
+            `SELECT 
+              lnk.club_owner_id,
+              lmp.document_id,
+              lmp.plan_name,
+              lmp.price,
+              lmp.month_duration,
+              lmp.is_active,
+              lmp.valid_upto
+            FROM local_membership_plans lmp
+            JOIN local_membership_plans_club_owner_lnk lnk ON lnk.local_membership_plan_id = lmp.id
+            WHERE lnk.club_owner_id = ANY(?)
+              AND lmp.is_active = true
+            ORDER BY lmp.id ASC`,
+            [clubOwnerIds],
+          ),
+        ]);
 
         // Map photos by owner ID (latest 5 photos max)
         const photosByOwnerId = new Map<number, { url: string }[]>();
@@ -2769,6 +2792,27 @@ export default factories.createCoreController(
           });
         }
 
+        // Map active membership plans by owner ID
+        const plansByOwnerId = new Map<number, any[]>();
+        for (const p of plansRes?.rows || []) {
+          const ownerId = p.club_owner_id;
+          if (!ownerId) continue;
+
+          if (!plansByOwnerId.has(ownerId)) {
+            plansByOwnerId.set(ownerId, []);
+          }
+
+          plansByOwnerId.get(ownerId)!.push({
+            documentId: p.document_id,
+            planName: p.plan_name,
+            price:
+              typeof p.price === "string" ? parseFloat(p.price) : p.price,
+            monthDuration: p.month_duration,
+            isActive: p.is_active,
+            validUpto: p.valid_upto || "unlimited",
+          });
+        }
+
         // Assemble clean, customized & lean response payload
         const data = filteredClubs.map((club: any) => ({
           id: club.id,
@@ -2785,6 +2829,7 @@ export default factories.createCoreController(
           services: servicesByOwnerId.get(club.id) || [],
           facilities: facilitiesByOwnerId.get(club.id) || [],
           holidays: holidaysByOwnerId.get(club.id) || [],
+          membershipPlans: plansByOwnerId.get(club.id) || [],
         }));
 
         return ctx.send({
