@@ -194,18 +194,22 @@ function formatClientDetailMedia(item: any): any {
     });
   }
 
-  // 6. Format any nested club_owner logos in client_checkins
+  // 6. Format client_checkins to strictly only send requested fields
   if (Array.isArray(item.client_checkins)) {
     item.client_checkins = item.client_checkins.map((chk: any) => {
       if (!chk || typeof chk !== "object") return chk;
-      if (
-        chk.club_owner &&
-        typeof chk.club_owner === "object" &&
-        chk.club_owner.logo
-      ) {
-        chk.club_owner.logo = getSmallOrOriginalImageUrl(chk.club_owner.logo);
-      }
-      return chk;
+      const club =
+        chk.club_owner?.data?.attributes ||
+        chk.club_owner?.attributes ||
+        chk.club_owner;
+
+      return {
+        checkinTime: chk.checkinTime || chk.checkin_time || null,
+        subscriptionType:
+          chk.subscriptionType || chk.subscription_type || null,
+        createdAt: chk.createdAt || chk.created_at || null,
+        clubName: club?.clubName || club?.club_name || null,
+      };
     });
   }
 
