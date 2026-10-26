@@ -162,10 +162,6 @@ export default {
       let clubOwnerDetail: any = null;
 
       /* ======================================================
-         CLIENT ROLE → GET CLIENT DETAIL
-      ====================================================== */
-
-      /* ======================================================
         CLIENT ROLE → GET CLIENT DETAIL
      ====================================================== */
 
@@ -181,7 +177,16 @@ export default {
               client_detail: {
                 populate: {
                   selfieUpload: true,
-                  local_subscriptions: true,
+                  local_subscriptions: {
+                    populate: {
+                      local_membership_plan: {
+                        populate: {
+                          club_owner: true,
+                        },
+                      },
+                      club_owner: true,
+                    },
+                  },
                   outdoor_subscriptions: true,
                 },
               },
@@ -212,13 +217,81 @@ export default {
             return Array.from(uniqueMap.values());
           };
 
-          const localSubscriptions = getUniqueSubscriptions(
-            detail.local_subscriptions,
+          const localSubscriptions = await Promise.all(
+            getUniqueSubscriptions(detail.local_subscriptions).map(
+              async (sub: any) => {
+                let clubName =
+                  sub.local_membership_plan?.club_owner?.clubName ||
+                  sub.local_membership_plan?.club_owner?.club_name ||
+                  sub.club_owner?.clubName ||
+                  sub.club_owner?.club_name ||
+                  null;
+
+                if (!clubName && (sub.local_membership_plan || sub.id)) {
+                  const planId =
+                    typeof sub.local_membership_plan === "object"
+                      ? sub.local_membership_plan?.id ||
+                        sub.local_membership_plan?.documentId
+                      : sub.local_membership_plan;
+
+                  if (planId) {
+                    const plan: any = await strapi.db
+                      .query("api::local-membership-plan.local-membership-plan")
+                      .findOne({
+                        where:
+                          typeof planId === "number"
+                            ? { id: planId }
+                            : { documentId: planId },
+                        populate: ["club_owner"],
+                      });
+
+                    clubName =
+                      plan?.club_owner?.clubName ||
+                      plan?.club_owner?.club_name ||
+                      null;
+                  }
+
+                  if (!clubName && sub.id) {
+                    const fullSub: any = await strapi.db
+                      .query("api::local-subscription.local-subscription")
+                      .findOne({
+                        where: { id: sub.id },
+                        populate: {
+                          local_membership_plan: {
+                            populate: ["club_owner"],
+                          },
+                          club_owner: true,
+                        },
+                      });
+
+                    clubName =
+                      fullSub?.local_membership_plan?.club_owner?.clubName ||
+                      fullSub?.local_membership_plan?.club_owner?.club_name ||
+                      fullSub?.club_owner?.clubName ||
+                      fullSub?.club_owner?.club_name ||
+                      null;
+                  }
+                }
+
+                return {
+                  startDate: sub.startDate,
+                  endDate: sub.endDate,
+                  subscriptionStatus: sub.subscriptionStatus,
+                  clubName,
+                };
+              }
+            )
           );
 
           const outdoorSubscriptions = getUniqueSubscriptions(
             detail.outdoor_subscriptions,
-          );
+          ).map((sub: any) => ({
+            totalVisitsAllowed: sub.totalVisitsAllowed,
+            totalVisits: sub.totalVisitsAllowed,
+            usedVisits: sub.usedVisits,
+            remainingVisits: sub.remainingVisits,
+            subscriptionStatus: sub.subscriptionStatus,
+          }));
 
           clientDetail = {
             email: detail.email ?? user.email,

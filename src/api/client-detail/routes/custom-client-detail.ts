@@ -10,6 +10,14 @@ export default {
     },
     {
       method: "GET",
+      path: "/client-details/me/subscriptions",
+      handler: "custom-client-detail.getSubscriptions",
+      config: {
+        auth: {}
+      }
+    },
+    {
+      method: "GET",
       path: "/client-detail/favorites",
       handler: "custom-client-detail.getFavorites",
       config: {
@@ -57,4 +65,4 @@ export default {
       }
     },
   ]
-};
+};
