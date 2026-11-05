@@ -1105,24 +1105,48 @@ export default factories.createCoreController(
             WHERE lnk.club_owner_id = ?`,
             [ownerId],
           ),
-
-          // Active local membership plans
+          //  Get all active membership plans through gym contract
           strapi.db.connection.raw(
-            `SELECT 
-              lmp.document_id,
-              lmp.plan_name,
-              lmp.price,
-              lmp.month_duration,
-              lmp.is_active,
-              lmp.valid_upto
-            FROM local_membership_plans lmp
-            JOIN local_membership_plans_club_owner_lnk lnk ON lnk.local_membership_plan_id = lmp.id
-            WHERE lnk.club_owner_id = ?
-              AND lmp.is_active = true
-            ORDER BY lmp.id ASC`,
+            `
+  SELECT
+    mp.document_id,
+    mp.duration,
+    mp.duration_months,
+    mp.customer_price,
+    mp.currency,
+    mp.is_active
+  FROM gym_contracts_club_owner_lnk owner_contract_lnk
+
+  INNER JOIN gym_contracts gc
+    ON gc.id = owner_contract_lnk.gym_contract_id
+    AND gc.contract_status = 'active'
+
+  INNER JOIN gym_contract_plan_rates_gym_contract_lnk contract_rate_lnk
+    ON contract_rate_lnk.gym_contract_id = gc.id
+
+  INNER JOIN gym_contract_plan_rates gcr
+    ON gcr.id = contract_rate_lnk.gym_contract_plan_rate_id
+    AND gcr.is_active = true
+
+  INNER JOIN gym_contract_plan_rates_membership_plan_price_lnk rate_price_lnk
+    ON rate_price_lnk.gym_contract_plan_rate_id = gcr.id
+
+  INNER JOIN membership_plan_prices mp
+    ON mp.id = rate_price_lnk.membership_plan_price_id
+    AND mp.is_active = true
+
+  WHERE owner_contract_lnk.club_owner_id = ?
+
+  ORDER BY
+    CASE mp.duration
+      WHEN 'monthly' THEN 1
+      WHEN 'six_months' THEN 2
+      WHEN 'twelve_months' THEN 3
+      ELSE 4
+    END ASC
+  `,
             [ownerId],
           ),
-
           // Favorite check
           checkIsClubFavoritedDirect(ctx, ownerId),
         ]);
@@ -1172,14 +1196,10 @@ export default factories.createCoreController(
           endtime: h.endtime || null,
         }));
 
-        // 6. Format active membership plans
+        // 6. Format all active gym contract membership plans
         const membershipPlans = (plansRes?.rows || []).map((p: any) => ({
-          documentId: p.document_id,
-          planName: p.plan_name,
-          price: typeof p.price === "string" ? parseFloat(p.price) : p.price,
-          monthDuration: p.month_duration,
-          isActive: p.is_active,
-          validUpto: p.valid_upto || "unlimited",
+          plan: p.duration,
+          price: Number(p.customer_price),
         }));
 
         // 7. Optional distance calculation if user coordinates are provided
@@ -2621,6 +2641,7 @@ export default factories.createCoreController(
             co.id,
             co.document_id,
             co.club_name,
+            co.club_category,
             co.club_id,
             co.latitude,
             co.longitude,
@@ -2694,11 +2715,16 @@ export default factories.createCoreController(
         // Phase 2: Concurrent direct PostgreSQL queries for lean relations
         // ----------------------------------------------------
         const today = getTodayDateString();
-        const [photosRes, servicesRes, facilitiesRes, holidaysRes, plansRes] =
-          await Promise.all([
-            // 1. Club Photos with images (latest first)
-            strapi.db.connection.raw(
-              `SELECT 
+        const [
+          photosRes,
+          servicesRes,
+          facilitiesRes,
+          holidaysRes,
+          monthlyPricesRes,
+        ] = await Promise.all([
+          // 1. Club Photos with images (latest first)
+          strapi.db.connection.raw(
+            `SELECT 
               cp.id,
               lnk.club_owner_id,
               f.url,
@@ -2711,34 +2737,34 @@ export default factories.createCoreController(
             LEFT JOIN files f ON f.id = frm.file_id
             WHERE lnk.club_owner_id = ANY(?)
             ORDER BY cp.id DESC`,
-              [clubOwnerIds],
-            ),
+            [clubOwnerIds],
+          ),
 
-            // 2. Club Services relations
-            strapi.db.connection.raw(
-              `SELECT 
+          // 2. Club Services relations
+          strapi.db.connection.raw(
+            `SELECT 
               lnk.club_owner_id,
               cs.name
             FROM club_services cs
             JOIN club_services_club_owners_lnk lnk ON lnk.club_service_id = cs.id
             WHERE lnk.club_owner_id = ANY(?)`,
-              [clubOwnerIds],
-            ),
+            [clubOwnerIds],
+          ),
 
-            // 3. Club Facilities relations
-            strapi.db.connection.raw(
-              `SELECT 
+          // 3. Club Facilities relations
+          strapi.db.connection.raw(
+            `SELECT 
               lnk.club_owner_id,
               cf.name
             FROM club_facilities cf
             JOIN club_owners_club_facilities_lnk lnk ON lnk.club_facility_id = cf.id
             WHERE lnk.club_owner_id = ANY(?)`,
-              [clubOwnerIds],
-            ),
+            [clubOwnerIds],
+          ),
 
-            // 4. Upcoming & Today Holidays (skipping past days)
-            strapi.db.connection.raw(
-              `SELECT 
+          // 4. Upcoming & Today Holidays (skipping past days)
+          strapi.db.connection.raw(
+            `SELECT 
               h.id,
               h.document_id,
               h.title,
@@ -2753,27 +2779,48 @@ export default factories.createCoreController(
             WHERE lnk.club_owner_id = ANY(?)
               AND (h.end_date >= ? OR (h.end_date IS NULL AND h.start_date >= ?))
             ORDER BY h.start_date ASC`,
-              [clubOwnerIds, today, today],
-            ),
+            [clubOwnerIds, today, today],
+          ),
 
-            // 5. Active local membership plans
-            strapi.db.connection.raw(
-              `SELECT 
-              lnk.club_owner_id,
-              lmp.document_id,
-              lmp.plan_name,
-              lmp.price,
-              lmp.month_duration,
-              lmp.is_active,
-              lmp.valid_upto
-            FROM local_membership_plans lmp
-            JOIN local_membership_plans_club_owner_lnk lnk ON lnk.local_membership_plan_id = lmp.id
-            WHERE lnk.club_owner_id = ANY(?)
-              AND lmp.is_active = true
-            ORDER BY lmp.id ASC`,
-              [clubOwnerIds],
-            ),
-          ]);
+          // 5. Get monthly customer price through active gym contract
+          strapi.db.connection.raw(
+            `
+  SELECT
+    co.id AS club_owner_id,
+    gc.id AS gym_contract_id,
+    mp.duration,
+    mp.customer_price
+  FROM club_owners co
+
+  INNER JOIN gym_contracts_club_owner_lnk owner_contract_lnk
+    ON owner_contract_lnk.club_owner_id = co.id
+
+  INNER JOIN gym_contracts gc
+    ON gc.id = owner_contract_lnk.gym_contract_id
+    AND gc.contract_status = 'active'
+
+  INNER JOIN gym_contract_plan_rates_gym_contract_lnk contract_rate_lnk
+    ON contract_rate_lnk.gym_contract_id = gc.id
+
+  INNER JOIN gym_contract_plan_rates gcr
+    ON gcr.id = contract_rate_lnk.gym_contract_plan_rate_id
+    AND gcr.is_active = true
+
+  INNER JOIN gym_contract_plan_rates_membership_plan_price_lnk rate_price_lnk
+    ON rate_price_lnk.gym_contract_plan_rate_id = gcr.id
+
+  INNER JOIN membership_plan_prices mp
+    ON mp.id = rate_price_lnk.membership_plan_price_id
+    AND mp.is_active = true
+
+  WHERE co.id = ANY(?)
+    AND mp.duration = 'monthly'
+
+  ORDER BY co.id ASC
+  `,
+            [clubOwnerIds],
+          ),
+        ]);
 
         // Map photos by owner ID (latest 5 photos max)
         const photosByOwnerId = new Map<number, { url: string }[]>();
@@ -2862,24 +2909,20 @@ export default factories.createCoreController(
           });
         }
 
-        // Map active membership plans by owner ID
+        // Map contract monthly membership price by owner ID
         const plansByOwnerId = new Map<number, any[]>();
-        for (const p of plansRes?.rows || []) {
-          const ownerId = p.club_owner_id;
+
+        for (const p of monthlyPricesRes?.rows || []) {
+          const ownerId = Number(p.club_owner_id);
+
           if (!ownerId) continue;
 
-          if (!plansByOwnerId.has(ownerId)) {
-            plansByOwnerId.set(ownerId, []);
-          }
-
-          plansByOwnerId.get(ownerId)!.push({
-            documentId: p.document_id,
-            planName: p.plan_name,
-            price: typeof p.price === "string" ? parseFloat(p.price) : p.price,
-            monthDuration: p.month_duration,
-            isActive: p.is_active,
-            validUpto: p.valid_upto || "unlimited",
-          });
+          plansByOwnerId.set(ownerId, [
+            {
+              plan: p.duration,
+              customerPrice: Number(p.customer_price),
+            },
+          ]);
         }
 
         // Assemble clean, customized & lean response payload
