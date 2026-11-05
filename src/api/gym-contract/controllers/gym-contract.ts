@@ -111,8 +111,9 @@ export default factories.createCoreController(
             categoryTier,
 
             zeroCommissionDeal: {
-              enabled: promotion?.isActive ?? false,
+              enabled: promotion?.isActive === true,
               userLimit: promotion?.userLimit ?? 0,
+              usedUserCount: promotion?.usedUserCount ?? 0,
             },
 
             plans,
