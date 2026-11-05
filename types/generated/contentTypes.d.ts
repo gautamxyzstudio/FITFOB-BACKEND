@@ -561,6 +561,10 @@ export interface ApiClientDetailClientDetail
     governmentId: Schema.Attribute.Media<
       'images' | 'files' | 'videos' | 'audios'
     >;
+    gym_memberships: Schema.Attribute.Relation<
+      'oneToMany',
+      'api::gym-membership.gym-membership'
+    >;
     height: Schema.Attribute.String;
     latitude: Schema.Attribute.String;
     local_subscriptions: Schema.Attribute.Relation<
@@ -767,6 +771,10 @@ export interface ApiClubOwnerClubOwner extends Struct.CollectionTypeSchema {
       'manyToMany',
       'api::client-detail.client-detail'
     >;
+    gym_contracts: Schema.Attribute.Relation<
+      'oneToMany',
+      'api::gym-contract.gym-contract'
+    >;
     holdidays: Schema.Attribute.Relation<'oneToMany', 'api::holdiday.holdiday'>;
     latitude: Schema.Attribute.String;
     local_membership_plans: Schema.Attribute.Relation<
@@ -880,6 +888,69 @@ export interface ApiClubServiceClubService extends Struct.CollectionTypeSchema {
   };
 }
 
+export interface ApiCommissionTransactionCommissionTransaction
+  extends Struct.CollectionTypeSchema {
+  collectionName: 'commission_transactions';
+  info: {
+    displayName: 'commission-transactions';
+    pluralName: 'commission-transactions';
+    singularName: 'commission-transaction';
+  };
+  options: {
+    draftAndPublish: false;
+  };
+  attributes: {
+    commissionAmount: Schema.Attribute.Decimal;
+    commissionMode: Schema.Attribute.Enumeration<
+      ['default', 'custom', 'promotion']
+    >;
+    createdAt: Schema.Attribute.DateTime;
+    createdBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
+      Schema.Attribute.Private;
+    currency: Schema.Attribute.String & Schema.Attribute.DefaultTo<'INR'>;
+    customerPrice: Schema.Attribute.Decimal;
+    gatewayFee: Schema.Attribute.Decimal;
+    gym_contract: Schema.Attribute.Relation<
+      'manyToOne',
+      'api::gym-contract.gym-contract'
+    >;
+    gym_membership: Schema.Attribute.Relation<
+      'manyToOne',
+      'api::gym-membership.gym-membership'
+    >;
+    gym_promotion: Schema.Attribute.Relation<
+      'manyToOne',
+      'api::gym-promotion.gym-promotion'
+    >;
+    gymPayout: Schema.Attribute.Decimal;
+    idempotencyKey: Schema.Attribute.String & Schema.Attribute.Unique;
+    locale: Schema.Attribute.String & Schema.Attribute.Private;
+    localizations: Schema.Attribute.Relation<
+      'oneToMany',
+      'api::commission-transaction.commission-transaction'
+    > &
+      Schema.Attribute.Private;
+    notes: Schema.Attribute.Text;
+    promotionApplied: Schema.Attribute.Boolean &
+      Schema.Attribute.DefaultTo<false>;
+    promotionSequence: Schema.Attribute.Integer;
+    providerPaymentId: Schema.Attribute.String;
+    providerTransactionId: Schema.Attribute.String;
+    publishedAt: Schema.Attribute.DateTime;
+    settledAt: Schema.Attribute.DateTime;
+    transactionId: Schema.Attribute.UID;
+    transactionStatus: Schema.Attribute.Enumeration<
+      ['pending', 'paid', 'failed', 'refunded']
+    >;
+    transactionType: Schema.Attribute.Enumeration<
+      ['charge', 'refund', 'adjustment', 'settlement']
+    >;
+    updatedAt: Schema.Attribute.DateTime;
+    updatedBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
+      Schema.Attribute.Private;
+  };
+}
+
 export interface ApiDeviceTokenDeviceToken extends Struct.CollectionTypeSchema {
   collectionName: 'device_tokens';
   info: {
@@ -941,6 +1012,228 @@ export interface ApiGeminiApiKeyGeminiApiKey extends Struct.SingleTypeSchema {
     updatedAt: Schema.Attribute.DateTime;
     updatedBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
       Schema.Attribute.Private;
+  };
+}
+
+export interface ApiGymContractPlanRateGymContractPlanRate
+  extends Struct.CollectionTypeSchema {
+  collectionName: 'gym_contract_plan_rates';
+  info: {
+    displayName: 'gym-contract-plan-rate';
+    pluralName: 'gym-contract-plan-rates';
+    singularName: 'gym-contract-plan-rate';
+  };
+  options: {
+    draftAndPublish: false;
+  };
+  attributes: {
+    commissionMode: Schema.Attribute.Enumeration<['default', 'custom']>;
+    createdAt: Schema.Attribute.DateTime;
+    createdBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
+      Schema.Attribute.Private;
+    customCommission: Schema.Attribute.Decimal;
+    gym_contract: Schema.Attribute.Relation<
+      'manyToOne',
+      'api::gym-contract.gym-contract'
+    >;
+    isActive: Schema.Attribute.Boolean & Schema.Attribute.DefaultTo<true>;
+    locale: Schema.Attribute.String & Schema.Attribute.Private;
+    localizations: Schema.Attribute.Relation<
+      'oneToMany',
+      'api::gym-contract-plan-rate.gym-contract-plan-rate'
+    > &
+      Schema.Attribute.Private;
+    membership_plan_price: Schema.Attribute.Relation<
+      'manyToOne',
+      'api::membership-plan-price.membership-plan-price'
+    >;
+    publishedAt: Schema.Attribute.DateTime;
+    updatedAt: Schema.Attribute.DateTime;
+    updatedBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
+      Schema.Attribute.Private;
+  };
+}
+
+export interface ApiGymContractGymContract extends Struct.CollectionTypeSchema {
+  collectionName: 'gym_contracts';
+  info: {
+    displayName: 'gym-contract';
+    pluralName: 'gym-contracts';
+    singularName: 'gym-contract';
+  };
+  options: {
+    draftAndPublish: false;
+  };
+  attributes: {
+    club_owner: Schema.Attribute.Relation<
+      'manyToOne',
+      'api::club-owner.club-owner'
+    >;
+    commission_transactions: Schema.Attribute.Relation<
+      'oneToMany',
+      'api::commission-transaction.commission-transaction'
+    >;
+    contractId: Schema.Attribute.UID;
+    contractStatus: Schema.Attribute.Enumeration<
+      ['draft', 'active', 'expired', 'cancelled']
+    >;
+    createdAt: Schema.Attribute.DateTime;
+    createdBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
+      Schema.Attribute.Private;
+    currency: Schema.Attribute.String & Schema.Attribute.DefaultTo<'INR'>;
+    endDate: Schema.Attribute.Date;
+    gym_contract_plan_rates: Schema.Attribute.Relation<
+      'oneToMany',
+      'api::gym-contract-plan-rate.gym-contract-plan-rate'
+    >;
+    gym_memberships: Schema.Attribute.Relation<
+      'oneToMany',
+      'api::gym-membership.gym-membership'
+    >;
+    gym_promotions: Schema.Attribute.Relation<
+      'oneToMany',
+      'api::gym-promotion.gym-promotion'
+    >;
+    locale: Schema.Attribute.String & Schema.Attribute.Private;
+    localizations: Schema.Attribute.Relation<
+      'oneToMany',
+      'api::gym-contract.gym-contract'
+    > &
+      Schema.Attribute.Private;
+    membership_tier: Schema.Attribute.Relation<
+      'manyToOne',
+      'api::membership-tier.membership-tier'
+    >;
+    notes: Schema.Attribute.Text;
+    publishedAt: Schema.Attribute.DateTime;
+    startDate: Schema.Attribute.Date;
+    updatedAt: Schema.Attribute.DateTime;
+    updatedBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
+      Schema.Attribute.Private;
+  };
+}
+
+export interface ApiGymMembershipGymMembership
+  extends Struct.CollectionTypeSchema {
+  collectionName: 'gym_memberships';
+  info: {
+    displayName: 'gym_memberships';
+    pluralName: 'gym-memberships';
+    singularName: 'gym-membership';
+  };
+  options: {
+    draftAndPublish: false;
+  };
+  attributes: {
+    client_detail: Schema.Attribute.Relation<
+      'manyToOne',
+      'api::client-detail.client-detail'
+    >;
+    commission_transactions: Schema.Attribute.Relation<
+      'oneToMany',
+      'api::commission-transaction.commission-transaction'
+    >;
+    commissionModeSnapshot: Schema.Attribute.Enumeration<
+      ['default', 'custom', 'promotion']
+    >;
+    commissionSnapshot: Schema.Attribute.Decimal;
+    createdAt: Schema.Attribute.DateTime;
+    createdBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
+      Schema.Attribute.Private;
+    currency: Schema.Attribute.String & Schema.Attribute.DefaultTo<'INR'>;
+    customerPriceSnapshot: Schema.Attribute.Decimal;
+    duration: Schema.Attribute.Enumeration<
+      ['monthly', 'six_months', 'twelve_months']
+    >;
+    durationMonths: Schema.Attribute.Integer;
+    endDate: Schema.Attribute.Date;
+    gatewayFeeSnapshot: Schema.Attribute.Decimal;
+    gym_contract: Schema.Attribute.Relation<
+      'manyToOne',
+      'api::gym-contract.gym-contract'
+    >;
+    gym_promotion: Schema.Attribute.Relation<
+      'manyToOne',
+      'api::gym-promotion.gym-promotion'
+    >;
+    gymPayoutSnapshot: Schema.Attribute.Decimal;
+    locale: Schema.Attribute.String & Schema.Attribute.Private;
+    localizations: Schema.Attribute.Relation<
+      'oneToMany',
+      'api::gym-membership.gym-membership'
+    > &
+      Schema.Attribute.Private;
+    membership_plan_price: Schema.Attribute.Relation<
+      'manyToOne',
+      'api::membership-plan-price.membership-plan-price'
+    >;
+    membershipId: Schema.Attribute.UID;
+    membershipStatus: Schema.Attribute.Enumeration<
+      ['pending', 'active', 'expired', 'cancelled']
+    >;
+    paidAt: Schema.Attribute.DateTime;
+    paymentIdempotencyKey: Schema.Attribute.String & Schema.Attribute.Unique;
+    paymentProvider: Schema.Attribute.String;
+    paymentStatus: Schema.Attribute.Enumeration<
+      ['pending', 'paid', 'failed', 'refunded']
+    >;
+    promotionApplied: Schema.Attribute.Boolean &
+      Schema.Attribute.DefaultTo<false>;
+    promotionSequence: Schema.Attribute.Integer;
+    providerPaymentId: Schema.Attribute.String;
+    publishedAt: Schema.Attribute.DateTime;
+    startDate: Schema.Attribute.Date;
+    updatedAt: Schema.Attribute.DateTime;
+    updatedBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
+      Schema.Attribute.Private;
+  };
+}
+
+export interface ApiGymPromotionGymPromotion
+  extends Struct.CollectionTypeSchema {
+  collectionName: 'gym_promotions';
+  info: {
+    displayName: 'gym-promotion';
+    pluralName: 'gym-promotions';
+    singularName: 'gym-promotion';
+  };
+  options: {
+    draftAndPublish: false;
+  };
+  attributes: {
+    commission_transactions: Schema.Attribute.Relation<
+      'oneToMany',
+      'api::commission-transaction.commission-transaction'
+    >;
+    createdAt: Schema.Attribute.DateTime;
+    createdBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
+      Schema.Attribute.Private;
+    endDate: Schema.Attribute.Date;
+    gym_contract: Schema.Attribute.Relation<
+      'manyToOne',
+      'api::gym-contract.gym-contract'
+    >;
+    gym_memberships: Schema.Attribute.Relation<
+      'oneToMany',
+      'api::gym-membership.gym-membership'
+    >;
+    isActive: Schema.Attribute.Boolean & Schema.Attribute.DefaultTo<true>;
+    locale: Schema.Attribute.String & Schema.Attribute.Private;
+    localizations: Schema.Attribute.Relation<
+      'oneToMany',
+      'api::gym-promotion.gym-promotion'
+    > &
+      Schema.Attribute.Private;
+    promotionType: Schema.Attribute.Enumeration<['zero_commission']> &
+      Schema.Attribute.DefaultTo<'zero_commission'>;
+    publishedAt: Schema.Attribute.DateTime;
+    reservedUserCount: Schema.Attribute.Integer;
+    startDate: Schema.Attribute.Date;
+    updatedAt: Schema.Attribute.DateTime;
+    updatedBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
+      Schema.Attribute.Private;
+    usedUserCount: Schema.Attribute.Integer;
+    userLimit: Schema.Attribute.Integer;
   };
 }
 
@@ -1128,6 +1421,101 @@ export interface ApiMembershipPaymentMembershipPayment
       ['local', 'outdoor', 'both']
     > &
       Schema.Attribute.Required;
+    updatedAt: Schema.Attribute.DateTime;
+    updatedBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
+      Schema.Attribute.Private;
+  };
+}
+
+export interface ApiMembershipPlanPriceMembershipPlanPrice
+  extends Struct.CollectionTypeSchema {
+  collectionName: 'membership_plan_prices';
+  info: {
+    displayName: 'membership-plan-price';
+    pluralName: 'membership-plan-prices';
+    singularName: 'membership-plan-price';
+  };
+  options: {
+    draftAndPublish: false;
+  };
+  attributes: {
+    createdAt: Schema.Attribute.DateTime;
+    createdBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
+      Schema.Attribute.Private;
+    currency: Schema.Attribute.String & Schema.Attribute.DefaultTo<'INR'>;
+    customerPrice: Schema.Attribute.Decimal;
+    defaultCommission: Schema.Attribute.Decimal;
+    duration: Schema.Attribute.Enumeration<
+      ['monthly', 'six_months', 'twelve_months']
+    >;
+    durationMonths: Schema.Attribute.Integer &
+      Schema.Attribute.SetMinMax<
+        {
+          min: 1;
+        },
+        number
+      >;
+    gym_contract_plan_rates: Schema.Attribute.Relation<
+      'oneToMany',
+      'api::gym-contract-plan-rate.gym-contract-plan-rate'
+    >;
+    gym_memberships: Schema.Attribute.Relation<
+      'oneToMany',
+      'api::gym-membership.gym-membership'
+    >;
+    isActive: Schema.Attribute.Boolean & Schema.Attribute.DefaultTo<true>;
+    locale: Schema.Attribute.String & Schema.Attribute.Private;
+    localizations: Schema.Attribute.Relation<
+      'oneToMany',
+      'api::membership-plan-price.membership-plan-price'
+    > &
+      Schema.Attribute.Private;
+    membership_tier: Schema.Attribute.Relation<
+      'manyToOne',
+      'api::membership-tier.membership-tier'
+    >;
+    publishedAt: Schema.Attribute.DateTime;
+    updatedAt: Schema.Attribute.DateTime;
+    updatedBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
+      Schema.Attribute.Private;
+  };
+}
+
+export interface ApiMembershipTierMembershipTier
+  extends Struct.CollectionTypeSchema {
+  collectionName: 'membership_tiers';
+  info: {
+    displayName: 'membership-tier';
+    pluralName: 'membership-tiers';
+    singularName: 'membership-tier';
+  };
+  options: {
+    draftAndPublish: false;
+  };
+  attributes: {
+    createdAt: Schema.Attribute.DateTime;
+    createdBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
+      Schema.Attribute.Private;
+    description: Schema.Attribute.String;
+    gym_contracts: Schema.Attribute.Relation<
+      'oneToMany',
+      'api::gym-contract.gym-contract'
+    >;
+    isActive: Schema.Attribute.Boolean & Schema.Attribute.DefaultTo<true>;
+    locale: Schema.Attribute.String & Schema.Attribute.Private;
+    localizations: Schema.Attribute.Relation<
+      'oneToMany',
+      'api::membership-tier.membership-tier'
+    > &
+      Schema.Attribute.Private;
+    membership_plan_prices: Schema.Attribute.Relation<
+      'oneToMany',
+      'api::membership-plan-price.membership-plan-price'
+    >;
+    name: Schema.Attribute.Enumeration<['basic', 'premium', 'luxury']>;
+    publishedAt: Schema.Attribute.DateTime;
+    slug: Schema.Attribute.UID & Schema.Attribute.Required;
+    sortOrder: Schema.Attribute.Integer & Schema.Attribute.DefaultTo<0>;
     updatedAt: Schema.Attribute.DateTime;
     updatedBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
       Schema.Attribute.Private;
@@ -2016,12 +2404,19 @@ declare module '@strapi/strapi' {
       'api::club-owner.club-owner': ApiClubOwnerClubOwner;
       'api::club-photo.club-photo': ApiClubPhotoClubPhoto;
       'api::club-service.club-service': ApiClubServiceClubService;
+      'api::commission-transaction.commission-transaction': ApiCommissionTransactionCommissionTransaction;
       'api::device-token.device-token': ApiDeviceTokenDeviceToken;
       'api::gemini-api-key.gemini-api-key': ApiGeminiApiKeyGeminiApiKey;
+      'api::gym-contract-plan-rate.gym-contract-plan-rate': ApiGymContractPlanRateGymContractPlanRate;
+      'api::gym-contract.gym-contract': ApiGymContractGymContract;
+      'api::gym-membership.gym-membership': ApiGymMembershipGymMembership;
+      'api::gym-promotion.gym-promotion': ApiGymPromotionGymPromotion;
       'api::holdiday.holdiday': ApiHoldidayHoldiday;
       'api::local-membership-plan.local-membership-plan': ApiLocalMembershipPlanLocalMembershipPlan;
       'api::local-subscription.local-subscription': ApiLocalSubscriptionLocalSubscription;
       'api::membership-payment.membership-payment': ApiMembershipPaymentMembershipPayment;
+      'api::membership-plan-price.membership-plan-price': ApiMembershipPlanPriceMembershipPlanPrice;
+      'api::membership-tier.membership-tier': ApiMembershipTierMembershipTier;
       'api::otp-request.otp-request': ApiOtpRequestOtpRequest;
       'api::outdoor-membership-plan.outdoor-membership-plan': ApiOutdoorMembershipPlanOutdoorMembershipPlan;
       'api::outdoor-subscription.outdoor-subscription': ApiOutdoorSubscriptionOutdoorSubscription;

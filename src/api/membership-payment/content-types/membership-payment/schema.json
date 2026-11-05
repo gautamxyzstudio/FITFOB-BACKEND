@@ -32,13 +32,21 @@
     },
     "paymentStatus": {
       "type": "enumeration",
-      "enum": ["pending", "paid", "failed"],
+      "enum": [
+        "pending",
+        "paid",
+        "failed"
+      ],
       "default": "pending",
       "required": true
     },
     "subscriptionType": {
       "type": "enumeration",
-      "enum": ["local", "outdoor","both"],
+      "enum": [
+        "local",
+        "outdoor",
+        "both"
+      ],
       "required": true
     },
     "client_detail": {

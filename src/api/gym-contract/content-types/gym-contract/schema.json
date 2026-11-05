@@ -1,0 +1,76 @@
+{
+  "kind": "collectionType",
+  "collectionName": "gym_contracts",
+  "info": {
+    "singularName": "gym-contract",
+    "pluralName": "gym-contracts",
+    "displayName": "gym-contract"
+  },
+  "options": {
+    "draftAndPublish": false
+  },
+  "pluginOptions": {},
+  "attributes": {
+    "contractId": {
+      "type": "uid"
+    },
+    "club_owner": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::club-owner.club-owner",
+      "inversedBy": "gym_contracts"
+    },
+    "contractStatus": {
+      "type": "enumeration",
+      "enum": [
+        "draft",
+        "active",
+        "expired",
+        "cancelled"
+      ]
+    },
+    "startDate": {
+      "type": "date"
+    },
+    "endDate": {
+      "type": "date"
+    },
+    "currency": {
+      "type": "string",
+      "default": "INR"
+    },
+    "notes": {
+      "type": "text"
+    },
+    "membership_tier": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::membership-tier.membership-tier",
+      "inversedBy": "gym_contracts"
+    },
+    "gym_contract_plan_rates": {
+      "type": "relation",
+      "relation": "oneToMany",
+      "target": "api::gym-contract-plan-rate.gym-contract-plan-rate",
+      "mappedBy": "gym_contract"
+    },
+    "gym_promotions": {
+      "type": "relation",
+      "relation": "oneToMany",
+      "target": "api::gym-promotion.gym-promotion",
+      "mappedBy": "gym_contract"
+    },
+    "gym_memberships": {
+      "type": "relation",
+      "relation": "oneToMany",
+      "target": "api::gym-membership.gym-membership",
+      "mappedBy": "gym_contract"
+    },
+    "commission_transactions": {
+      "type": "relation",
+      "relation": "oneToMany",
+      "target": "api::commission-transaction.commission-transaction",
+      "mappedBy": "gym_contract"
+    }
+  }
+}

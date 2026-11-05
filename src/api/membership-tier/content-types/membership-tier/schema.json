@@ -1,0 +1,50 @@
+{
+  "kind": "collectionType",
+  "collectionName": "membership_tiers",
+  "info": {
+    "singularName": "membership-tier",
+    "pluralName": "membership-tiers",
+    "displayName": "membership-tier"
+  },
+  "options": {
+    "draftAndPublish": false
+  },
+  "pluginOptions": {},
+  "attributes": {
+    "name": {
+      "type": "enumeration",
+      "enum": [
+        "basic",
+        "premium",
+        "luxury"
+      ]
+    },
+    "description": {
+      "type": "string"
+    },
+    "isActive": {
+      "type": "boolean",
+      "default": true
+    },
+    "slug": {
+      "type": "uid",
+      "required": true
+    },
+    "sortOrder": {
+      "type": "integer",
+      "default": 0
+    },
+    "membership_plan_prices": {
+      "type": "relation",
+      "relation": "oneToMany",
+      "target": "api::membership-plan-price.membership-plan-price",
+      "mappedBy": "membership_tier"
+    },
+    "gym_contracts": {
+      "type": "relation",
+      "relation": "oneToMany",
+      "target": "api::gym-contract.gym-contract",
+      "mappedBy": "membership_tier"
+    }
+  }
+}

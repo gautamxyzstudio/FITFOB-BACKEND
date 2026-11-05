@@ -1,0 +1,128 @@
+{
+  "kind": "collectionType",
+  "collectionName": "gym_memberships",
+  "info": {
+    "singularName": "gym-membership",
+    "pluralName": "gym-memberships",
+    "displayName": "gym_memberships"
+  },
+  "options": {
+    "draftAndPublish": false
+  },
+  "pluginOptions": {},
+  "attributes": {
+    "membershipId": {
+      "type": "uid"
+    },
+    "client_detail": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::client-detail.client-detail",
+      "inversedBy": "gym_memberships"
+    },
+    "gym_contract": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::gym-contract.gym-contract",
+      "inversedBy": "gym_memberships"
+    },
+    "membership_plan_price": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::membership-plan-price.membership-plan-price",
+      "inversedBy": "gym_memberships"
+    },
+    "gym_promotion": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::gym-promotion.gym-promotion",
+      "inversedBy": "gym_memberships"
+    },
+    "duration": {
+      "type": "enumeration",
+      "enum": [
+        "monthly",
+        "six_months",
+        "twelve_months"
+      ]
+    },
+    "durationMonths": {
+      "type": "integer"
+    },
+    "customerPriceSnapshot": {
+      "type": "decimal"
+    },
+    "commissionModeSnapshot": {
+      "type": "enumeration",
+      "enum": [
+        "default",
+        "custom",
+        "promotion"
+      ]
+    },
+    "commissionSnapshot": {
+      "type": "decimal"
+    },
+    "gatewayFeeSnapshot": {
+      "type": "decimal"
+    },
+    "gymPayoutSnapshot": {
+      "type": "decimal"
+    },
+    "promotionApplied": {
+      "type": "boolean",
+      "default": false
+    },
+    "promotionSequence": {
+      "type": "integer"
+    },
+    "currency": {
+      "type": "string",
+      "default": "INR"
+    },
+    "membershipStatus": {
+      "type": "enumeration",
+      "enum": [
+        "pending",
+        "active",
+        "expired",
+        "cancelled"
+      ]
+    },
+    "paymentStatus": {
+      "type": "enumeration",
+      "enum": [
+        "pending",
+        "paid",
+        "failed",
+        "refunded"
+      ]
+    },
+    "startDate": {
+      "type": "date"
+    },
+    "endDate": {
+      "type": "date"
+    },
+    "paidAt": {
+      "type": "datetime"
+    },
+    "paymentProvider": {
+      "type": "string"
+    },
+    "providerPaymentId": {
+      "type": "string"
+    },
+    "paymentIdempotencyKey": {
+      "type": "string",
+      "required": false,
+      "unique": true
+    },
+    "commission_transactions": {
+      "type": "relation",
+      "relation": "oneToMany",
+      "target": "api::commission-transaction.commission-transaction",
+      "mappedBy": "gym_membership"
+    }
+  }
+}

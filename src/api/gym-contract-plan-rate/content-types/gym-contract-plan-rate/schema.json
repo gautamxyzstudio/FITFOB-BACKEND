@@ -1,0 +1,41 @@
+{
+  "kind": "collectionType",
+  "collectionName": "gym_contract_plan_rates",
+  "info": {
+    "singularName": "gym-contract-plan-rate",
+    "pluralName": "gym-contract-plan-rates",
+    "displayName": "gym-contract-plan-rate"
+  },
+  "options": {
+    "draftAndPublish": false
+  },
+  "pluginOptions": {},
+  "attributes": {
+    "commissionMode": {
+      "type": "enumeration",
+      "enum": [
+        "default",
+        "custom"
+      ]
+    },
+    "customCommission": {
+      "type": "decimal"
+    },
+    "isActive": {
+      "type": "boolean",
+      "default": true
+    },
+    "membership_plan_price": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::membership-plan-price.membership-plan-price",
+      "inversedBy": "gym_contract_plan_rates"
+    },
+    "gym_contract": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::gym-contract.gym-contract",
+      "inversedBy": "gym_contract_plan_rates"
+    }
+  }
+}

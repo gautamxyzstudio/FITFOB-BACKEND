@@ -145,6 +145,12 @@
     "sendNotifications": {
       "type": "boolean",
       "default": true
+    },
+    "gym_contracts": {
+      "type": "relation",
+      "relation": "oneToMany",
+      "target": "api::gym-contract.gym-contract",
+      "mappedBy": "club_owner"
     }
   }
 }

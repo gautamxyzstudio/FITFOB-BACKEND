@@ -109,6 +109,12 @@
       "relation": "oneToMany",
       "target": "api::membership-payment.membership-payment",
       "mappedBy": "client_detail"
+    },
+    "gym_memberships": {
+      "type": "relation",
+      "relation": "oneToMany",
+      "target": "api::gym-membership.gym-membership",
+      "mappedBy": "client_detail"
     }
   }
 }

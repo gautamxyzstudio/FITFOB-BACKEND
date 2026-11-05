@@ -1,0 +1,60 @@
+{
+  "kind": "collectionType",
+  "collectionName": "membership_plan_prices",
+  "info": {
+    "singularName": "membership-plan-price",
+    "pluralName": "membership-plan-prices",
+    "displayName": "membership-plan-price"
+  },
+  "options": {
+    "draftAndPublish": false
+  },
+  "pluginOptions": {},
+  "attributes": {
+    "duration": {
+      "type": "enumeration",
+      "enum": [
+        "monthly",
+        "six_months",
+        "twelve_months"
+      ]
+    },
+    "durationMonths": {
+      "type": "integer",
+      "required": false,
+      "min": 1
+    },
+    "customerPrice": {
+      "type": "decimal"
+    },
+    "defaultCommission": {
+      "type": "decimal"
+    },
+    "currency": {
+      "type": "string",
+      "default": "INR"
+    },
+    "isActive": {
+      "type": "boolean",
+      "default": true
+    },
+    "membership_tier": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::membership-tier.membership-tier",
+      "inversedBy": "membership_plan_prices"
+    },
+    "gym_contract_plan_rates": {
+      "type": "relation",
+      "relation": "oneToMany",
+      "target": "api::gym-contract-plan-rate.gym-contract-plan-rate",
+      "mappedBy": "membership_plan_price"
+    },
+    "gym_memberships": {
+      "type": "relation",
+      "relation": "oneToMany",
+      "target": "api::gym-membership.gym-membership",
+      "mappedBy": "membership_plan_price"
+    }
+  }
+}
