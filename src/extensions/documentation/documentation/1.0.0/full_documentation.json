@@ -14,7 +14,7 @@
       "name": "Apache 2.0",
       "url": "https://www.apache.org/licenses/LICENSE-2.0.html"
     },
-    "x-generation-date": "2026-11-05T08:28:59.109Z"
+    "x-generation-date": "2026-11-05T09:48:25.848Z"
   },
   "x-strapi-config": {
     "plugins": [
@@ -19405,6 +19405,7 @@
                                 "clubCategory": {
                                   "type": "string",
                                   "enum": [
+                                    "Basic",
                                     "Premium",
                                     "Luxury"
                                   ]
@@ -20500,6 +20501,7 @@
                       "clubCategory": {
                         "type": "string",
                         "enum": [
+                          "Basic",
                           "Premium",
                           "Luxury"
                         ]
@@ -26405,6 +26407,7 @@
                                 "clubCategory": {
                                   "type": "string",
                                   "enum": [
+                                    "Basic",
                                     "Premium",
                                     "Luxury"
                                   ]
@@ -27500,6 +27503,7 @@
                       "clubCategory": {
                         "type": "string",
                         "enum": [
+                          "Basic",
                           "Premium",
                           "Luxury"
                         ]
@@ -33979,6 +33983,7 @@
                                       "clubCategory": {
                                         "type": "string",
                                         "enum": [
+                                          "Basic",
                                           "Premium",
                                           "Luxury"
                                         ]
@@ -35074,6 +35079,7 @@
                             "clubCategory": {
                               "type": "string",
                               "enum": [
+                                "Basic",
                                 "Premium",
                                 "Luxury"
                               ]
@@ -43816,6 +43822,7 @@
                         "clubCategory": {
                           "type": "string",
                           "enum": [
+                            "Basic",
                             "Premium",
                             "Luxury"
                           ]
@@ -44931,6 +44938,7 @@
                 "clubCategory": {
                   "type": "string",
                   "enum": [
+                    "Basic",
                     "Premium",
                     "Luxury"
                   ]
@@ -45652,6 +45660,7 @@
               "clubCategory": {
                 "type": "string",
                 "enum": [
+                  "Basic",
                   "Premium",
                   "Luxury"
                 ]
@@ -48674,6 +48683,7 @@
                                       "clubCategory": {
                                         "type": "string",
                                         "enum": [
+                                          "Basic",
                                           "Premium",
                                           "Luxury"
                                         ]
@@ -49769,6 +49779,7 @@
                             "clubCategory": {
                               "type": "string",
                               "enum": [
+                                "Basic",
                                 "Premium",
                                 "Luxury"
                               ]
@@ -52867,6 +52878,7 @@
           "clubCategory": {
             "type": "string",
             "enum": [
+              "Basic",
               "Premium",
               "Luxury"
             ]
@@ -58406,6 +58418,7 @@
                       "clubCategory": {
                         "type": "string",
                         "enum": [
+                          "Basic",
                           "Premium",
                           "Luxury"
                         ]
@@ -59521,6 +59534,7 @@
               "clubCategory": {
                 "type": "string",
                 "enum": [
+                  "Basic",
                   "Premium",
                   "Luxury"
                 ]
@@ -65568,6 +65582,7 @@
                       "clubCategory": {
                         "type": "string",
                         "enum": [
+                          "Basic",
                           "Premium",
                           "Luxury"
                         ]
@@ -66683,6 +66698,7 @@
               "clubCategory": {
                 "type": "string",
                 "enum": [
+                  "Basic",
                   "Premium",
                   "Luxury"
                 ]
@@ -72728,6 +72744,7 @@
                       "clubCategory": {
                         "type": "string",
                         "enum": [
+                          "Basic",
                           "Premium",
                           "Luxury"
                         ]
@@ -73843,6 +73860,7 @@
               "clubCategory": {
                 "type": "string",
                 "enum": [
+                  "Basic",
                   "Premium",
                   "Luxury"
                 ]
@@ -79896,6 +79914,7 @@
                         "clubCategory": {
                           "type": "string",
                           "enum": [
+                            "Basic",
                             "Premium",
                             "Luxury"
                           ]
@@ -81011,6 +81030,7 @@
                 "clubCategory": {
                   "type": "string",
                   "enum": [
+                    "Basic",
                     "Premium",
                     "Luxury"
                   ]
@@ -84397,6 +84417,7 @@
                                     "clubCategory": {
                                       "type": "string",
                                       "enum": [
+                                        "Basic",
                                         "Premium",
                                         "Luxury"
                                       ]
@@ -85492,6 +85513,7 @@
                           "clubCategory": {
                             "type": "string",
                             "enum": [
+                              "Basic",
                               "Premium",
                               "Luxury"
                             ]
@@ -91484,6 +91506,7 @@
                                       "clubCategory": {
                                         "type": "string",
                                         "enum": [
+                                          "Basic",
                                           "Premium",
                                           "Luxury"
                                         ]
@@ -92579,6 +92602,7 @@
                             "clubCategory": {
                               "type": "string",
                               "enum": [
+                                "Basic",
                                 "Premium",
                                 "Luxury"
                               ]
@@ -101969,6 +101993,7 @@
                       "clubCategory": {
                         "type": "string",
                         "enum": [
+                          "Basic",
                           "Premium",
                           "Luxury"
                         ]
@@ -103084,6 +103109,7 @@
               "clubCategory": {
                 "type": "string",
                 "enum": [
+                  "Basic",
                   "Premium",
                   "Luxury"
                 ]
@@ -108557,6 +108583,7 @@
                                     "clubCategory": {
                                       "type": "string",
                                       "enum": [
+                                        "Basic",
                                         "Premium",
                                         "Luxury"
                                       ]
@@ -109672,6 +109699,7 @@
                             "clubCategory": {
                               "type": "string",
                               "enum": [
+                                "Basic",
                                 "Premium",
                                 "Luxury"
                               ]
@@ -113588,6 +113616,7 @@
                                 "clubCategory": {
                                   "type": "string",
                                   "enum": [
+                                    "Basic",
                                     "Premium",
                                     "Luxury"
                                   ]
@@ -114683,6 +114712,7 @@
                       "clubCategory": {
                         "type": "string",
                         "enum": [
+                          "Basic",
                           "Premium",
                           "Luxury"
                         ]
@@ -123108,6 +123138,7 @@
                           "clubCategory": {
                             "type": "string",
                             "enum": [
+                              "Basic",
                               "Premium",
                               "Luxury"
                             ]
@@ -124223,6 +124254,7 @@
                   "clubCategory": {
                     "type": "string",
                     "enum": [
+                      "Basic",
                       "Premium",
                       "Luxury"
                     ]
@@ -130367,6 +130399,7 @@
                       "clubCategory": {
                         "type": "string",
                         "enum": [
+                          "Basic",
                           "Premium",
                           "Luxury"
                         ]
@@ -131482,6 +131515,7 @@
               "clubCategory": {
                 "type": "string",
                 "enum": [
+                  "Basic",
                   "Premium",
                   "Luxury"
                 ]
@@ -137349,6 +137383,7 @@
                       "clubCategory": {
                         "type": "string",
                         "enum": [
+                          "Basic",
                           "Premium",
                           "Luxury"
                         ]
@@ -138464,6 +138499,7 @@
               "clubCategory": {
                 "type": "string",
                 "enum": [
+                  "Basic",
                   "Premium",
                   "Luxury"
                 ]
@@ -141821,6 +141857,7 @@
                                 "clubCategory": {
                                   "type": "string",
                                   "enum": [
+                                    "Basic",
                                     "Premium",
                                     "Luxury"
                                   ]
@@ -142916,6 +142953,7 @@
                       "clubCategory": {
                         "type": "string",
                         "enum": [
+                          "Basic",
                           "Premium",
                           "Luxury"
                         ]
@@ -148957,6 +148995,7 @@
                                 "clubCategory": {
                                   "type": "string",
                                   "enum": [
+                                    "Basic",
                                     "Premium",
                                     "Luxury"
                                   ]
@@ -150052,6 +150091,7 @@
                       "clubCategory": {
                         "type": "string",
                         "enum": [
+                          "Basic",
                           "Premium",
                           "Luxury"
                         ]
@@ -158119,6 +158159,7 @@
                                           "clubCategory": {
                                             "type": "string",
                                             "enum": [
+                                              "Basic",
                                               "Premium",
                                               "Luxury"
                                             ]
@@ -159234,6 +159275,7 @@
                                   "clubCategory": {
                                     "type": "string",
                                     "enum": [
+                                      "Basic",
                                       "Premium",
                                       "Luxury"
                                     ]
@@ -165115,6 +165157,7 @@
                                       "clubCategory": {
                                         "type": "string",
                                         "enum": [
+                                          "Basic",
                                           "Premium",
                                           "Luxury"
                                         ]
@@ -166230,6 +166273,7 @@
                               "clubCategory": {
                                 "type": "string",
                                 "enum": [
+                                  "Basic",
                                   "Premium",
                                   "Luxury"
                                 ]
@@ -171058,6 +171102,7 @@
                                       "clubCategory": {
                                         "type": "string",
                                         "enum": [
+                                          "Basic",
                                           "Premium",
                                           "Luxury"
                                         ]
@@ -172153,6 +172198,7 @@
                             "clubCategory": {
                               "type": "string",
                               "enum": [
+                                "Basic",
                                 "Premium",
                                 "Luxury"
                               ]
@@ -178039,6 +178085,7 @@
                                 "clubCategory": {
                                   "type": "string",
                                   "enum": [
+                                    "Basic",
                                     "Premium",
                                     "Luxury"
                                   ]
@@ -179134,6 +179181,7 @@
                       "clubCategory": {
                         "type": "string",
                         "enum": [
+                          "Basic",
                           "Premium",
                           "Luxury"
                         ]
@@ -185520,6 +185568,7 @@
                                       "clubCategory": {
                                         "type": "string",
                                         "enum": [
+                                          "Basic",
                                           "Premium",
                                           "Luxury"
                                         ]
@@ -186615,6 +186664,7 @@
                             "clubCategory": {
                               "type": "string",
                               "enum": [
+                                "Basic",
                                 "Premium",
                                 "Luxury"
                               ]
@@ -190393,6 +190443,7 @@
               "clubCategory": {
                 "type": "string",
                 "enum": [
+                  "Basic",
                   "Premium",
                   "Luxury"
                 ]
@@ -193072,6 +193123,7 @@
                                       "clubCategory": {
                                         "type": "string",
                                         "enum": [
+                                          "Basic",
                                           "Premium",
                                           "Luxury"
                                         ]
@@ -194167,6 +194219,7 @@
                             "clubCategory": {
                               "type": "string",
                               "enum": [
+                                "Basic",
                                 "Premium",
                                 "Luxury"
                               ]
@@ -197481,6 +197534,7 @@
           "clubCategory": {
             "type": "string",
             "enum": [
+              "Basic",
               "Premium",
               "Luxury"
             ]

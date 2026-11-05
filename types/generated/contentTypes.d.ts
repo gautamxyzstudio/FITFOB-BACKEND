@@ -757,7 +757,7 @@ export interface ApiClubOwnerClubOwner extends Struct.CollectionTypeSchema {
       'api::club-service.club-service'
     >;
     clubAddress: Schema.Attribute.String;
-    clubCategory: Schema.Attribute.Enumeration<['Premium', 'Luxury']>;
+    clubCategory: Schema.Attribute.Enumeration<['Basic', 'Premium', 'Luxury']>;
     clubId: Schema.Attribute.String &
       Schema.Attribute.Required &
       Schema.Attribute.Unique;
@@ -1746,7 +1746,7 @@ export interface ApiPendingClubOwnerPendingClubOwner
       'api::club-service.club-service'
     >;
     clubAddress: Schema.Attribute.String;
-    clubCategory: Schema.Attribute.Enumeration<['Premium', 'Luxury']>;
+    clubCategory: Schema.Attribute.Enumeration<['Basic', 'Premium', 'Luxury']>;
     clubName: Schema.Attribute.String;
     createdAt: Schema.Attribute.DateTime;
     createdBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &

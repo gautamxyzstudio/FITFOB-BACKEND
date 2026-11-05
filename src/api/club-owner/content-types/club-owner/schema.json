@@ -81,6 +81,7 @@
     "clubCategory": {
       "type": "enumeration",
       "enum": [
+        "Basic",
         "Premium",
         "Luxury"
       ]
