@@ -8,6 +8,14 @@ export default {
         auth:{}
       },
     },
+      {
+      method: 'PUT',
+      path: '/gym-contract/:documentId',
+      handler: 'gym-contract.updateGymContract',
+      config: {
+        auth:{}
+      },
+    },
     {
       method: 'GET',
       path: '/gym-contracts/my-contract',
