@@ -147,7 +147,7 @@ export default factories.createCoreController(
                 id: authUser.id,
               },
             },
-            select: ["id", "clubName"],
+            select: ["id", "clubName", "clubCategory"],
           });
 
         if (!clubOwner) {
@@ -244,6 +244,8 @@ export default factories.createCoreController(
 
         // 7. Final response
         const responseData: any = {
+          clubName: clubOwner.clubName,
+          clubCategory: clubOwner.clubCategory,
           plans,
         };
 
