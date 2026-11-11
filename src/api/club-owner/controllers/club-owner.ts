@@ -2,6 +2,7 @@ import { factories } from "@strapi/strapi";
 import { Context } from "koa";
 import bcrypt from "bcryptjs";
 import axios from "axios";
+import { randomBytes } from "node:crypto";
 import {
   normalizeWeekdayScheduling,
   orderWeekdayScheduling,
@@ -33,6 +34,13 @@ const POPULATE: any = {
 
 const CLUB_OWNER_UID = "api::club-owner.club-owner" as any;
 const HOLDIDAY_UID = "api::holdiday.holdiday" as any;
+const GYM_CONTRACT_UID = "api::gym-contract.gym-contract" as any;
+const GYM_CONTRACT_RATE_UID =
+  "api::gym-contract-plan-rate.gym-contract-plan-rate" as any;
+const MEMBERSHIP_TIER_UID = "api::membership-tier.membership-tier" as any;
+const MEMBERSHIP_PRICE_UID =
+  "api::membership-plan-price.membership-plan-price" as any;
+const GYM_PROMOTION_UID = "api::gym-promotion.gym-promotion" as any;
 
 /* ---------- OTP GENERATOR ---------- */
 const generateOtp = () =>
@@ -746,6 +754,600 @@ async function checkIsClubFavoritedDirect(
     strapi.log.warn("[checkIsClubFavoritedDirect] Error:", err);
     return false;
   }
+}
+
+/* =======================================================
+   GYM CONTRACT & CATEGORY TIER SYNC HELPERS
+======================================================= */
+const CLUB_CATEGORY_MAP: Record<
+  string,
+  {
+    category: "Basic" | "Premium" | "Luxury";
+    tierName: "basic" | "premium" | "luxury";
+  }
+> = {
+  basic: { category: "Basic", tierName: "basic" },
+  premium: { category: "Premium", tierName: "premium" },
+  luxury: { category: "Luxury", tierName: "luxury" },
+};
+
+function getCategoryMapping(input: any) {
+  if (typeof input !== "string") return null;
+  const key = input.trim().toLowerCase();
+  return CLUB_CATEGORY_MAP[key] || null;
+}
+
+const REQUIRED_DURATIONS = ["monthly", "six_months", "twelve_months"];
+
+function generateContractId(): string {
+  const date = new Date().toISOString().slice(0, 10).replace(/-/g, "");
+  const randomCode = randomBytes(4).toString("hex").toUpperCase();
+  return `GYM-CTR-${date}-${randomCode}`;
+}
+
+function formatDate(date: Date): string {
+  return date.toISOString().split("T")[0];
+}
+
+function getContractEndDate(startDate: Date): Date {
+  const endDate = new Date(startDate);
+  endDate.setFullYear(endDate.getFullYear() + 1);
+  return endDate;
+}
+
+/**
+ * Synchronize Gym Contract, Membership Tier, and Rate Plans
+ * when Club Category is updated.
+ *
+ * 1. Updates Gym Contract's membership_tier relation to the matching tier.
+ * 2. Updates Gym Contract Plan Rates to point to the new tier's membership plan prices.
+ * 3. Resets commissionMode to 'default' and customCommission to null.
+ * 4. Ensures dependent link tables (_lnk) in Knex/database are synchronized.
+ */
+async function syncGymContractForClubCategory(
+  strapi: any,
+  clubOwner: { id: number; documentId?: string; clubName?: string },
+  targetCategoryInput: string,
+) {
+  const mapped = getCategoryMapping(targetCategoryInput);
+  if (!mapped) {
+    throw new Error(`Invalid clubCategory: ${targetCategoryInput}`);
+  }
+  const { category: normalizedCategory, tierName } = mapped;
+  const ownerId = Number(clubOwner.id);
+  const ownerDocId = clubOwner.documentId
+    ? String(clubOwner.documentId).trim()
+    : undefined;
+
+  // 1. Find matching global membership tier
+  let membershipTier: any = await strapi.db.query(MEMBERSHIP_TIER_UID).findOne({
+    where: {
+      name: tierName,
+      isActive: true,
+    },
+  });
+
+  if (!membershipTier) {
+    membershipTier = await strapi.db.query(MEMBERSHIP_TIER_UID).findOne({
+      where: {
+        name: tierName,
+      },
+    });
+  }
+
+  if (!membershipTier) {
+    throw new Error(`Membership tier not found for tier name: '${tierName}'`);
+  }
+
+  // 2. Fetch global membership plan prices for this tier
+  const membershipPrices: any[] = await strapi.db
+    .query(MEMBERSHIP_PRICE_UID)
+    .findMany({
+      where: {
+        membership_tier: {
+          id: membershipTier.id,
+        },
+        isActive: true,
+        duration: {
+          $in: REQUIRED_DURATIONS,
+        },
+      },
+    });
+
+  const priceMap = new Map<string, any>(
+    membershipPrices.map((price: any) => [price.duration, price]),
+  );
+
+  const missingDurations = REQUIRED_DURATIONS.filter(
+    (duration) => !priceMap.has(duration),
+  );
+
+  if (missingDurations.length > 0) {
+    strapi.log.warn(
+      `[syncGymContract] Missing global membership prices for ${tierName}: ${missingDurations.join(", ")}`,
+    );
+  }
+
+  const currencies = [
+    ...new Set(membershipPrices.map((p: any) => p.currency).filter(Boolean)),
+  ];
+  const currency = currencies[0] || "INR";
+
+  // 3. Find existing gym contracts for this club owner
+  let gymContracts: any[] = await strapi.db.query(GYM_CONTRACT_UID).findMany({
+    where: {
+      club_owner: {
+        id: ownerId,
+      },
+    },
+    populate: {
+      membership_tier: true,
+      gym_promotions: true,
+    },
+  });
+
+  if ((!gymContracts || gymContracts.length === 0) && ownerDocId) {
+    gymContracts = await strapi.db.query(GYM_CONTRACT_UID).findMany({
+      where: {
+        club_owner: {
+          documentId: ownerDocId,
+        },
+      },
+      populate: {
+        membership_tier: true,
+        gym_promotions: true,
+      },
+    });
+  }
+
+  // 4. Create default gym contract if none exists
+  if (!gymContracts || gymContracts.length === 0) {
+    const startDate = new Date();
+    const endDate = getContractEndDate(startDate);
+
+    let createdContract: any = null;
+    if ((strapi as any).documents) {
+      try {
+        createdContract = await (strapi as any)
+          .documents(GYM_CONTRACT_UID)
+          .create({
+            data: {
+              contractId: generateContractId(),
+              club_owner: ownerDocId || ownerId,
+              membership_tier: membershipTier.documentId || membershipTier.id,
+              contractStatus: "active",
+              startDate: formatDate(startDate),
+              endDate: formatDate(endDate),
+              currency,
+              notes: "Automatically generated default gym contract.",
+            },
+          });
+      } catch (docErr) {
+        strapi.log.warn("documents.create fallback on gym-contract:", docErr);
+      }
+    }
+
+    if (!createdContract) {
+      createdContract = await strapi.db.query(GYM_CONTRACT_UID).create({
+        data: {
+          contractId: generateContractId(),
+          club_owner: ownerId,
+          membership_tier: membershipTier.id,
+          contractStatus: "active",
+          startDate: formatDate(startDate),
+          endDate: formatDate(endDate),
+          currency,
+          notes: "Automatically generated default gym contract.",
+        },
+      });
+    }
+
+    // Direct lnk sync if table exists
+    if (strapi.db?.connection && createdContract?.id) {
+      try {
+        const hasOwnerLnk = await strapi.db.connection.schema.hasTable(
+          "gym_contracts_club_owner_lnk",
+        );
+        if (hasOwnerLnk) {
+          const existingLnk = await strapi.db
+            .connection("gym_contracts_club_owner_lnk")
+            .where({
+              gym_contract_id: createdContract.id,
+              club_owner_id: ownerId,
+            })
+            .first();
+          if (!existingLnk) {
+            const cols = Object.keys(
+              await strapi.db
+                .connection("gym_contracts_club_owner_lnk")
+                .columnInfo(),
+            );
+            const insertData: any = {
+              gym_contract_id: createdContract.id,
+              club_owner_id: ownerId,
+            };
+            if (cols.includes("gym_contract_ord")) {
+              insertData.gym_contract_ord = 1;
+            }
+            if (cols.includes("club_owner_ord")) {
+              insertData.club_owner_ord = 1;
+            }
+            await strapi.db
+              .connection("gym_contracts_club_owner_lnk")
+              .insert(insertData);
+          }
+        }
+      } catch (_) {}
+    }
+
+    const fetched = await strapi.db.query(GYM_CONTRACT_UID).findOne({
+      where: { id: createdContract.id },
+      populate: {
+        membership_tier: true,
+        gym_promotions: true,
+      },
+    });
+
+    gymContracts = [fetched || createdContract];
+  }
+
+  // 5. Update contracts and their plan rates
+  for (const contract of gymContracts) {
+    // 5a. Update contract membership_tier & currency
+    if ((strapi as any).documents && contract.documentId) {
+      try {
+        await (strapi as any).documents(GYM_CONTRACT_UID).update({
+          documentId: contract.documentId,
+          data: {
+            membership_tier: membershipTier.documentId || membershipTier.id,
+            currency,
+          },
+        });
+      } catch (docErr) {
+        strapi.log.warn("documents.update error on gym-contract:", docErr);
+      }
+    }
+
+    await strapi.db.query(GYM_CONTRACT_UID).update({
+      where: { id: contract.id },
+      data: {
+        membership_tier: membershipTier.id,
+        currency,
+      },
+    });
+
+    // Sync gym_contracts_membership_tier_lnk
+    if (strapi.db?.connection) {
+      try {
+        const hasTierLnk = await strapi.db.connection.schema.hasTable(
+          "gym_contracts_membership_tier_lnk",
+        );
+        if (hasTierLnk) {
+          await strapi.db
+            .connection("gym_contracts_membership_tier_lnk")
+            .where({ gym_contract_id: contract.id })
+            .del();
+          const cols = Object.keys(
+            await strapi.db
+              .connection("gym_contracts_membership_tier_lnk")
+              .columnInfo(),
+          );
+          const insertData: any = {
+            gym_contract_id: contract.id,
+            membership_tier_id: membershipTier.id,
+          };
+          if (cols.includes("gym_contract_ord")) {
+            insertData.gym_contract_ord = 1;
+          }
+          if (cols.includes("membership_tier_ord")) {
+            insertData.membership_tier_ord = 1;
+          }
+          await strapi.db
+            .connection("gym_contracts_membership_tier_lnk")
+            .insert(insertData);
+        }
+      } catch (tierLnkErr) {
+        strapi.log.warn(
+          "Error syncing gym_contracts_membership_tier_lnk:",
+          tierLnkErr,
+        );
+      }
+    }
+
+    // 5b. Find all existing rate plans for this contract
+    const existingRates: any[] = await strapi.db
+      .query(GYM_CONTRACT_RATE_UID)
+      .findMany({
+        where: {
+          gym_contract: {
+            id: contract.id,
+          },
+        },
+        populate: {
+          membership_plan_price: true,
+        },
+      });
+
+    const handledRateIds = new Set<number>();
+
+    for (const duration of REQUIRED_DURATIONS) {
+      const membershipPrice = priceMap.get(duration);
+      if (!membershipPrice) {
+        continue;
+      }
+
+      // Find existing rate for this duration
+      let matchingRate = existingRates.find(
+        (r: any) =>
+          !handledRateIds.has(r.id) &&
+          r.membership_plan_price?.duration === duration,
+      );
+
+      // Or match any unhandled rate
+      if (!matchingRate) {
+        matchingRate = existingRates.find(
+          (r: any) => !handledRateIds.has(r.id),
+        );
+      }
+
+      if (matchingRate) {
+        handledRateIds.add(matchingRate.id);
+
+        if ((strapi as any).documents && matchingRate.documentId) {
+          try {
+            await (strapi as any).documents(GYM_CONTRACT_RATE_UID).update({
+              documentId: matchingRate.documentId,
+              data: {
+                membership_plan_price:
+                  membershipPrice.documentId || membershipPrice.id,
+                commissionMode: "default",
+                customCommission: null,
+                isActive: true,
+              },
+            });
+          } catch (docErr) {
+            strapi.log.warn("documents.update error on plan rate:", docErr);
+          }
+        }
+
+        await strapi.db.query(GYM_CONTRACT_RATE_UID).update({
+          where: { id: matchingRate.id },
+          data: {
+            gym_contract: contract.id,
+            membership_plan_price: membershipPrice.id,
+            commissionMode: "default",
+            customCommission: null,
+            isActive: true,
+          },
+        });
+
+        if (strapi.db?.connection) {
+          try {
+            const hasPriceLnk = await strapi.db.connection.schema.hasTable(
+              "gym_contract_plan_rates_membership_plan_price_lnk",
+            );
+            if (hasPriceLnk) {
+              await strapi.db
+                .connection("gym_contract_plan_rates_membership_plan_price_lnk")
+                .where({ gym_contract_plan_rate_id: matchingRate.id })
+                .del();
+              const cols = Object.keys(
+                await strapi.db
+                  .connection(
+                    "gym_contract_plan_rates_membership_plan_price_lnk",
+                  )
+                  .columnInfo(),
+              );
+              const insertData: any = {
+                gym_contract_plan_rate_id: matchingRate.id,
+                membership_plan_price_id: membershipPrice.id,
+              };
+              if (cols.includes("gym_contract_plan_rate_ord")) {
+                insertData.gym_contract_plan_rate_ord = 1;
+              }
+              if (cols.includes("membership_plan_price_ord")) {
+                insertData.membership_plan_price_ord = 1;
+              }
+              await strapi.db
+                .connection(
+                  "gym_contract_plan_rates_membership_plan_price_lnk",
+                )
+                .insert(insertData);
+            }
+
+            const hasContractLnk = await strapi.db.connection.schema.hasTable(
+              "gym_contract_plan_rates_gym_contract_lnk",
+            );
+            if (hasContractLnk) {
+              const contractLnkExists = await strapi.db
+                .connection("gym_contract_plan_rates_gym_contract_lnk")
+                .where({
+                  gym_contract_plan_rate_id: matchingRate.id,
+                  gym_contract_id: contract.id,
+                })
+                .first();
+              if (!contractLnkExists) {
+                const cols = Object.keys(
+                  await strapi.db
+                    .connection("gym_contract_plan_rates_gym_contract_lnk")
+                    .columnInfo(),
+                );
+                const insertData: any = {
+                  gym_contract_plan_rate_id: matchingRate.id,
+                  gym_contract_id: contract.id,
+                };
+                if (cols.includes("gym_contract_plan_rate_ord")) {
+                  insertData.gym_contract_plan_rate_ord = 1;
+                }
+                if (cols.includes("gym_contract_ord")) {
+                  insertData.gym_contract_ord = 1;
+                }
+                await strapi.db
+                  .connection("gym_contract_plan_rates_gym_contract_lnk")
+                  .insert(insertData);
+              }
+            }
+          } catch (lnkErr) {
+            strapi.log.warn("Error updating rate plan lnk tables:", lnkErr);
+          }
+        }
+      } else {
+        let createdRate: any = null;
+
+        if ((strapi as any).documents) {
+          try {
+            createdRate = await (strapi as any)
+              .documents(GYM_CONTRACT_RATE_UID)
+              .create({
+                data: {
+                  gym_contract: contract.documentId || contract.id,
+                  membership_plan_price:
+                    membershipPrice.documentId || membershipPrice.id,
+                  commissionMode: "default",
+                  customCommission: null,
+                  isActive: true,
+                },
+              });
+          } catch (createDocErr) {
+            strapi.log.warn("documents.create on rate error:", createDocErr);
+          }
+        }
+
+        if (!createdRate) {
+          createdRate = await strapi.db.query(GYM_CONTRACT_RATE_UID).create({
+            data: {
+              gym_contract: contract.id,
+              membership_plan_price: membershipPrice.id,
+              commissionMode: "default",
+              customCommission: null,
+              isActive: true,
+            },
+          });
+        }
+
+        if (createdRate?.id) {
+          handledRateIds.add(createdRate.id);
+
+          if (strapi.db?.connection) {
+            try {
+              const hasPriceLnk = await strapi.db.connection.schema.hasTable(
+                "gym_contract_plan_rates_membership_plan_price_lnk",
+              );
+              if (hasPriceLnk) {
+                const priceLnkExists = await strapi.db
+                  .connection(
+                    "gym_contract_plan_rates_membership_plan_price_lnk",
+                  )
+                  .where({
+                    gym_contract_plan_rate_id: createdRate.id,
+                    membership_plan_price_id: membershipPrice.id,
+                  })
+                  .first();
+                if (!priceLnkExists) {
+                  const cols = Object.keys(
+                    await strapi.db
+                      .connection(
+                        "gym_contract_plan_rates_membership_plan_price_lnk",
+                      )
+                      .columnInfo(),
+                  );
+                  const insertData: any = {
+                    gym_contract_plan_rate_id: createdRate.id,
+                    membership_plan_price_id: membershipPrice.id,
+                  };
+                  if (cols.includes("gym_contract_plan_rate_ord")) {
+                    insertData.gym_contract_plan_rate_ord = 1;
+                  }
+                  if (cols.includes("membership_plan_price_ord")) {
+                    insertData.membership_plan_price_ord = 1;
+                  }
+                  await strapi.db
+                    .connection(
+                      "gym_contract_plan_rates_membership_plan_price_lnk",
+                    )
+                    .insert(insertData);
+                }
+              }
+
+              const hasContractLnk = await strapi.db.connection.schema.hasTable(
+                "gym_contract_plan_rates_gym_contract_lnk",
+              );
+              if (hasContractLnk) {
+                const contractLnkExists = await strapi.db
+                  .connection("gym_contract_plan_rates_gym_contract_lnk")
+                  .where({
+                    gym_contract_plan_rate_id: createdRate.id,
+                    gym_contract_id: contract.id,
+                  })
+                  .first();
+                if (!contractLnkExists) {
+                  const cols = Object.keys(
+                    await strapi.db
+                      .connection("gym_contract_plan_rates_gym_contract_lnk")
+                      .columnInfo(),
+                  );
+                  const insertData: any = {
+                    gym_contract_plan_rate_id: createdRate.id,
+                    gym_contract_id: contract.id,
+                  };
+                  if (cols.includes("gym_contract_plan_rate_ord")) {
+                    insertData.gym_contract_plan_rate_ord = 1;
+                  }
+                  if (cols.includes("gym_contract_ord")) {
+                    insertData.gym_contract_ord = 1;
+                  }
+                  await strapi.db
+                    .connection("gym_contract_plan_rates_gym_contract_lnk")
+                    .insert(insertData);
+                }
+              }
+            } catch (lnkErr) {
+              strapi.log.warn("Error creating rate plan lnk tables:", lnkErr);
+            }
+          }
+        }
+      }
+    }
+
+    // Deactivate orphan extra rates
+    for (const extraRate of existingRates) {
+      if (!handledRateIds.has(extraRate.id)) {
+        try {
+          await strapi.db.query(GYM_CONTRACT_RATE_UID).update({
+            where: { id: extraRate.id },
+            data: { isActive: false },
+          });
+        } catch (_) {}
+      }
+    }
+
+    // Ensure zero_commission promotion exists
+    const existingPromotion = (contract.gym_promotions || []).find(
+      (p: any) => p.promotionType === "zero_commission",
+    );
+    if (!existingPromotion) {
+      try {
+        await strapi.db.query(GYM_PROMOTION_UID).create({
+          data: {
+            gym_contract: contract.id,
+            promotionType: "zero_commission",
+            userLimit: 20,
+            usedUserCount: 0,
+            reservedUserCount: 0,
+            isActive: true,
+            startDate: contract.startDate,
+            endDate: contract.endDate,
+          },
+        });
+      } catch (promoErr) {
+        strapi.log.warn("Failed to create promotion:", promoErr);
+      }
+    }
+  }
+
+  strapi.log.info(
+    `[syncGymContract] Successfully updated gym contract relations and plan rates for club owner ${ownerId} (Category: ${normalizedCategory}, Tier: ${tierName})`,
+  );
 }
 
 export default factories.createCoreController(
@@ -1983,6 +2585,22 @@ export default factories.createCoreController(
           updateData.club_facilities = facilityIds;
         }
 
+        let isCategoryUpdated = false;
+        if (
+          updateData.clubCategory !== undefined &&
+          updateData.clubCategory !== null &&
+          String(updateData.clubCategory).trim() !== ""
+        ) {
+          const mapped = getCategoryMapping(updateData.clubCategory);
+          if (!mapped) {
+            return ctx.badRequest(
+              "Invalid clubCategory. Must be 'Basic', 'Premium', or 'Luxury'.",
+            );
+          }
+          updateData.clubCategory = mapped.category;
+          isCategoryUpdated = true;
+        }
+
         let updated: any = null;
 
         if ((strapi as any).documents && existing.documentId) {
@@ -2007,6 +2625,27 @@ export default factories.createCoreController(
               data: updateData,
             },
           );
+        }
+
+        // When clubCategory is updated, sync gym-contract, membership_tier,
+        // and gym-contract-plan-rate (reset commissionMode to default)
+        if (isCategoryUpdated) {
+          try {
+            await syncGymContractForClubCategory(
+              strapi,
+              {
+                id: existing.id || Number(id),
+                documentId: existing.documentId,
+                clubName: existing.clubName || updateData.clubName,
+              },
+              updateData.clubCategory,
+            );
+          } catch (contractErr: any) {
+            strapi.log.error(
+              "Failed to sync gym contract and rate plans on clubCategory update:",
+              contractErr,
+            );
+          }
         }
 
         const entity: any = await strapi.entityService.findOne(
