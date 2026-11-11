@@ -1,5 +1,9 @@
 import { factories } from "@strapi/strapi";
 import { randomUUID } from "node:crypto";
+import {
+  logAdminActivity,
+  getAdminActivityUserId,
+} from "../../../utils/admin-activity-log";
 
 const UID = "api::membership-plan-price.membership-plan-price";
 
@@ -183,6 +187,16 @@ export default factories.createCoreController(UID, ({ strapi }) => ({
                 membership_plan_price_id: priceId,
                 membership_tier_id: tierId,
                 membership_plan_price_ord: 1,
+              });
+
+              // Create activity log
+              await logAdminActivity({
+                adminUserId: getAdminActivityUserId(ctx),
+                category: "global_pricing",
+                actionType: "create",
+                entityName: "Membership Plan Pricing",
+                entityId: priceId,
+                description: `Created ${item.tierName} ${plan.duration} pricing. Customer price: ${plan.customerPrice}, Commission: ${plan.defaultCommission}, Currency: ${currency}.`,
               });
             }
 
@@ -519,14 +533,26 @@ export default factories.createCoreController(UID, ({ strapi }) => ({
 
             updatedCount++;
 
-            updatedPlans.push({
-              id: existing.id,
-              tier,
-              duration: plan.duration,
+            const newValues = {
               customerPrice,
               defaultCommission,
               currency: currency ?? existing.currency,
               isActive: plan.isActive ?? existing.is_active,
+            };
+
+            const oldValues = {
+              customerPrice: Number(existing.customer_price),
+              defaultCommission: Number(existing.default_commission),
+              currency: existing.currency,
+              isActive: existing.is_active,
+            };
+
+            updatedPlans.push({
+              id: existing.id,
+              tier,
+              duration: plan.duration,
+              oldValues,
+              newValues,
             });
           }
         }
@@ -536,6 +562,27 @@ export default factories.createCoreController(UID, ({ strapi }) => ({
           updatedPlans,
         };
       });
+
+      for (const plan of result.updatedPlans) {
+        const changes = Object.keys(plan.newValues)
+          .filter((key) => plan.oldValues[key] !== plan.newValues[key])
+          .map(
+            (key) => `${key}: ${plan.oldValues[key]} → ${plan.newValues[key]}`,
+          );
+
+        if (changes.length === 0) continue;
+
+        await logAdminActivity({
+          adminUserId: getAdminActivityUserId(ctx),
+          category: "global_pricing",
+          actionType: "update",
+          entityName: "Membership Plan Pricing",
+          entityId: plan.id,
+          description: `Updated ${plan.tier} ${
+            plan.duration
+          } pricing. Changes: ${changes.join("; ")}`,
+        });
+      }
 
       ctx.body = {
         data: result.updatedPlans,
