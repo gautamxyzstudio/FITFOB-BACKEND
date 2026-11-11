@@ -4,6 +4,10 @@
 
 import { factories } from "@strapi/strapi";
 import { Context } from "koa";
+import {
+  logAdminActivity,
+  getAdminActivityUserId,
+} from "../../../utils/admin-activity-log";
 
 /* ---------- ROLE HELPER ---------- */
 async function getUserRole(user: any): Promise<string> {
@@ -275,6 +279,15 @@ export default factories.createCoreController(
             : `${strapi.config.server.url || ""}${item.logo.url}`;
         }
 
+        await logAdminActivity({
+          adminUserId: getAdminActivityUserId(ctx),
+          category: "club_services",
+          actionType: "update",
+          entityName: "Club Service",
+          entityId: item.documentId || item.id,
+          description: `Updated club service: ${item.name}`,
+        });
+
         const data = {
           documentId: item.documentId || null,
           name: item.name,
@@ -360,6 +373,15 @@ export default factories.createCoreController(
           createdAt: item?.createdAt,
         };
 
+        await logAdminActivity({
+          adminUserId: getAdminActivityUserId(ctx),
+          category: "club_services",
+          actionType: "create",
+          entityName: "Club Service",
+          entityId: item?.documentId || item?.id,
+          description: `Created club service: ${item?.name || payload.name}`,
+        });
+
         ctx.body = data;
       } catch (error) {
         strapi.log.error("CREATE CLUB SERVICE ERROR:", error);
@@ -398,7 +420,12 @@ export default factories.createCoreController(
             .query("api::club-service.club-service")
             .findOne({
               where: isNumeric
-                ? { $or: [{ documentId: String(id).trim() }, { id: Number(id) }] }
+                ? {
+                    $or: [
+                      { documentId: String(id).trim() },
+                      { id: Number(id) },
+                    ],
+                  }
                 : { documentId: String(id).trim() },
               populate: {
                 logo: true,
@@ -449,6 +476,15 @@ export default factories.createCoreController(
           createdAt: item.createdAt,
         };
 
+        await logAdminActivity({
+          adminUserId: getAdminActivityUserId(ctx),
+          category: "club_services",
+          actionType: "delete",
+          entityName: "Club Service",
+          entityId: item.documentId || item.id,
+          description: `Deleted club service: ${item.name}`,
+        });
+
         ctx.body = {
           success: true,
           message: "Club service deleted successfully",
@@ -461,4 +497,3 @@ export default factories.createCoreController(
     },
   }),
 );
-

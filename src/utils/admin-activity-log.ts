@@ -10,7 +10,7 @@ type AdminActivityActionType =
   | "create"
   | "update"
   | "delete"
-  | "approved"
+  | "approve"
   | "rejected";
 
 interface LogAdminActivityParams {
