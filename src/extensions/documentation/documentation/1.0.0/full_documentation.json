@@ -14,7 +14,7 @@
       "name": "Apache 2.0",
       "url": "https://www.apache.org/licenses/LICENSE-2.0.html"
     },
-    "x-generation-date": "2026-11-05T13:40:04.565Z"
+    "x-generation-date": "2026-11-11T06:36:17.964Z"
   },
   "x-strapi-config": {
     "plugins": [
@@ -22686,6 +22686,9 @@
                                             "providerPaymentId": {
                                               "type": "string"
                                             },
+                                            "providerOrderId": {
+                                              "type": "string"
+                                            },
                                             "paymentIdempotencyKey": {
                                               "type": "string"
                                             },
@@ -29686,6 +29689,9 @@
                                               "type": "string"
                                             },
                                             "providerPaymentId": {
+                                              "type": "string"
+                                            },
+                                            "providerOrderId": {
                                               "type": "string"
                                             },
                                             "paymentIdempotencyKey": {
@@ -37076,6 +37082,9 @@
                                                   "providerPaymentId": {
                                                     "type": "string"
                                                   },
+                                                  "providerOrderId": {
+                                                    "type": "string"
+                                                  },
                                                   "paymentIdempotencyKey": {
                                                     "type": "string"
                                                   },
@@ -43072,6 +43081,9 @@
                                 "type": "string"
                               },
                               "providerPaymentId": {
+                                "type": "string"
+                              },
+                              "providerOrderId": {
                                 "type": "string"
                               },
                               "paymentIdempotencyKey": {
@@ -51776,6 +51788,9 @@
                                                   "providerPaymentId": {
                                                     "type": "string"
                                                   },
+                                                  "providerOrderId": {
+                                                    "type": "string"
+                                                  },
                                                   "paymentIdempotencyKey": {
                                                     "type": "string"
                                                   },
@@ -57668,6 +57683,9 @@
                               "type": "string"
                             },
                             "providerPaymentId": {
+                              "type": "string"
+                            },
+                            "providerOrderId": {
                               "type": "string"
                             },
                             "paymentIdempotencyKey": {
@@ -64834,6 +64852,9 @@
                             "providerPaymentId": {
                               "type": "string"
                             },
+                            "providerOrderId": {
+                              "type": "string"
+                            },
                             "paymentIdempotencyKey": {
                               "type": "string"
                             },
@@ -71994,6 +72015,9 @@
                               "type": "string"
                             },
                             "providerPaymentId": {
+                              "type": "string"
+                            },
+                            "providerOrderId": {
                               "type": "string"
                             },
                             "paymentIdempotencyKey": {
@@ -79164,6 +79188,9 @@
                                 "type": "string"
                               },
                               "providerPaymentId": {
+                                "type": "string"
+                              },
+                              "providerOrderId": {
                                 "type": "string"
                               },
                               "paymentIdempotencyKey": {
@@ -88514,6 +88541,9 @@
               "providerPaymentId": {
                 "type": "string"
               },
+              "providerOrderId": {
+                "type": "string"
+              },
               "paymentIdempotencyKey": {
                 "type": "string"
               },
@@ -94597,6 +94627,9 @@
                                                     "type": "string"
                                                   },
                                                   "providerPaymentId": {
+                                                    "type": "string"
+                                                  },
+                                                  "providerOrderId": {
                                                     "type": "string"
                                                   },
                                                   "paymentIdempotencyKey": {
@@ -101245,6 +101278,9 @@
                             "providerPaymentId": {
                               "type": "string"
                             },
+                            "providerOrderId": {
+                              "type": "string"
+                            },
                             "paymentIdempotencyKey": {
                               "type": "string"
                             },
@@ -107835,6 +107871,9 @@
                                           "providerPaymentId": {
                                             "type": "string"
                                           },
+                                          "providerOrderId": {
+                                            "type": "string"
+                                          },
                                           "paymentIdempotencyKey": {
                                             "type": "string"
                                           },
@@ -110975,6 +111014,9 @@
                 "type": "string"
               },
               "providerPaymentId": {
+                "type": "string"
+              },
+              "providerOrderId": {
                 "type": "string"
               },
               "paymentIdempotencyKey": {
@@ -116897,6 +116939,9 @@
                                             "providerPaymentId": {
                                               "type": "string"
                                             },
+                                            "providerOrderId": {
+                                              "type": "string"
+                                            },
                                             "paymentIdempotencyKey": {
                                               "type": "string"
                                             },
@@ -117962,6 +118007,9 @@
             "type": "string"
           },
           "providerPaymentId": {
+            "type": "string"
+          },
+          "providerOrderId": {
             "type": "string"
           },
           "paymentIdempotencyKey": {
@@ -122388,6 +122436,9 @@
                                   "type": "string"
                                 },
                                 "providerPaymentId": {
+                                  "type": "string"
+                                },
+                                "providerOrderId": {
                                   "type": "string"
                                 },
                                 "paymentIdempotencyKey": {
@@ -129651,6 +129702,9 @@
                             "providerPaymentId": {
                               "type": "string"
                             },
+                            "providerOrderId": {
+                              "type": "string"
+                            },
                             "paymentIdempotencyKey": {
                               "type": "string"
                             },
@@ -136633,6 +136687,9 @@
                               "type": "string"
                             },
                             "providerPaymentId": {
+                              "type": "string"
+                            },
+                            "providerOrderId": {
                               "type": "string"
                             },
                             "paymentIdempotencyKey": {
@@ -145138,6 +145195,9 @@
                                             "providerPaymentId": {
                                               "type": "string"
                                             },
+                                            "providerOrderId": {
+                                              "type": "string"
+                                            },
                                             "paymentIdempotencyKey": {
                                               "type": "string"
                                             },
@@ -152276,6 +152336,9 @@
                                             "providerPaymentId": {
                                               "type": "string"
                                             },
+                                            "providerOrderId": {
+                                              "type": "string"
+                                            },
                                             "paymentIdempotencyKey": {
                                               "type": "string"
                                             },
@@ -157409,6 +157472,9 @@
                                                   "type": "string"
                                                 },
                                                 "providerPaymentId": {
+                                                  "type": "string"
+                                                },
+                                                "providerOrderId": {
                                                   "type": "string"
                                                 },
                                                 "paymentIdempotencyKey": {
@@ -164407,6 +164473,9 @@
                                               "type": "string"
                                             },
                                             "providerPaymentId": {
+                                              "type": "string"
+                                            },
+                                            "providerOrderId": {
                                               "type": "string"
                                             },
                                             "paymentIdempotencyKey": {
@@ -174100,6 +174169,9 @@
                                                   "providerPaymentId": {
                                                     "type": "string"
                                                   },
+                                                  "providerOrderId": {
+                                                    "type": "string"
+                                                  },
                                                   "paymentIdempotencyKey": {
                                                     "type": "string"
                                                   },
@@ -181364,6 +181436,9 @@
                                               "type": "string"
                                             },
                                             "providerPaymentId": {
+                                              "type": "string"
+                                            },
+                                            "providerOrderId": {
                                               "type": "string"
                                             },
                                             "paymentIdempotencyKey": {
@@ -188659,6 +188734,9 @@
                                                     "type": "string"
                                                   },
                                                   "providerPaymentId": {
+                                                    "type": "string"
+                                                  },
+                                                  "providerOrderId": {
                                                     "type": "string"
                                                   },
                                                   "paymentIdempotencyKey": {
@@ -196214,6 +196292,9 @@
                                                     "type": "string"
                                                   },
                                                   "providerPaymentId": {
+                                                    "type": "string"
+                                                  },
+                                                  "providerOrderId": {
                                                     "type": "string"
                                                   },
                                                   "paymentIdempotencyKey": {

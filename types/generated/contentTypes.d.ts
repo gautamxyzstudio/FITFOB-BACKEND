@@ -1180,6 +1180,7 @@ export interface ApiGymMembershipGymMembership
     promotionApplied: Schema.Attribute.Boolean &
       Schema.Attribute.DefaultTo<false>;
     promotionSequence: Schema.Attribute.Integer;
+    providerOrderId: Schema.Attribute.String & Schema.Attribute.Unique;
     providerPaymentId: Schema.Attribute.String;
     publishedAt: Schema.Attribute.DateTime;
     startDate: Schema.Attribute.Date;

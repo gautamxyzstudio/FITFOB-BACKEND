@@ -113,6 +113,10 @@
     "providerPaymentId": {
       "type": "string"
     },
+    "providerOrderId": {
+      "type": "string",
+      "unique": true
+    },
     "paymentIdempotencyKey": {
       "type": "string",
       "required": false,
