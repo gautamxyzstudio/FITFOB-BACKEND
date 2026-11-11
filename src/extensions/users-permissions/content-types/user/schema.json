@@ -133,6 +133,12 @@
       "relation": "oneToOne",
       "target": "api::pending-club-owner.pending-club-owner",
       "inversedBy": "user"
+    },
+    "admin_activity_logs": {
+      "type": "relation",
+      "relation": "oneToMany",
+      "target": "api::admin-activity-log.admin-activity-log",
+      "mappedBy": "users_permissions_user"
     }
   }
 }

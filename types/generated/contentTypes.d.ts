@@ -443,6 +443,52 @@ export interface AdminUser extends Struct.CollectionTypeSchema {
   };
 }
 
+export interface ApiAdminActivityLogAdminActivityLog
+  extends Struct.CollectionTypeSchema {
+  collectionName: 'admin_activity_logs';
+  info: {
+    displayName: 'admin-activity-logs';
+    pluralName: 'admin-activity-logs';
+    singularName: 'admin-activity-log';
+  };
+  options: {
+    draftAndPublish: false;
+  };
+  attributes: {
+    actionType: Schema.Attribute.Enumeration<['create', 'update', 'delete']>;
+    category: Schema.Attribute.Enumeration<
+      [
+        'approve_club',
+        'club_contract',
+        'club_owner',
+        'club_services',
+        'club_facilities',
+        'global_pricing',
+      ]
+    >;
+    createdAt: Schema.Attribute.DateTime;
+    createdBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
+      Schema.Attribute.Private;
+    description: Schema.Attribute.String;
+    entityId: Schema.Attribute.String;
+    entityName: Schema.Attribute.String;
+    locale: Schema.Attribute.String & Schema.Attribute.Private;
+    localizations: Schema.Attribute.Relation<
+      'oneToMany',
+      'api::admin-activity-log.admin-activity-log'
+    > &
+      Schema.Attribute.Private;
+    publishedAt: Schema.Attribute.DateTime;
+    updatedAt: Schema.Attribute.DateTime;
+    updatedBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
+      Schema.Attribute.Private;
+    users_permissions_user: Schema.Attribute.Relation<
+      'manyToOne',
+      'plugin::users-permissions.user'
+    >;
+  };
+}
+
 export interface ApiClientActivityLogClientActivityLog
   extends Struct.CollectionTypeSchema {
   collectionName: 'client_activity_logs';
@@ -2292,6 +2338,10 @@ export interface PluginUsersPermissionsUser
     draftAndPublish: false;
   };
   attributes: {
+    admin_activity_logs: Schema.Attribute.Relation<
+      'oneToMany',
+      'api::admin-activity-log.admin-activity-log'
+    >;
     approved_by: Schema.Attribute.Relation<
       'oneToOne',
       'plugin::users-permissions.user'
@@ -2379,6 +2429,7 @@ declare module '@strapi/strapi' {
       'admin::transfer-token': AdminTransferToken;
       'admin::transfer-token-permission': AdminTransferTokenPermission;
       'admin::user': AdminUser;
+      'api::admin-activity-log.admin-activity-log': ApiAdminActivityLogAdminActivityLog;
       'api::client-activity-log.client-activity-log': ApiClientActivityLogClientActivityLog;
       'api::client-checkin.client-checkin': ApiClientCheckinClientCheckin;
       'api::client-detail.client-detail': ApiClientDetailClientDetail;

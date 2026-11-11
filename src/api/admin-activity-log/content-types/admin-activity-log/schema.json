@@ -1,0 +1,49 @@
+{
+  "kind": "collectionType",
+  "collectionName": "admin_activity_logs",
+  "info": {
+    "singularName": "admin-activity-log",
+    "pluralName": "admin-activity-logs",
+    "displayName": "admin-activity-logs"
+  },
+  "options": {
+    "draftAndPublish": false
+  },
+  "pluginOptions": {},
+  "attributes": {
+    "category": {
+      "type": "enumeration",
+      "enum": [
+        "approve_club",
+        "club_contract",
+        "club_owner",
+        "club_services",
+        "club_facilities",
+        "global_pricing"
+      ]
+    },
+    "users_permissions_user": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "plugin::users-permissions.user",
+      "inversedBy": "admin_activity_logs"
+    },
+    "actionType": {
+      "type": "enumeration",
+      "enum": [
+        "create",
+        "update",
+        "delete"
+      ]
+    },
+    "entityName": {
+      "type": "string"
+    },
+    "entityId": {
+      "type": "string"
+    },
+    "description": {
+      "type": "string"
+    }
+  }
+}
