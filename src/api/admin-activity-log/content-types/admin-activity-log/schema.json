@@ -14,7 +14,6 @@
     "category": {
       "type": "enumeration",
       "enum": [
-        "approve_club",
         "club_contract",
         "club_owner",
         "club_services",
@@ -33,7 +32,9 @@
       "enum": [
         "create",
         "update",
-        "delete"
+        "delete",
+        "approve",
+        "rejected"
       ]
     },
     "entityName": {

@@ -455,10 +455,11 @@ export interface ApiAdminActivityLogAdminActivityLog
     draftAndPublish: false;
   };
   attributes: {
-    actionType: Schema.Attribute.Enumeration<['create', 'update', 'delete']>;
+    actionType: Schema.Attribute.Enumeration<
+      ['create', 'update', 'delete', 'approve', 'rejected']
+    >;
     category: Schema.Attribute.Enumeration<
       [
-        'approve_club',
         'club_contract',
         'club_owner',
         'club_services',

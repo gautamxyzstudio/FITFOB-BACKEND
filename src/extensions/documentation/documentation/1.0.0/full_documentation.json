@@ -14,7 +14,7 @@
       "name": "Apache 2.0",
       "url": "https://www.apache.org/licenses/LICENSE-2.0.html"
     },
-    "x-generation-date": "2026-11-11T11:44:37.890Z"
+    "x-generation-date": "2026-11-11T12:02:18.019Z"
   },
   "x-strapi-config": {
     "plugins": [
@@ -17278,7 +17278,6 @@
               "category": {
                 "type": "string",
                 "enum": [
-                  "approve_club",
                   "club_contract",
                   "club_owner",
                   "club_services",
@@ -17302,7 +17301,9 @@
                 "enum": [
                   "create",
                   "update",
-                  "delete"
+                  "delete",
+                  "approve",
+                  "rejected"
                 ]
               },
               "entityName": {
@@ -17389,7 +17390,6 @@
           "category": {
             "type": "string",
             "enum": [
-              "approve_club",
               "club_contract",
               "club_owner",
               "club_services",
@@ -24043,7 +24043,6 @@
                     "category": {
                       "type": "string",
                       "enum": [
-                        "approve_club",
                         "club_contract",
                         "club_owner",
                         "club_services",
@@ -24074,7 +24073,9 @@
                       "enum": [
                         "create",
                         "update",
-                        "delete"
+                        "delete",
+                        "approve",
+                        "rejected"
                       ]
                     },
                     "entityName": {
@@ -24240,7 +24241,9 @@
             "enum": [
               "create",
               "update",
-              "delete"
+              "delete",
+              "approve",
+              "rejected"
             ]
           },
           "entityName": {
@@ -30752,7 +30755,6 @@
                         "category": {
                           "type": "string",
                           "enum": [
-                            "approve_club",
                             "club_contract",
                             "club_owner",
                             "club_services",
@@ -30783,7 +30785,9 @@
                           "enum": [
                             "create",
                             "update",
-                            "delete"
+                            "delete",
+                            "approve",
+                            "rejected"
                           ]
                         },
                         "entityName": {
@@ -37831,7 +37835,6 @@
                         "category": {
                           "type": "string",
                           "enum": [
-                            "approve_club",
                             "club_contract",
                             "club_owner",
                             "club_services",
@@ -37862,7 +37865,9 @@
                           "enum": [
                             "create",
                             "update",
-                            "delete"
+                            "delete",
+                            "approve",
+                            "rejected"
                           ]
                         },
                         "entityName": {
@@ -45780,7 +45785,6 @@
                     "category": {
                       "type": "string",
                       "enum": [
-                        "approve_club",
                         "club_contract",
                         "club_owner",
                         "club_services",
@@ -45811,7 +45815,9 @@
                       "enum": [
                         "create",
                         "update",
-                        "delete"
+                        "delete",
+                        "approve",
+                        "rejected"
                       ]
                     },
                     "entityName": {
@@ -52617,7 +52623,6 @@
                           "category": {
                             "type": "string",
                             "enum": [
-                              "approve_club",
                               "club_contract",
                               "club_owner",
                               "club_services",
@@ -52648,7 +52653,9 @@
                             "enum": [
                               "create",
                               "update",
-                              "delete"
+                              "delete",
+                              "approve",
+                              "rejected"
                             ]
                           },
                           "entityName": {
@@ -60634,7 +60641,6 @@
                     "category": {
                       "type": "string",
                       "enum": [
-                        "approve_club",
                         "club_contract",
                         "club_owner",
                         "club_services",
@@ -60665,7 +60671,9 @@
                       "enum": [
                         "create",
                         "update",
-                        "delete"
+                        "delete",
+                        "approve",
+                        "rejected"
                       ]
                     },
                     "entityName": {
@@ -67367,7 +67375,6 @@
                         "category": {
                           "type": "string",
                           "enum": [
-                            "approve_club",
                             "club_contract",
                             "club_owner",
                             "club_services",
@@ -67398,7 +67405,9 @@
                           "enum": [
                             "create",
                             "update",
-                            "delete"
+                            "delete",
+                            "approve",
+                            "rejected"
                           ]
                         },
                         "entityName": {
@@ -74608,7 +74617,6 @@
                         "category": {
                           "type": "string",
                           "enum": [
-                            "approve_club",
                             "club_contract",
                             "club_owner",
                             "club_services",
@@ -74639,7 +74647,9 @@
                           "enum": [
                             "create",
                             "update",
-                            "delete"
+                            "delete",
+                            "approve",
+                            "rejected"
                           ]
                         },
                         "entityName": {
@@ -81847,7 +81857,6 @@
                         "category": {
                           "type": "string",
                           "enum": [
-                            "approve_club",
                             "club_contract",
                             "club_owner",
                             "club_services",
@@ -81878,7 +81887,9 @@
                           "enum": [
                             "create",
                             "update",
-                            "delete"
+                            "delete",
+                            "approve",
+                            "rejected"
                           ]
                         },
                         "entityName": {
@@ -89094,7 +89105,6 @@
                           "category": {
                             "type": "string",
                             "enum": [
-                              "approve_club",
                               "club_contract",
                               "club_owner",
                               "club_services",
@@ -89125,7 +89135,9 @@
                             "enum": [
                               "create",
                               "update",
-                              "delete"
+                              "delete",
+                              "approve",
+                              "rejected"
                             ]
                           },
                           "entityName": {
@@ -96247,7 +96259,6 @@
                             "category": {
                               "type": "string",
                               "enum": [
-                                "approve_club",
                                 "club_contract",
                                 "club_owner",
                                 "club_services",
@@ -96278,7 +96289,9 @@
                               "enum": [
                                 "create",
                                 "update",
-                                "delete"
+                                "delete",
+                                "approve",
+                                "rejected"
                               ]
                             },
                             "entityName": {
@@ -103919,7 +103932,6 @@
                     "category": {
                       "type": "string",
                       "enum": [
-                        "approve_club",
                         "club_contract",
                         "club_owner",
                         "club_services",
@@ -103950,7 +103962,9 @@
                       "enum": [
                         "create",
                         "update",
-                        "delete"
+                        "delete",
+                        "approve",
+                        "rejected"
                       ]
                     },
                     "entityName": {
@@ -111404,7 +111418,6 @@
                         "category": {
                           "type": "string",
                           "enum": [
-                            "approve_club",
                             "club_contract",
                             "club_owner",
                             "club_services",
@@ -111435,7 +111448,9 @@
                           "enum": [
                             "create",
                             "update",
-                            "delete"
+                            "delete",
+                            "approve",
+                            "rejected"
                           ]
                         },
                         "entityName": {
@@ -118071,7 +118086,6 @@
                                       "category": {
                                         "type": "string",
                                         "enum": [
-                                          "approve_club",
                                           "club_contract",
                                           "club_owner",
                                           "club_services",
@@ -118102,7 +118116,9 @@
                                         "enum": [
                                           "create",
                                           "update",
-                                          "delete"
+                                          "delete",
+                                          "approve",
+                                          "rejected"
                                         ]
                                       },
                                       "entityName": {
@@ -125930,7 +125946,6 @@
                         "category": {
                           "type": "string",
                           "enum": [
-                            "approve_club",
                             "club_contract",
                             "club_owner",
                             "club_services",
@@ -125961,7 +125976,9 @@
                           "enum": [
                             "create",
                             "update",
-                            "delete"
+                            "delete",
+                            "approve",
+                            "rejected"
                           ]
                         },
                         "entityName": {
@@ -132691,7 +132708,6 @@
                             "category": {
                               "type": "string",
                               "enum": [
-                                "approve_club",
                                 "club_contract",
                                 "club_owner",
                                 "club_services",
@@ -132722,7 +132738,9 @@
                               "enum": [
                                 "create",
                                 "update",
-                                "delete"
+                                "delete",
+                                "approve",
+                                "rejected"
                               ]
                             },
                             "entityName": {
@@ -140008,7 +140026,6 @@
                         "category": {
                           "type": "string",
                           "enum": [
-                            "approve_club",
                             "club_contract",
                             "club_owner",
                             "club_services",
@@ -140039,7 +140056,9 @@
                           "enum": [
                             "create",
                             "update",
-                            "delete"
+                            "delete",
+                            "approve",
+                            "rejected"
                           ]
                         },
                         "entityName": {
@@ -147069,7 +147088,6 @@
                         "category": {
                           "type": "string",
                           "enum": [
-                            "approve_club",
                             "club_contract",
                             "club_owner",
                             "club_services",
@@ -147100,7 +147118,9 @@
                           "enum": [
                             "create",
                             "update",
-                            "delete"
+                            "delete",
+                            "approve",
+                            "rejected"
                           ]
                         },
                         "entityName": {
@@ -154403,7 +154423,6 @@
                         "category": {
                           "type": "string",
                           "enum": [
-                            "approve_club",
                             "club_contract",
                             "club_owner",
                             "club_services",
@@ -154434,7 +154453,9 @@
                           "enum": [
                             "create",
                             "update",
-                            "delete"
+                            "delete",
+                            "approve",
+                            "rejected"
                           ]
                         },
                         "entityName": {
@@ -161618,7 +161639,6 @@
                         "category": {
                           "type": "string",
                           "enum": [
-                            "approve_club",
                             "club_contract",
                             "club_owner",
                             "club_services",
@@ -161649,7 +161669,9 @@
                           "enum": [
                             "create",
                             "update",
-                            "delete"
+                            "delete",
+                            "approve",
+                            "rejected"
                           ]
                         },
                         "entityName": {
@@ -168076,7 +168098,6 @@
                                             "category": {
                                               "type": "string",
                                               "enum": [
-                                                "approve_club",
                                                 "club_contract",
                                                 "club_owner",
                                                 "club_services",
@@ -168107,7 +168128,9 @@
                                               "enum": [
                                                 "create",
                                                 "update",
-                                                "delete"
+                                                "delete",
+                                                "approve",
+                                                "rejected"
                                               ]
                                             },
                                             "entityName": {
@@ -175151,7 +175174,6 @@
                                         "category": {
                                           "type": "string",
                                           "enum": [
-                                            "approve_club",
                                             "club_contract",
                                             "club_owner",
                                             "club_services",
@@ -175182,7 +175204,9 @@
                                           "enum": [
                                             "create",
                                             "update",
-                                            "delete"
+                                            "delete",
+                                            "approve",
+                                            "rejected"
                                           ]
                                         },
                                         "entityName": {
@@ -183673,7 +183697,6 @@
                               "category": {
                                 "type": "string",
                                 "enum": [
-                                  "approve_club",
                                   "club_contract",
                                   "club_owner",
                                   "club_services",
@@ -183704,7 +183727,9 @@
                                 "enum": [
                                   "create",
                                   "update",
-                                  "delete"
+                                  "delete",
+                                  "approve",
+                                  "rejected"
                                 ]
                               },
                               "entityName": {
@@ -191016,7 +191041,6 @@
                         "category": {
                           "type": "string",
                           "enum": [
-                            "approve_club",
                             "club_contract",
                             "club_owner",
                             "club_services",
@@ -191047,7 +191071,9 @@
                           "enum": [
                             "create",
                             "update",
-                            "delete"
+                            "delete",
+                            "approve",
+                            "rejected"
                           ]
                         },
                         "entityName": {
@@ -198872,7 +198898,6 @@
                     "category": {
                       "type": "string",
                       "enum": [
-                        "approve_club",
                         "club_contract",
                         "club_owner",
                         "club_services",
@@ -198903,7 +198928,9 @@
                       "enum": [
                         "create",
                         "update",
-                        "delete"
+                        "delete",
+                        "approve",
+                        "rejected"
                       ]
                     },
                     "entityName": {
@@ -206504,7 +206531,6 @@
                     "category": {
                       "type": "string",
                       "enum": [
-                        "approve_club",
                         "club_contract",
                         "club_owner",
                         "club_services",
@@ -206535,7 +206561,9 @@
                       "enum": [
                         "create",
                         "update",
-                        "delete"
+                        "delete",
+                        "approve",
+                        "rejected"
                       ]
                     },
                     "entityName": {

@@ -3,6 +3,11 @@ import {
   deletePendingClubOwnersForUser,
 } from "../../pending-club-owner/controllers/pending-club-owner";
 
+import {
+  logAdminActivity,
+  getAdminActivityUserId,
+} from "../../../utils/admin-activity-log";
+
 const PENDING_CLUB_OWNER_UID = "api::pending-club-owner.pending-club-owner";
 
 export default {
@@ -60,6 +65,18 @@ export default {
             pending_club_owner: true,
           },
         });
+
+      // Admin activity log
+      await logAdminActivity({
+        adminUserId: getAdminActivityUserId(ctx),
+        category: "club_owner",
+        actionType: "approved",
+        entityName: "Club Owner Verification",
+        entityId: user.id,
+        description: `Approved club owner verification for ${
+          user.username || user.email
+        }.`,
+      });
 
       ctx.body = {
         message: "User verification approved",
@@ -143,7 +160,10 @@ export default {
       }
 
       // 3. Fallback check using entityService
-      if ((!pendingOwners || pendingOwners.length === 0) && !user.pending_club_owner?.id) {
+      if (
+        (!pendingOwners || pendingOwners.length === 0) &&
+        !user.pending_club_owner?.id
+      ) {
         const drafts: any[] = await strapi.entityService.findMany(
           PENDING_CLUB_OWNER_UID,
           {
@@ -175,6 +195,18 @@ export default {
             pending_club_owner: true,
           },
         });
+
+      // Admin activity log
+      await logAdminActivity({
+        adminUserId: getAdminActivityUserId(ctx),
+        category: "club_owner",
+        actionType: "rejected",
+        entityName: "Club Owner Verification",
+        entityId: user.id,
+        description: `Rejected club owner verification for ${
+          user.username || user.email
+        }. Reason: ${reason}`,
+      });
 
       ctx.body = {
         message: "User verification rejected",
