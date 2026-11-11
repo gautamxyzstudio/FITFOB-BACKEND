@@ -70,7 +70,7 @@ export default {
       await logAdminActivity({
         adminUserId: getAdminActivityUserId(ctx),
         category: "club_owner",
-        actionType: "approved",
+        actionType: "approve",
         entityName: "Club Owner Verification",
         entityId: user.id,
         description: `Approved club owner verification for ${

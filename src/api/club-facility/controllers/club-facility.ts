@@ -4,6 +4,10 @@
 
 import { factories } from "@strapi/strapi";
 import { Context } from "koa";
+import {
+  logAdminActivity,
+  getAdminActivityUserId,
+} from "../../../utils/admin-activity-log";
 
 /* ---------- ROLE HELPER ---------- */
 async function getUserRole(user: any): Promise<string> {
@@ -275,6 +279,16 @@ export default factories.createCoreController(
             : `${strapi.config.server.url || ""}${item.logo.url}`;
         }
 
+        // Admin activity log
+        await logAdminActivity({
+          adminUserId: getAdminActivityUserId(ctx),
+          category: "club_facilities",
+          actionType: "update",
+          entityName: "Club Facility",
+          entityId: item.documentId || item.id,
+          description: `Updated club facility: ${item.name}`,
+        });
+
         const data = {
           documentId: item.documentId || null,
           name: item.name,
@@ -352,6 +366,16 @@ export default factories.createCoreController(
             : `${strapi.config.server.url || ""}${item.logo.url}`;
         }
 
+        // Admin activity log
+        await logAdminActivity({
+          adminUserId: getAdminActivityUserId(ctx),
+          category: "club_facilities",
+          actionType: "create",
+          entityName: "Club Facility",
+          entityId: item?.documentId || item?.id,
+          description: `Created club facility: ${item?.name || payload.name}`,
+        });
+
         const data = {
           documentId: item?.documentId || null,
           name: item?.name,
@@ -398,7 +422,12 @@ export default factories.createCoreController(
             .query("api::club-facility.club-facility")
             .findOne({
               where: isNumeric
-                ? { $or: [{ documentId: String(id).trim() }, { id: Number(id) }] }
+                ? {
+                    $or: [
+                      { documentId: String(id).trim() },
+                      { id: Number(id) },
+                    ],
+                  }
                 : { documentId: String(id).trim() },
               populate: {
                 logo: true,
@@ -434,6 +463,16 @@ export default factories.createCoreController(
           );
         }
 
+        // Admin activity log
+        await logAdminActivity({
+          adminUserId: getAdminActivityUserId(ctx),
+          category: "club_facilities",
+          actionType: "delete",
+          entityName: "Club Facility",
+          entityId: item.documentId || item.id,
+          description: `Deleted club facility: ${item.name}`,
+        });
+
         ctx.body = {
           success: true,
           message: "Club facility deleted successfully",
@@ -445,4 +484,3 @@ export default factories.createCoreController(
     },
   }),
 );
-
