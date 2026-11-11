@@ -2186,7 +2186,7 @@ export default {
         };
       });
 
-      let finalData = dataWithCurrentStep;
+      let finalData = dataWithCurrentStep.filter((item:any)=> item.currentStep >= 2);
 
       // 🔍 Filter by status in memory (ensures accuracy even if relation filtering is skipped by ORM)
       if (targetStatus !== "all") {
