@@ -1109,6 +1109,7 @@ export default factories.createCoreController(
           strapi.db.connection.raw(
             `
   SELECT
+    gcr.document_id AS gym_contract_plan_rate_document_id,
     mp.document_id,
     mp.duration,
     mp.duration_months,
@@ -1198,6 +1199,7 @@ export default factories.createCoreController(
 
         // 6. Format all active gym contract membership plans
         const membershipPlans = (plansRes?.rows || []).map((p: any) => ({
+          gymContractPlanRateDocumentId: p.gym_contract_plan_rate_document_id,
           plan: p.duration,
           price: Number(p.customer_price),
         }));
@@ -2788,6 +2790,7 @@ export default factories.createCoreController(
   SELECT
     co.id AS club_owner_id,
     gc.id AS gym_contract_id,
+    gcr.document_id AS gym_contract_plan_rate_document_id,
     mp.duration,
     mp.customer_price
   FROM club_owners co
@@ -2919,6 +2922,8 @@ export default factories.createCoreController(
 
           plansByOwnerId.set(ownerId, [
             {
+              documentId: p.gym_contract_plan_rate_document_id,
+              gymContractPlanRateDocumentId: p.gym_contract_plan_rate_document_id,
               plan: p.duration,
               customerPrice: Number(p.customer_price),
             },

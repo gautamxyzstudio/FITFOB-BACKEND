@@ -5,7 +5,7 @@ const LOCAL_PLAN_UID =
   "api::local-membership-plan.local-membership-plan" as any;
 const CLIENT_UID = "api::client-detail.client-detail" as any;
 const CLUB_OWNER_UID = "api::club-owner.club-owner" as any;
-import { createMembershipOrder } from "../../../utils/payment";
+import { createMembershipOrder } from "../../../utils/razorpay";
 
 /* ---------- ROLE HELPER ---------- */
 async function getUserRole(user: any): Promise<string> {

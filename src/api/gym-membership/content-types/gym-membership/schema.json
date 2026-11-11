@@ -32,12 +32,6 @@
       "target": "api::membership-plan-price.membership-plan-price",
       "inversedBy": "gym_memberships"
     },
-    "gym_promotion": {
-      "type": "relation",
-      "relation": "manyToOne",
-      "target": "api::gym-promotion.gym-promotion",
-      "inversedBy": "gym_memberships"
-    },
     "duration": {
       "type": "enumeration",
       "enum": [
@@ -51,30 +45,6 @@
     },
     "customerPriceSnapshot": {
       "type": "decimal"
-    },
-    "commissionModeSnapshot": {
-      "type": "enumeration",
-      "enum": [
-        "default",
-        "custom",
-        "promotion"
-      ]
-    },
-    "commissionSnapshot": {
-      "type": "decimal"
-    },
-    "gatewayFeeSnapshot": {
-      "type": "decimal"
-    },
-    "gymPayoutSnapshot": {
-      "type": "decimal"
-    },
-    "promotionApplied": {
-      "type": "boolean",
-      "default": false
-    },
-    "promotionSequence": {
-      "type": "integer"
     },
     "currency": {
       "type": "string",

@@ -1,5 +1,5 @@
 import { factories } from "@strapi/strapi";
-import { createMembershipOrder } from "../../../utils/payment";
+import { createMembershipOrder } from "../../../utils/razorpay";
 const OUTDOOR_SUB_UID = "api::outdoor-subscription.outdoor-subscription" as any;
 const OUTDOOR_PLAN_UID =
   "api::outdoor-membership-plan.outdoor-membership-plan" as any;

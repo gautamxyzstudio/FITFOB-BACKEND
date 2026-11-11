@@ -1133,10 +1133,6 @@ export interface ApiGymMembershipGymMembership
       'oneToMany',
       'api::commission-transaction.commission-transaction'
     >;
-    commissionModeSnapshot: Schema.Attribute.Enumeration<
-      ['default', 'custom', 'promotion']
-    >;
-    commissionSnapshot: Schema.Attribute.Decimal;
     createdAt: Schema.Attribute.DateTime;
     createdBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
       Schema.Attribute.Private;
@@ -1147,16 +1143,10 @@ export interface ApiGymMembershipGymMembership
     >;
     durationMonths: Schema.Attribute.Integer;
     endDate: Schema.Attribute.Date;
-    gatewayFeeSnapshot: Schema.Attribute.Decimal;
     gym_contract: Schema.Attribute.Relation<
       'manyToOne',
       'api::gym-contract.gym-contract'
     >;
-    gym_promotion: Schema.Attribute.Relation<
-      'manyToOne',
-      'api::gym-promotion.gym-promotion'
-    >;
-    gymPayoutSnapshot: Schema.Attribute.Decimal;
     locale: Schema.Attribute.String & Schema.Attribute.Private;
     localizations: Schema.Attribute.Relation<
       'oneToMany',
@@ -1177,9 +1167,6 @@ export interface ApiGymMembershipGymMembership
     paymentStatus: Schema.Attribute.Enumeration<
       ['pending', 'paid', 'failed', 'refunded']
     >;
-    promotionApplied: Schema.Attribute.Boolean &
-      Schema.Attribute.DefaultTo<false>;
-    promotionSequence: Schema.Attribute.Integer;
     providerOrderId: Schema.Attribute.String & Schema.Attribute.Unique;
     providerPaymentId: Schema.Attribute.String;
     publishedAt: Schema.Attribute.DateTime;
@@ -1213,10 +1200,6 @@ export interface ApiGymPromotionGymPromotion
     gym_contract: Schema.Attribute.Relation<
       'manyToOne',
       'api::gym-contract.gym-contract'
-    >;
-    gym_memberships: Schema.Attribute.Relation<
-      'oneToMany',
-      'api::gym-membership.gym-membership'
     >;
     isActive: Schema.Attribute.Boolean & Schema.Attribute.DefaultTo<true>;
     locale: Schema.Attribute.String & Schema.Attribute.Private;

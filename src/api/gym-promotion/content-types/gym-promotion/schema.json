@@ -43,12 +43,6 @@
     "endDate": {
       "type": "date"
     },
-    "gym_memberships": {
-      "type": "relation",
-      "relation": "oneToMany",
-      "target": "api::gym-membership.gym-membership",
-      "mappedBy": "gym_promotion"
-    },
     "commission_transactions": {
       "type": "relation",
       "relation": "oneToMany",

@@ -1,391 +1,252 @@
-import { createMembershipOrder } from "../../../utils/payment";
-
+const CONTRACT_PLAN_RATE_UID =
+  "api::gym-contract-plan-rate.gym-contract-plan-rate";
 const CLIENT_TABLE = "client_details";
-const USER_TABLE = "up_users";
 const CLIENT_USER_LINK_TABLE = "up_users_client_detail_lnk";
 
-const LOCAL_PLAN_TABLE = "local_membership_plans";
-const LOCAL_PLAN_OWNER_LINK_TABLE = "local_membership_plans_club_owner_lnk";
-const CLUB_OWNER_TABLE = "club_owners";
+import { createMembershipOrder } from "../../../utils/razorpay";
 
-const OUTDOOR_PLAN_TABLE = "outdoor_membership_plans";
-const LOCAL_SUB_TABLE = "local_subscriptions";
-const OUTDOOR_SUB_TABLE = "outdoor_subscriptions";
-
-const LOCAL_SUB_CLIENT_LINK_TABLE = "local_subscriptions_client_detail_lnk";
-const LOCAL_SUB_PLAN_LINK_TABLE =
-  "local_subscriptions_local_membership_plan_lnk";
-
-const OUTDOOR_SUB_CLIENT_LINK_TABLE = "outdoor_subscriptions_client_detail_lnk";
-const OUTDOOR_SUB_PLAN_LINK_TABLE =
-  "outdoor_subscriptions_outdoor_membership_plan_lnk";
-
-type SubscriptionType = "local" | "outdoor" | "both";
-
-function normalizeRole(user: any): string {
-  const role = user?.role;
-  const value =
-    typeof role === "string" ? role : role?.name ?? role?.type ?? "";
-
-  return String(value)
-    .toLowerCase()
-    .replace(/[\s_-]/g, "");
-}
-
-function isValidPlanDate(validUpto: unknown): boolean {
-  if (typeof validUpto !== "string" || !validUpto.trim()) {
-    return false;
-  }
-
-  const value = validUpto.trim();
-
-  if (value.toLowerCase() === "unlimited") {
-    return true;
-  }
-
-  const match = value.match(/^(\d{4})-(\d{2})-(\d{2})$/);
-  if (!match) return false;
-
-  const year = Number(match[1]);
-  const month = Number(match[2]);
-  const day = Number(match[3]);
-
-  const parsed = new Date(Date.UTC(year, month - 1, day));
-
-  if (
-    parsed.getUTCFullYear() !== year ||
-    parsed.getUTCMonth() !== month - 1 ||
-    parsed.getUTCDate() !== day
-  ) {
-    return false;
-  }
-
-  const today = new Date();
-  const todayUtc = Date.UTC(
-    today.getFullYear(),
-    today.getMonth(),
-    today.getDate(),
-  );
-
-  return parsed.getTime() >= todayUtc;
-}
-
-async function findPlan(
-  table: string,
-  identifier: unknown,
-): Promise<any | null> {
-  if (typeof identifier !== "string" && typeof identifier !== "number") {
-    return null;
-  }
-
-  const value = String(identifier).trim();
+function dateOnly(value?: string | Date | null) {
   if (!value) return null;
-
-  return strapi.db
-    .connection(table)
-    .where(function () {
-      this.where("document_id", value);
-
-      if (/^\d+$/.test(value)) {
-        this.orWhere("id", Number(value));
-      }
-    })
-    .first();
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return null;
+  return date;
 }
 
-async function findClientByUserId(userId: number): Promise<any | null> {
-  const knex = strapi.db.connection;
+function isContractOutsideDateRange(
+  startDate?: string | Date | null,
+  endDate?: string | Date | null
+) {
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
 
-  return knex(`${CLIENT_TABLE} as c`)
-    .join(`${CLIENT_USER_LINK_TABLE} as l`, "l.client_detail_id", "c.id")
+  const start = dateOnly(startDate);
+  const end = dateOnly(endDate);
+
+  if (start) {
+    start.setHours(0, 0, 0, 0);
+    if (today < start) return true;
+  }
+  if (end) {
+    end.setHours(23, 59, 59, 999);
+    if (today > end) return true;
+  }
+  return false;
+}
+
+async function findClientByUserId(userId: number) {
+  return strapi.db.connection(`${CLIENT_TABLE} as c`)
+    .join(
+      `${CLIENT_USER_LINK_TABLE} as l`,
+      "l.client_detail_id",
+      "c.id"
+    )
     .where("l.user_id", userId)
-    .select("c.id", "c.document_id", "c.client_id", "c.name", "c.email")
-    .first();
-}
-
-async function findClubOwnerForLocalPlan(
-  localPlanId: number,
-): Promise<any | null> {
-  const knex = strapi.db.connection;
-
-  return knex(`${LOCAL_PLAN_OWNER_LINK_TABLE} as l`)
-    .join(CLUB_OWNER_TABLE + " as c", "c.id", "l.club_owner_id")
-    .where("l.local_membership_plan_id", localPlanId)
-    .select("c.id", "c.document_id", "c.owner_name", "c.club_name")
-    .first();
-}
-
-async function hasActiveLocalSubscription(
-  clientId: number,
-  planId: number,
-): Promise<boolean> {
-  const knex = strapi.db.connection;
-  const today = new Date().toISOString().slice(0, 10);
-
-  const result = await knex(`${LOCAL_SUB_TABLE} as s`)
-    .join(
-      `${LOCAL_SUB_CLIENT_LINK_TABLE} as cl`,
-      "cl.local_subscription_id",
-      "s.id",
+    .select(
+      "c.id",
+      "c.document_id",
+      "c.client_id",
+      "c.name",
+      "c.email"
     )
-    .join(
-      `${LOCAL_SUB_PLAN_LINK_TABLE} as pl`,
-      "pl.local_subscription_id",
-      "s.id",
-    )
-    .where("cl.client_detail_id", clientId)
-    .where("pl.local_membership_plan_id", planId)
-    .where("s.subscription_status", "active")
-    .where(function () {
-      this.whereNull("s.end_date").orWhere("s.end_date", ">=", today);
-    })
     .first();
-
-  return Boolean(result);
-}
-
-async function hasActiveOutdoorSubscription(
-  clientId: number,
-  planId: number,
-): Promise<boolean> {
-  const knex = strapi.db.connection;
-
-  const result = await knex(`${OUTDOOR_SUB_TABLE} as s`)
-    .join(
-      `${OUTDOOR_SUB_CLIENT_LINK_TABLE} as cl`,
-      "cl.outdoor_subscription_id",
-      "s.id",
-    )
-    .join(
-      `${OUTDOOR_SUB_PLAN_LINK_TABLE} as pl`,
-      "pl.outdoor_subscription_id",
-      "s.id",
-    )
-    .where("cl.client_detail_id", clientId)
-    .where("pl.outdoor_membership_plan_id", planId)
-    .where("s.subscription_status", "active")
-    .where("s.remaining_visits", ">", 0)
-    .first();
-
-  return Boolean(result);
 }
 
 export default {
-  async buy(ctx) {
+  async buy(ctx: any) {
     try {
-      // 1. Authenticate the user.
       const user = ctx.state.user;
 
       if (!user?.id) {
-        return ctx.unauthorized("Please log in first.");
+        return ctx.unauthorized("Please log in to continue.");
       }
 
-      // 2. Verify Client role.
-      if (normalizeRole(user) !== "client") {
-        return ctx.forbidden("Only clients can purchase memberships.");
-      }
+      const {
+        gym_contract_plan_rate: rateDocumentId,
+        idempotencyKey,
+      } = ctx.request.body?.data ?? {};
 
-      // 3. Read the request.
-      const body = ctx.request.body?.data ?? ctx.request.body ?? {};
-
-      const localIdentifier = body.local_membership_plan;
-      const outdoorIdentifier = body.outdoor_membership_plan;
-
-      const wantsLocal =
-        localIdentifier !== undefined &&
-        localIdentifier !== null &&
-        String(localIdentifier).trim() !== "";
-
-      const wantsOutdoor =
-        outdoorIdentifier !== undefined &&
-        outdoorIdentifier !== null &&
-        String(outdoorIdentifier).trim() !== "";
-
-      if (!wantsLocal && !wantsOutdoor) {
+      if (
+        typeof rateDocumentId !== "string" ||
+        !rateDocumentId.trim()
+      ) {
         return ctx.badRequest(
-          "Provide local_membership_plan, outdoor_membership_plan, or both.",
+          "Gym contract plan rate document ID is required."
         );
       }
 
-      const subscriptionType: SubscriptionType =
-        wantsLocal && wantsOutdoor ? "both" : wantsLocal ? "local" : "outdoor";
+      if (
+        typeof idempotencyKey !== "string" ||
+        !idempotencyKey.trim() ||
+        idempotencyKey.length > 128
+      ) {
+        return ctx.badRequest("A valid idempotency key is required.");
+      }
 
-      // 4. Find the client using the actual user-client linking table.
       const client = await findClientByUserId(user.id);
-
-      if (!client?.id || !client?.document_id) {
-        return ctx.badRequest(
-          "Client profile not found. Please complete client onboarding.",
-        );
+      if (!client?.document_id) {
+        return ctx.badRequest("Customer profile was not found.");
       }
 
-      const knex = strapi.db.connection;
-
-      let localPlan: any = null;
-      let outdoorPlan: any = null;
-      let clubOwner: any = null;
-
-      // 5. Fetch and validate the local plan.
-      if (wantsLocal) {
-        localPlan = await findPlan(LOCAL_PLAN_TABLE, localIdentifier);
-
-        if (!localPlan) {
-          return ctx.badRequest("Local membership plan not found.");
-        }
-
-        if (localPlan.is_active !== true) {
-          return ctx.badRequest(
-            "The selected local membership plan is inactive.",
-          );
-        }
-
-        if (!isValidPlanDate(localPlan.valid_upto)) {
-          return ctx.badRequest(
-            "The selected local membership plan has expired or has an invalid validUpto value.",
-          );
-        }
-
-        if (
-          !Number.isFinite(Number(localPlan.price)) ||
-          Number(localPlan.price) <= 0
-        ) {
-          return ctx.badRequest(
-            "The local membership plan has an invalid price.",
-          );
-        }
-
-        // The owner relation is stored in a linking table, not
-        // local_membership_plans.club_owner_id.
-        clubOwner = await findClubOwnerForLocalPlan(localPlan.id);
-
-        if (!clubOwner) {
-          return ctx.badRequest(
-            "The local membership plan has no associated club owner.",
-          );
-        }
-
-        const alreadySubscribed = await hasActiveLocalSubscription(
-          client.id,
-          localPlan.id,
-        );
-
-        if (alreadySubscribed) {
-          return ctx.badRequest(
-            "You already have an active subscription for this local membership plan.",
-          );
-        }
-      }
-
-      // 6. Fetch and validate the outdoor plan.
-      if (wantsOutdoor) {
-        outdoorPlan = await findPlan(OUTDOOR_PLAN_TABLE, outdoorIdentifier);
-
-        if (!outdoorPlan) {
-          return ctx.badRequest("Outdoor membership plan not found.");
-        }
-
-        if (outdoorPlan.is_active !== true) {
-          return ctx.badRequest(
-            "The selected outdoor membership plan is inactive.",
-          );
-        }
-
-        if (!isValidPlanDate(outdoorPlan.valid_upto)) {
-          return ctx.badRequest(
-            "The selected outdoor membership plan has expired or has an invalid validUpto value.",
-          );
-        }
-
-        if (
-          !Number.isFinite(Number(outdoorPlan.price)) ||
-          Number(outdoorPlan.price) <= 0
-        ) {
-          return ctx.badRequest(
-            "The outdoor membership plan has an invalid price.",
-          );
-        }
-
-        const visits = Number(outdoorPlan.visit_allowed);
-
-        if (!Number.isInteger(visits) || visits <= 0) {
-          return ctx.badRequest(
-            "The outdoor membership plan has an invalid visit allowance.",
-          );
-        }
-
-        const alreadySubscribed = await hasActiveOutdoorSubscription(
-          client.id,
-          outdoorPlan.id,
-        );
-
-        if (alreadySubscribed) {
-          return ctx.badRequest(
-            "You already have an active outdoor pass for this plan.",
-          );
-        }
-      }
-
-      // 7. Calculate the amount from database prices.
-      const localPrice = wantsLocal ? Number(localPlan.price) : 0;
-      const outdoorPrice = wantsOutdoor ? Number(outdoorPlan.price) : 0;
-
-      const amountRupees = Number((localPrice + outdoorPrice).toFixed(2));
-
-      if (!Number.isFinite(amountRupees) || amountRupees <= 0) {
-        return ctx.badRequest("Invalid total membership amount.");
-      }
-
-      // 8. Create one Razorpay Order and one pending payment.
-      const payment = await createMembershipOrder({
-        amountRupees,
-        clientId: client.id,
-        clientDocumentId: client.document_id,
-        localPlanDocumentId: wantsLocal ? localPlan.document_id : undefined,
-        outdoorPlanDocumentId: wantsOutdoor
-          ? outdoorPlan.document_id
-          : undefined,
-        subscriptionType,
-      });
-      // 9. Return checkout details.
-      ctx.status = 200;
-      ctx.body = {
-        message: "Membership checkout created successfully.",
-        data: {
-          ...payment,
-          subscriptionType,
-          plans: {
-            local: wantsLocal
-              ? {
-                  documentId: localPlan.document_id,
-                  planName: localPlan.plan_name,
-                  price: localPrice,
-                  clubOwner: {
-                    id: clubOwner.id,
-                    documentId: clubOwner.document_id,
-                    ownerName: clubOwner.owner_name,
-                    clubName: clubOwner.club_name,
-                  },
-                }
-              : null,
-            outdoor: wantsOutdoor
-              ? {
-                  documentId: outdoorPlan.document_id,
-                  planName: outdoorPlan.plan_name,
-                  price: outdoorPrice,
-                  visitAllowed: Number(outdoorPlan.visit_allowed),
-                }
-              : null,
+      const planRate = await (strapi.documents(
+        CONTRACT_PLAN_RATE_UID as any
+      ) as any).findOne({
+        documentId: rateDocumentId,
+        populate: {
+          gym_contract: {
+            populate: {
+              club_owner: true,
+              membership_tier: true,
+            },
           },
-          totalAmountInRupees: amountRupees,
+          membership_plan_price: {
+            populate: {
+              membership_tier: true,
+            },
+          },
         },
-      };
-    } catch (error) {
-      strapi.log.error("Membership checkout failed", error);
+      });
 
-      ctx.status = 500;
-      ctx.body = {
-        message: "Unable to create membership checkout.",
-      };
+      if (!planRate) {
+        return ctx.notFound("Selected membership plan was not found.");
+      }
+      if (!planRate.isActive) {
+        return ctx.badRequest("This membership plan is inactive.");
+      }
+
+      const contract = planRate.gym_contract;
+      const planPrice = planRate.membership_plan_price;
+
+      if (!contract || !planPrice) {
+        return ctx.badRequest("Membership plan configuration is incomplete.");
+      }
+      if (contract.contractStatus !== "active") {
+        return ctx.badRequest("This gym contract is not active.");
+      }
+      if (
+        isContractOutsideDateRange(
+          contract.startDate,
+          contract.endDate
+        )
+      ) {
+        return ctx.badRequest(
+          "This gym contract is outside its valid date range."
+        );
+      }
+      if (!contract.club_owner) {
+        return ctx.badRequest("Gym owner configuration was not found.");
+      }
+      if (
+        !contract.membership_tier ||
+        !contract.membership_tier.isActive
+      ) {
+        return ctx.badRequest("This membership tier is not active.");
+      }
+      if (!planPrice.isActive) {
+        return ctx.badRequest("This membership price is inactive.");
+      }
+      if (
+        planPrice.membership_tier?.documentId !==
+        contract.membership_tier.documentId
+      ) {
+        return ctx.badRequest(
+          "Membership plan does not belong to this gym contract tier."
+        );
+      }
+
+      const customerPrice = Number(planPrice.customerPrice);
+      const defaultCommission = Number(planPrice.defaultCommission);
+      const customCommission =
+        planRate.customCommission == null
+          ? undefined
+          : Number(planRate.customCommission);
+
+      if (!Number.isFinite(customerPrice) || customerPrice <= 0) {
+        return ctx.badRequest("Invalid membership price.");
+      }
+      if (
+        !Number.isFinite(defaultCommission) ||
+        defaultCommission < 0 ||
+        defaultCommission > customerPrice
+      ) {
+        return ctx.badRequest("Invalid default commission configuration.");
+      }
+      if (
+        planRate.commissionMode !== "default" &&
+        planRate.commissionMode !== "custom"
+      ) {
+        return ctx.badRequest("Invalid commission mode.");
+      }
+      if (
+        planRate.commissionMode === "custom" &&
+        (
+          customCommission === undefined ||
+          !Number.isFinite(customCommission) ||
+          customCommission < 0 ||
+          customCommission > customerPrice
+        )
+      ) {
+        return ctx.badRequest("Invalid custom commission configuration.");
+      }
+
+      const durationMonths = Number(
+        planPrice.durationMonths ??
+          (planPrice.duration === "monthly"
+            ? 1
+            : planPrice.duration === "six_months"
+              ? 6
+              : planPrice.duration === "twelve_months"
+                ? 12
+                : 0)
+      );
+
+      if (!Number.isInteger(durationMonths) || durationMonths < 1) {
+        return ctx.badRequest("Invalid membership duration.");
+      }
+
+      const currency =
+        contract.currency || planPrice.currency || "INR";
+
+      if (currency !== "INR") {
+        return ctx.badRequest("This payment currency is not supported.");
+      }
+
+      const result = await createMembershipOrder({
+        clientDocumentId: client.document_id,
+        contractDocumentId: contract.documentId,
+        planPriceDocumentId: planPrice.documentId,
+        idempotencyKey,
+        duration: planPrice.duration,
+        durationMonths,
+        customerPrice,
+        defaultCommission,
+        commissionMode: planRate.commissionMode,
+        customCommission,
+        currency,
+      });
+
+      return ctx.send({
+        message: result.reused
+          ? "Existing payment order returned."
+          : "Membership payment order created.",
+        data: result,
+      });
+    } catch (error: any) {
+      strapi.log.error("Membership purchase error:", error);
+      const message =
+        error?.message || "Unable to create membership order.";
+
+      if (
+        message.includes("active membership") ||
+        message.includes("pending payment") ||
+        message.includes("already being processed")
+      ) {
+        ctx.status = 409;
+        ctx.body = { success: false, message };
+        return;
+      }
+
+      ctx.status = 400;
+      ctx.body = { success: false, message };
     }
   },
 };

@@ -1,15 +1,13 @@
 
-
 export default {
   routes: [
     {
       method: "POST",
-      path: "/membership-payments/webhook",
-      handler: "payment-webhook.webhook",
+      path: "/webhook",
+      handler: "webhook.handle",
       config: {
         auth: false,
       },
     },
   ],
 };
-
