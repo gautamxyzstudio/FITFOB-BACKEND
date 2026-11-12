@@ -14,6 +14,10 @@ import {
 } from "../../../utils/resolveClubRelations";
 import { sendTwilioOtp } from "../../../services/twilio-sms";
 import { getOtpEmailTemplate } from "../../../utils/otpEmailTemplate";
+import {
+  logAdminActivity,
+  getAdminActivityUserId,
+} from "../../../utils/admin-activity-log";
 
 const POPULATE: any = {
   user: true,
@@ -2669,6 +2673,129 @@ export default factories.createCoreController(
           }
         }
 
+        // 📝 Compute changed details for activity logging
+        const changedDetails: string[] = [];
+
+        const simpleFields = [
+          { key: "clubName", label: "clubName" },
+          { key: "ownerName", label: "ownerName" },
+          { key: "phoneNumber", label: "phoneNumber" },
+          { key: "email", label: "email" },
+          { key: "clubAddress", label: "clubAddress" },
+          { key: "city", label: "city" },
+          { key: "state", label: "state" },
+          { key: "pincode", label: "pincode" },
+          { key: "clubCategory", label: "clubCategory" },
+          { key: "latitude", label: "latitude" },
+          { key: "longitude", label: "longitude" },
+        ];
+
+        for (const field of simpleFields) {
+          if (
+            data[field.key] !== undefined &&
+            String(data[field.key]) !== String(existing[field.key] ?? "")
+          ) {
+            changedDetails.push(
+              `${field.label}: '${existing[field.key] ?? ""}' -> '${
+                data[field.key]
+              }'`,
+            );
+          }
+        }
+
+        if (data.weekdayScheduling !== undefined) {
+          const oldScheduleStr = formatWeekdaySchedulingToString(
+            existing?.weekdayScheduling ?? existing?.weekday_scheduling,
+          );
+          const newScheduleStr = formatWeekdaySchedulingToString(
+            entity?.weekdayScheduling ??
+              entity?.weekday_scheduling ??
+              updateData.weekdayScheduling ??
+              data.weekdayScheduling,
+          );
+          if (oldScheduleStr !== newScheduleStr) {
+            changedDetails.push(
+              `weekdayScheduling: '${oldScheduleStr}' -> '${newScheduleStr}'`,
+            );
+          }
+        }
+        if (
+          data.facilities !== undefined ||
+          data.club_facilities !== undefined
+        ) {
+          const newFacilities = await resolveFacilityNames(
+            entity?.facilities !== undefined
+              ? entity.facilities
+              : data.facilities !== undefined
+              ? data.facilities
+              : data.club_facilities,
+            entity?.club_facilities,
+            existing?.id || id,
+          );
+          const oldFacilitiesStr = oldFacilities.join(", ");
+          const newFacilitiesStr = newFacilities.join(", ");
+          if (oldFacilitiesStr !== newFacilitiesStr) {
+            changedDetails.push(
+              `facilities: '${oldFacilitiesStr}' -> '${newFacilitiesStr}'`,
+            );
+          }
+        }
+        if (
+          data.services !== undefined ||
+          data.club_services !== undefined
+        ) {
+          const newServices = await resolveServiceNames(
+            entity?.services !== undefined
+              ? entity.services
+              : data.services !== undefined
+              ? data.services
+              : data.club_services,
+            entity?.club_services,
+            existing?.id || id,
+          );
+          const oldServicesStr = oldServices.join(", ");
+          const newServicesStr = newServices.join(", ");
+          if (oldServicesStr !== newServicesStr) {
+            changedDetails.push(
+              `services: '${oldServicesStr}' -> '${newServicesStr}'`,
+            );
+          }
+        }
+        if (data.logo !== undefined) {
+          changedDetails.push("logo");
+        }
+
+        const handledKeys = new Set([
+          "clubName",
+          "ownerName",
+          "phoneNumber",
+          "email",
+          "clubAddress",
+          "city",
+          "state",
+          "pincode",
+          "clubCategory",
+          "weekdayScheduling",
+          "facilities",
+          "club_facilities",
+          "services",
+          "club_services",
+          "logo",
+          "latitude",
+          "longitude",
+        ]);
+
+        for (const key of Object.keys(data)) {
+          if (!handledKeys.has(key) && data[key] !== undefined) {
+            changedDetails.push(key);
+          }
+        }
+
+        const changeSummary =
+          changedDetails.length > 0
+            ? ` (Changed: ${changedDetails.join(", ")})`
+            : "";
+
         // 📝 Log Activity (only for club owners, NOT admin or superadmin)
         if (!isAdmin && (userClubOwner || roleName === "clubowner")) {
           const ownerForLog =
@@ -2686,129 +2813,6 @@ export default factories.createCoreController(
                 "api::club-owner-activity-log.club-owner-activity-log",
               );
               if (activityLogService?.logActivity) {
-                const changedDetails: string[] = [];
-
-                const simpleFields = [
-                  { key: "clubName", label: "clubName" },
-                  { key: "ownerName", label: "ownerName" },
-                  { key: "phoneNumber", label: "phoneNumber" },
-                  { key: "email", label: "email" },
-                  { key: "clubAddress", label: "clubAddress" },
-                  { key: "city", label: "city" },
-                  { key: "state", label: "state" },
-                  { key: "pincode", label: "pincode" },
-                  { key: "clubCategory", label: "clubCategory" },
-                  { key: "latitude", label: "latitude" },
-                  { key: "longitude", label: "longitude" },
-                ];
-
-                for (const field of simpleFields) {
-                  if (
-                    data[field.key] !== undefined &&
-                    String(data[field.key]) !==
-                      String(existing[field.key] ?? "")
-                  ) {
-                    changedDetails.push(
-                      `${field.label}: '${existing[field.key] ?? ""}' -> '${
-                        data[field.key]
-                      }'`,
-                    );
-                  }
-                }
-
-                if (data.weekdayScheduling !== undefined) {
-                  const oldScheduleStr = formatWeekdaySchedulingToString(
-                    existing?.weekdayScheduling ?? existing?.weekday_scheduling,
-                  );
-                  const newScheduleStr = formatWeekdaySchedulingToString(
-                    entity?.weekdayScheduling ??
-                      entity?.weekday_scheduling ??
-                      updateData.weekdayScheduling ??
-                      data.weekdayScheduling,
-                  );
-                  if (oldScheduleStr !== newScheduleStr) {
-                    changedDetails.push(
-                      `weekdayScheduling: '${oldScheduleStr}' -> '${newScheduleStr}'`,
-                    );
-                  }
-                }
-                if (
-                  data.facilities !== undefined ||
-                  data.club_facilities !== undefined
-                ) {
-                  const newFacilities = await resolveFacilityNames(
-                    entity?.facilities !== undefined
-                      ? entity.facilities
-                      : data.facilities !== undefined
-                      ? data.facilities
-                      : data.club_facilities,
-                    entity?.club_facilities,
-                    existing?.id || id,
-                  );
-                  const oldFacilitiesStr = oldFacilities.join(", ");
-                  const newFacilitiesStr = newFacilities.join(", ");
-                  if (oldFacilitiesStr !== newFacilitiesStr) {
-                    changedDetails.push(
-                      `facilities: '${oldFacilitiesStr}' -> '${newFacilitiesStr}'`,
-                    );
-                  }
-                }
-                if (
-                  data.services !== undefined ||
-                  data.club_services !== undefined
-                ) {
-                  const newServices = await resolveServiceNames(
-                    entity?.services !== undefined
-                      ? entity.services
-                      : data.services !== undefined
-                      ? data.services
-                      : data.club_services,
-                    entity?.club_services,
-                    existing?.id || id,
-                  );
-                  const oldServicesStr = oldServices.join(", ");
-                  const newServicesStr = newServices.join(", ");
-                  if (oldServicesStr !== newServicesStr) {
-                    changedDetails.push(
-                      `services: '${oldServicesStr}' -> '${newServicesStr}'`,
-                    );
-                  }
-                }
-                if (data.logo !== undefined) {
-                  changedDetails.push("logo");
-                }
-
-                const handledKeys = new Set([
-                  "clubName",
-                  "ownerName",
-                  "phoneNumber",
-                  "email",
-                  "clubAddress",
-                  "city",
-                  "state",
-                  "pincode",
-                  "clubCategory",
-                  "weekdayScheduling",
-                  "facilities",
-                  "club_facilities",
-                  "services",
-                  "club_services",
-                  "logo",
-                  "latitude",
-                  "longitude",
-                ]);
-
-                for (const key of Object.keys(data)) {
-                  if (!handledKeys.has(key) && data[key] !== undefined) {
-                    changedDetails.push(key);
-                  }
-                }
-
-                const changeSummary =
-                  changedDetails.length > 0
-                    ? ` (Changed: ${changedDetails.join(", ")})`
-                    : "";
-
                 await activityLogService.logActivity({
                   clubOwnerId: targetOwnerId,
                   category: "profile",
@@ -2826,6 +2830,30 @@ export default factories.createCoreController(
                 logErr,
               );
             }
+          }
+        }
+
+        // 📝 Log Admin Activity (when admin or superadmin updates a club owner)
+        if (isAdmin) {
+          const adminTargetOwnerId =
+            existing?.documentId || existing?.id || id;
+
+          try {
+            await logAdminActivity({
+              adminUserId: getAdminActivityUserId(ctx),
+              category: "club_owner",
+              actionType: "update",
+              entityName: "Club Owner",
+              entityId: adminTargetOwnerId,
+              description: `Updated club owner details for ${
+                entity?.clubName || existing?.clubName || "club"
+              }${changeSummary}`,
+            });
+          } catch (adminLogErr) {
+            strapi.log.warn(
+              "[AdminActivityLog] Failed to log club owner update by admin:",
+              adminLogErr,
+            );
           }
         }
 
