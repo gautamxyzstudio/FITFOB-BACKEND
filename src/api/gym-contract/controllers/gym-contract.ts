@@ -6,6 +6,11 @@ const CLUB_OWNER_UID = "api::club-owner.club-owner";
 
 const REQUIRED_DURATIONS = ["monthly", "six_months", "twelve_months"];
 
+import {
+  logAdminActivity,
+  getAdminActivityUserId,
+} from "../../../utils/admin-activity-log";
+
 function toNumber(value: unknown): number {
   const result = Number(value);
 
@@ -439,6 +444,92 @@ export default factories.createCoreController(
               durationOrder.indexOf(a.duration) -
               durationOrder.indexOf(b.duration),
           );
+
+        // --------------------------------------------------
+        // 8. Admin Activity Log
+        // --------------------------------------------------
+
+        try {
+          const changes: string[] = [];
+
+          if (promotionUpdate) {
+            if (
+              promotionUpdate.userLimit !== undefined &&
+              promotionUpdate.userLimit !== existingPromotion?.userLimit
+            ) {
+              changes.push(
+                `user limit changed from ${existingPromotion?.userLimit ?? 0} to ${promotionUpdate.userLimit}`,
+              );
+            }
+
+            if (
+              promotionUpdate.isActive !== undefined &&
+              promotionUpdate.isActive !== existingPromotion?.isActive
+            ) {
+              changes.push(
+                `zero-commission deal ${promotionUpdate.isActive ? "enabled" : "disabled"}`,
+              );
+            }
+          }
+
+          for (const commission of commissionUpdates) {
+            const existingRate = existingRates.find(
+              (rate: any) => rate.id === commission.rateId,
+            );
+            const oldMode = existingRate?.commissionMode || "default";
+            const oldCustom =
+              existingRate?.customCommission !== null &&
+              existingRate?.customCommission !== undefined
+                ? Number(existingRate.customCommission)
+                : null;
+            const newMode = commission.commissionMode;
+            const newCustom =
+              commission.customCommission !== null &&
+              commission.customCommission !== undefined
+                ? Number(commission.customCommission)
+                : null;
+
+            if (newMode === "custom") {
+              if (oldMode === "custom" && oldCustom !== null) {
+                if (oldCustom !== newCustom) {
+                  changes.push(
+                    `${commission.duration} custom commission changed from ${oldCustom} to ${newCustom}`,
+                  );
+                }
+              } else {
+                changes.push(
+                  `${commission.duration} custom commission set to ${newCustom}`,
+                );
+              }
+            } else if (newMode === "default" && oldMode === "custom") {
+              changes.push(
+                `${commission.duration} commission reset to default`,
+              );
+            }
+          }
+
+          const changeSummary =
+            changes.length > 0 ? ` (${changes.join(", ")})` : "";
+
+          await logAdminActivity({
+            adminUserId: getAdminActivityUserId(ctx),
+            category: "club_contract",
+            actionType: "update",
+            entityName: "Gym Contract",
+            entityId:
+              gymContract.documentId ||
+              gymContract.contractId ||
+              gymContract.id,
+            description: `Updated gym contract for ${
+              clubOwner.clubName || "gym"
+            }${changeSummary}`,
+          });
+        } catch (logErr) {
+          strapi.log.warn(
+            "[AdminActivityLog] Failed to log gym contract update:",
+            logErr,
+          );
+        }
 
         return ctx.send({
           data: {
