@@ -547,7 +547,7 @@ export async function finalizeGymMembershipPayment(
           gymPayout,
           currency: current.currency || "INR",
           promotionApplied,
-          transactionStatus: "paid",
+          transactionStatus: "pending",
           notes,
         },
       });
