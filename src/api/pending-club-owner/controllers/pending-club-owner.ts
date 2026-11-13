@@ -9,6 +9,7 @@ import {
   orderWeekdayScheduling,
 } from "../../../utils/weekdayScheduling";
 import { validateOwnerGovernmentDocument } from "../../../services/aws-owner-document-validator";
+import { analyzeGymPhoto } from "../../../services/aws-gym-image-analyzer";
 import {
   resolveClubServiceIds,
   resolveClubFacilityIds,
@@ -1876,6 +1877,123 @@ export default {
   },
 
   /* ===================================================== */
+  /* STEP 6A.1 — ANALYZE CLUB PHOTO USING AWS REKOGNITION */
+  async analyzeClubPhoto(ctx: Context) {
+    const files: any = ctx.request.files;
+    const body: any = getBody(ctx);
+
+    let imageBuffer: Buffer | null = null;
+
+    // 1. Check if image file was uploaded in multipart (e.g. key = "file", "image", "photo")
+    const rawFile =
+      files?.file ||
+      files?.image ||
+      files?.photo ||
+      files?.files ||
+      files?.club_photos ||
+      files?.clubPhotos ||
+      files?.images ||
+      (files && Object.values(files)[0]);
+
+    const photoFile = Array.isArray(rawFile) ? rawFile[0] : rawFile;
+
+    if (photoFile) {
+      try {
+        const filePath = photoFile.filepath || photoFile.path;
+        if (filePath && fs.existsSync(filePath)) {
+          imageBuffer = await prepareAndOptimizeImage(photoFile, 1600, 85);
+        } else if (photoFile.buffer && Buffer.isBuffer(photoFile.buffer)) {
+          imageBuffer = photoFile.buffer;
+        } else if (Buffer.isBuffer(photoFile)) {
+          imageBuffer = photoFile;
+        }
+      } catch (err: any) {
+        return ctx.badRequest(
+          err.message || "Failed to process uploaded image file"
+        );
+      }
+    } else if (body.imageUrl || body.fileUrl || body.url) {
+      // 2. Check if image URL was passed
+      const targetUrl = body.imageUrl || body.fileUrl || body.url;
+      try {
+        const resp = await axios.get(targetUrl, {
+          responseType: "arraybuffer",
+          timeout: 15000,
+        });
+        imageBuffer = Buffer.from(resp.data);
+      } catch (urlErr: any) {
+        return ctx.badRequest(
+          `Failed to download image from URL: ${urlErr.message}`
+        );
+      }
+    } else if (body.base64 || body.imageBase64) {
+      // 3. Check if base64 string was passed
+      try {
+        const rawBase64 = (body.base64 || body.imageBase64).replace(
+          /^data:image\/\w+;base64,/,
+          ""
+        );
+        imageBuffer = Buffer.from(rawBase64, "base64");
+      } catch (b64Err: any) {
+        return ctx.badRequest("Invalid base64 image data");
+      }
+    } else if (body.photoId || body.clubPhotoId) {
+      // 4. Check if existing club photo ID was passed
+      const photoId = Number(body.photoId || body.clubPhotoId);
+      const photoRes = await strapi.db.connection.raw(
+        `SELECT f.url, f.formats, f.provider_metadata
+         FROM files_related_mph mph
+         JOIN files f ON f.id = mph.file_id
+         WHERE mph.related_id = ?
+           AND mph.related_type = 'api::club-photo.club-photo'
+           AND mph.field = 'images'
+         LIMIT 1`,
+        [photoId]
+      );
+      const fileRecord = photoRes.rows?.[0];
+      if (fileRecord?.url) {
+        const fullUrl = fileRecord.url.startsWith("http")
+          ? fileRecord.url
+          : `${strapi.config.server.url}${fileRecord.url}`;
+        try {
+          const resp = await axios.get(fullUrl, {
+            responseType: "arraybuffer",
+            timeout: 15000,
+          });
+          imageBuffer = Buffer.from(resp.data);
+        } catch (fetchErr: any) {
+          return ctx.badRequest(
+            "Failed to retrieve image for the specified photoId"
+          );
+        }
+      } else {
+        return ctx.notFound("Club photo not found");
+      }
+    }
+
+    if (!imageBuffer) {
+      return ctx.badRequest(
+        "Please provide an image file (multipart form-data with key 'file' or 'image'), 'imageUrl', or 'base64' string to analyze."
+      );
+    }
+
+    try {
+      const result = await analyzeGymPhoto(imageBuffer);
+
+      return ctx.send({
+        message: "Image analyzed successfully",
+        suggestedTitles: result.suggestedTitles,
+        isGymPhoto: result.isGymPhoto,
+      });
+    } catch (error: any) {
+      strapi.log.error("[analyzeClubPhoto] AWS Rekognition Error:", error);
+      return ctx.internalServerError(
+        error.message || "Failed to analyze gym photo using AWS Rekognition"
+      );
+    }
+  },
+
+  /* ===================================================== */
   /* STEP 6A — UPLOAD SINGLE CLUB PHOTO WITH TEXT (CAN CALL MULTIPLE TIMES) */
   async uploadClubPhoto(ctx: Context) {
     const draft: any = await getEditableDraft(ctx, false);
@@ -1886,22 +2004,41 @@ export default {
     const body = getBody(ctx);
     const files: any = ctx.request.files;
 
-    const photoFile =
+    const rawPhoto =
+      files?.file ||
       files?.image ||
+      files?.photo ||
       files?.club_photos ||
       files?.clubPhotos ||
       files?.images ||
-      files?.file ||
-      files?.photo;
+      (files && Object.values(files)[0]);
+
+    const photoFile = Array.isArray(rawPhoto) ? rawPhoto[0] : rawPhoto;
 
     if (!photoFile) return ctx.badRequest("Please upload a club photo");
 
-    await prepareAndOptimizeImage(photoFile, 1600, 85);
+    const optimizedBuffer = await prepareAndOptimizeImage(photoFile, 1600, 85);
     const uploadedPhotos = await uploadToFolder(photoFile);
     const photoIds = uploadedPhotos.map((f: any) => f.id);
 
     const docId = Math.random().toString(36).substring(2, 26);
-    const imageInfo = body.imageInfo || body.description || "";
+    let imageInfo = (body.imageInfo || body.description || "").trim();
+
+    // Auto-analyze using AWS Rekognition if description was not provided
+    let autoAnalysis: any = null;
+    if (!imageInfo) {
+      try {
+        autoAnalysis = await analyzeGymPhoto(optimizedBuffer);
+        if (autoAnalysis?.description) {
+          imageInfo = autoAnalysis.description;
+        }
+      } catch (analysisErr) {
+        strapi.log.warn(
+          "[uploadClubPhoto] AWS auto-analysis fallback failed:",
+          analysisErr
+        );
+      }
+    }
 
     const insertRes = await strapi.db.connection.raw(
       `INSERT INTO club_photos (
@@ -1956,6 +2093,7 @@ export default {
         imageInfo: newPhoto.image_info,
         fileUrl,
         images: uploadedPhotos,
+        analysis: autoAnalysis || undefined,
       },
     });
   },

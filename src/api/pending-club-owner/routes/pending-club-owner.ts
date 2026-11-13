@@ -99,6 +99,14 @@ export default {
     },
     {
       method: "POST",
+      path: "/pending-club-owner/analyse-club-photo",
+      handler: "pending-club-owner.analyzeClubPhoto",
+      config: {
+        auth: {},
+      },
+    },
+    {
+      method: "POST",
       path: "/pending-club-owner/upload-club-photo",
       handler: "pending-club-owner.uploadClubPhoto",
       config: {
