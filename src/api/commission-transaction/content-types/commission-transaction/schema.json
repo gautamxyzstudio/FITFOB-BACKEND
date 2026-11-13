@@ -11,9 +11,6 @@
   },
   "pluginOptions": {},
   "attributes": {
-    "transactionId": {
-      "type": "uid"
-    },
     "gym_membership": {
       "type": "relation",
       "relation": "manyToOne",
@@ -32,15 +29,6 @@
       "target": "api::gym-promotion.gym-promotion",
       "inversedBy": "commission_transactions"
     },
-    "transactionType": {
-      "type": "enumeration",
-      "enum": [
-        "charge",
-        "refund",
-        "adjustment",
-        "settlement"
-      ]
-    },
     "commissionMode": {
       "type": "enumeration",
       "enum": [
@@ -55,9 +43,6 @@
     "commissionAmount": {
       "type": "decimal"
     },
-    "gatewayFee": {
-      "type": "decimal"
-    },
     "gymPayout": {
       "type": "decimal"
     },
@@ -69,30 +54,13 @@
       "type": "boolean",
       "default": false
     },
-    "promotionSequence": {
-      "type": "integer"
-    },
     "transactionStatus": {
       "type": "enumeration",
       "enum": [
         "pending",
         "paid",
-        "failed",
-        "refunded"
+        "failed"
       ]
-    },
-    "providerPaymentId": {
-      "type": "string"
-    },
-    "providerTransactionId": {
-      "type": "string"
-    },
-    "idempotencyKey": {
-      "type": "string",
-      "unique": true
-    },
-    "settledAt": {
-      "type": "datetime"
     },
     "notes": {
       "type": "text"
