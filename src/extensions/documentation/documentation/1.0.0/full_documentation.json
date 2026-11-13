@@ -14,7 +14,7 @@
       "name": "Apache 2.0",
       "url": "https://www.apache.org/licenses/LICENSE-2.0.html"
     },
-    "x-generation-date": "2026-11-13T07:07:31.047Z"
+    "x-generation-date": "2026-11-13T07:54:38.245Z"
   },
   "x-strapi-config": {
     "plugins": [
@@ -22706,9 +22706,6 @@
                                                         "documentId": {
                                                           "type": "string"
                                                         },
-                                                        "transactionId": {
-                                                          "type": "string"
-                                                        },
                                                         "gym_membership": {
                                                           "type": "object",
                                                           "properties": {
@@ -22900,15 +22897,6 @@
                                                             }
                                                           }
                                                         },
-                                                        "transactionType": {
-                                                          "type": "string",
-                                                          "enum": [
-                                                            "charge",
-                                                            "refund",
-                                                            "adjustment",
-                                                            "settlement"
-                                                          ]
-                                                        },
                                                         "commissionMode": {
                                                           "type": "string",
                                                           "enum": [
@@ -22925,10 +22913,6 @@
                                                           "type": "number",
                                                           "format": "float"
                                                         },
-                                                        "gatewayFee": {
-                                                          "type": "number",
-                                                          "format": "float"
-                                                        },
                                                         "gymPayout": {
                                                           "type": "number",
                                                           "format": "float"
@@ -22939,30 +22923,13 @@
                                                         "promotionApplied": {
                                                           "type": "boolean"
                                                         },
-                                                        "promotionSequence": {
-                                                          "type": "integer"
-                                                        },
                                                         "transactionStatus": {
                                                           "type": "string",
                                                           "enum": [
                                                             "pending",
                                                             "paid",
-                                                            "failed",
-                                                            "refunded"
+                                                            "failed"
                                                           ]
-                                                        },
-                                                        "providerPaymentId": {
-                                                          "type": "string"
-                                                        },
-                                                        "providerTransactionId": {
-                                                          "type": "string"
-                                                        },
-                                                        "idempotencyKey": {
-                                                          "type": "string"
-                                                        },
-                                                        "settledAt": {
-                                                          "type": "string",
-                                                          "format": "date-time"
                                                         },
                                                         "notes": {
                                                           "type": "string"
@@ -29902,9 +29869,6 @@
                                                   "documentId": {
                                                     "type": "string"
                                                   },
-                                                  "transactionId": {
-                                                    "type": "string"
-                                                  },
                                                   "gym_membership": {
                                                     "type": "object",
                                                     "properties": {
@@ -30096,15 +30060,6 @@
                                                       }
                                                     }
                                                   },
-                                                  "transactionType": {
-                                                    "type": "string",
-                                                    "enum": [
-                                                      "charge",
-                                                      "refund",
-                                                      "adjustment",
-                                                      "settlement"
-                                                    ]
-                                                  },
                                                   "commissionMode": {
                                                     "type": "string",
                                                     "enum": [
@@ -30121,10 +30076,6 @@
                                                     "type": "number",
                                                     "format": "float"
                                                   },
-                                                  "gatewayFee": {
-                                                    "type": "number",
-                                                    "format": "float"
-                                                  },
                                                   "gymPayout": {
                                                     "type": "number",
                                                     "format": "float"
@@ -30135,30 +30086,13 @@
                                                   "promotionApplied": {
                                                     "type": "boolean"
                                                   },
-                                                  "promotionSequence": {
-                                                    "type": "integer"
-                                                  },
                                                   "transactionStatus": {
                                                     "type": "string",
                                                     "enum": [
                                                       "pending",
                                                       "paid",
-                                                      "failed",
-                                                      "refunded"
+                                                      "failed"
                                                     ]
-                                                  },
-                                                  "providerPaymentId": {
-                                                    "type": "string"
-                                                  },
-                                                  "providerTransactionId": {
-                                                    "type": "string"
-                                                  },
-                                                  "idempotencyKey": {
-                                                    "type": "string"
-                                                  },
-                                                  "settledAt": {
-                                                    "type": "string",
-                                                    "format": "date-time"
                                                   },
                                                   "notes": {
                                                     "type": "string"
@@ -36982,9 +36916,6 @@
                                                   "documentId": {
                                                     "type": "string"
                                                   },
-                                                  "transactionId": {
-                                                    "type": "string"
-                                                  },
                                                   "gym_membership": {
                                                     "type": "object",
                                                     "properties": {
@@ -37176,15 +37107,6 @@
                                                       }
                                                     }
                                                   },
-                                                  "transactionType": {
-                                                    "type": "string",
-                                                    "enum": [
-                                                      "charge",
-                                                      "refund",
-                                                      "adjustment",
-                                                      "settlement"
-                                                    ]
-                                                  },
                                                   "commissionMode": {
                                                     "type": "string",
                                                     "enum": [
@@ -37201,10 +37123,6 @@
                                                     "type": "number",
                                                     "format": "float"
                                                   },
-                                                  "gatewayFee": {
-                                                    "type": "number",
-                                                    "format": "float"
-                                                  },
                                                   "gymPayout": {
                                                     "type": "number",
                                                     "format": "float"
@@ -37215,30 +37133,13 @@
                                                   "promotionApplied": {
                                                     "type": "boolean"
                                                   },
-                                                  "promotionSequence": {
-                                                    "type": "integer"
-                                                  },
                                                   "transactionStatus": {
                                                     "type": "string",
                                                     "enum": [
                                                       "pending",
                                                       "paid",
-                                                      "failed",
-                                                      "refunded"
+                                                      "failed"
                                                     ]
-                                                  },
-                                                  "providerPaymentId": {
-                                                    "type": "string"
-                                                  },
-                                                  "providerTransactionId": {
-                                                    "type": "string"
-                                                  },
-                                                  "idempotencyKey": {
-                                                    "type": "string"
-                                                  },
-                                                  "settledAt": {
-                                                    "type": "string",
-                                                    "format": "date-time"
                                                   },
                                                   "notes": {
                                                     "type": "string"
@@ -44448,9 +44349,6 @@
                                                         "documentId": {
                                                           "type": "string"
                                                         },
-                                                        "transactionId": {
-                                                          "type": "string"
-                                                        },
                                                         "gym_membership": {
                                                           "type": "object",
                                                           "properties": {
@@ -44642,15 +44540,6 @@
                                                             }
                                                           }
                                                         },
-                                                        "transactionType": {
-                                                          "type": "string",
-                                                          "enum": [
-                                                            "charge",
-                                                            "refund",
-                                                            "adjustment",
-                                                            "settlement"
-                                                          ]
-                                                        },
                                                         "commissionMode": {
                                                           "type": "string",
                                                           "enum": [
@@ -44667,10 +44556,6 @@
                                                           "type": "number",
                                                           "format": "float"
                                                         },
-                                                        "gatewayFee": {
-                                                          "type": "number",
-                                                          "format": "float"
-                                                        },
                                                         "gymPayout": {
                                                           "type": "number",
                                                           "format": "float"
@@ -44681,30 +44566,13 @@
                                                         "promotionApplied": {
                                                           "type": "boolean"
                                                         },
-                                                        "promotionSequence": {
-                                                          "type": "integer"
-                                                        },
                                                         "transactionStatus": {
                                                           "type": "string",
                                                           "enum": [
                                                             "pending",
                                                             "paid",
-                                                            "failed",
-                                                            "refunded"
+                                                            "failed"
                                                           ]
-                                                        },
-                                                        "providerPaymentId": {
-                                                          "type": "string"
-                                                        },
-                                                        "providerTransactionId": {
-                                                          "type": "string"
-                                                        },
-                                                        "idempotencyKey": {
-                                                          "type": "string"
-                                                        },
-                                                        "settledAt": {
-                                                          "type": "string",
-                                                          "format": "date-time"
                                                         },
                                                         "notes": {
                                                           "type": "string"
@@ -50371,9 +50239,6 @@
                                               "documentId": {
                                                 "type": "string"
                                               },
-                                              "transactionId": {
-                                                "type": "string"
-                                              },
                                               "gym_membership": {
                                                 "type": "object",
                                                 "properties": {
@@ -50428,15 +50293,6 @@
                                                   }
                                                 }
                                               },
-                                              "transactionType": {
-                                                "type": "string",
-                                                "enum": [
-                                                  "charge",
-                                                  "refund",
-                                                  "adjustment",
-                                                  "settlement"
-                                                ]
-                                              },
                                               "commissionMode": {
                                                 "type": "string",
                                                 "enum": [
@@ -50453,10 +50309,6 @@
                                                 "type": "number",
                                                 "format": "float"
                                               },
-                                              "gatewayFee": {
-                                                "type": "number",
-                                                "format": "float"
-                                              },
                                               "gymPayout": {
                                                 "type": "number",
                                                 "format": "float"
@@ -50467,30 +50319,13 @@
                                               "promotionApplied": {
                                                 "type": "boolean"
                                               },
-                                              "promotionSequence": {
-                                                "type": "integer"
-                                              },
                                               "transactionStatus": {
                                                 "type": "string",
                                                 "enum": [
                                                   "pending",
                                                   "paid",
-                                                  "failed",
-                                                  "refunded"
+                                                  "failed"
                                                 ]
-                                              },
-                                              "providerPaymentId": {
-                                                "type": "string"
-                                              },
-                                              "providerTransactionId": {
-                                                "type": "string"
-                                              },
-                                              "idempotencyKey": {
-                                                "type": "string"
-                                              },
-                                              "settledAt": {
-                                                "type": "string",
-                                                "format": "date-time"
                                               },
                                               "notes": {
                                                 "type": "string"
@@ -59304,9 +59139,6 @@
                                                         "documentId": {
                                                           "type": "string"
                                                         },
-                                                        "transactionId": {
-                                                          "type": "string"
-                                                        },
                                                         "gym_membership": {
                                                           "type": "object",
                                                           "properties": {
@@ -59498,15 +59330,6 @@
                                                             }
                                                           }
                                                         },
-                                                        "transactionType": {
-                                                          "type": "string",
-                                                          "enum": [
-                                                            "charge",
-                                                            "refund",
-                                                            "adjustment",
-                                                            "settlement"
-                                                          ]
-                                                        },
                                                         "commissionMode": {
                                                           "type": "string",
                                                           "enum": [
@@ -59523,10 +59346,6 @@
                                                           "type": "number",
                                                           "format": "float"
                                                         },
-                                                        "gatewayFee": {
-                                                          "type": "number",
-                                                          "format": "float"
-                                                        },
                                                         "gymPayout": {
                                                           "type": "number",
                                                           "format": "float"
@@ -59537,30 +59356,13 @@
                                                         "promotionApplied": {
                                                           "type": "boolean"
                                                         },
-                                                        "promotionSequence": {
-                                                          "type": "integer"
-                                                        },
                                                         "transactionStatus": {
                                                           "type": "string",
                                                           "enum": [
                                                             "pending",
                                                             "paid",
-                                                            "failed",
-                                                            "refunded"
+                                                            "failed"
                                                           ]
-                                                        },
-                                                        "providerPaymentId": {
-                                                          "type": "string"
-                                                        },
-                                                        "providerTransactionId": {
-                                                          "type": "string"
-                                                        },
-                                                        "idempotencyKey": {
-                                                          "type": "string"
-                                                        },
-                                                        "settledAt": {
-                                                          "type": "string",
-                                                          "format": "date-time"
                                                         },
                                                         "notes": {
                                                           "type": "string"
@@ -65123,9 +64925,6 @@
                                             "documentId": {
                                               "type": "string"
                                             },
-                                            "transactionId": {
-                                              "type": "string"
-                                            },
                                             "gym_membership": {
                                               "type": "object",
                                               "properties": {
@@ -65180,15 +64979,6 @@
                                                 }
                                               }
                                             },
-                                            "transactionType": {
-                                              "type": "string",
-                                              "enum": [
-                                                "charge",
-                                                "refund",
-                                                "adjustment",
-                                                "settlement"
-                                              ]
-                                            },
                                             "commissionMode": {
                                               "type": "string",
                                               "enum": [
@@ -65205,10 +64995,6 @@
                                               "type": "number",
                                               "format": "float"
                                             },
-                                            "gatewayFee": {
-                                              "type": "number",
-                                              "format": "float"
-                                            },
                                             "gymPayout": {
                                               "type": "number",
                                               "format": "float"
@@ -65219,30 +65005,13 @@
                                             "promotionApplied": {
                                               "type": "boolean"
                                             },
-                                            "promotionSequence": {
-                                              "type": "integer"
-                                            },
                                             "transactionStatus": {
                                               "type": "string",
                                               "enum": [
                                                 "pending",
                                                 "paid",
-                                                "failed",
-                                                "refunded"
+                                                "failed"
                                               ]
-                                            },
-                                            "providerPaymentId": {
-                                              "type": "string"
-                                            },
-                                            "providerTransactionId": {
-                                              "type": "string"
-                                            },
-                                            "idempotencyKey": {
-                                              "type": "string"
-                                            },
-                                            "settledAt": {
-                                              "type": "string",
-                                              "format": "date-time"
                                             },
                                             "notes": {
                                               "type": "string"
@@ -72365,9 +72134,6 @@
                                             "documentId": {
                                               "type": "string"
                                             },
-                                            "transactionId": {
-                                              "type": "string"
-                                            },
                                             "gym_membership": {
                                               "type": "object",
                                               "properties": {
@@ -72422,15 +72188,6 @@
                                                 }
                                               }
                                             },
-                                            "transactionType": {
-                                              "type": "string",
-                                              "enum": [
-                                                "charge",
-                                                "refund",
-                                                "adjustment",
-                                                "settlement"
-                                              ]
-                                            },
                                             "commissionMode": {
                                               "type": "string",
                                               "enum": [
@@ -72447,10 +72204,6 @@
                                               "type": "number",
                                               "format": "float"
                                             },
-                                            "gatewayFee": {
-                                              "type": "number",
-                                              "format": "float"
-                                            },
                                             "gymPayout": {
                                               "type": "number",
                                               "format": "float"
@@ -72461,30 +72214,13 @@
                                             "promotionApplied": {
                                               "type": "boolean"
                                             },
-                                            "promotionSequence": {
-                                              "type": "integer"
-                                            },
                                             "transactionStatus": {
                                               "type": "string",
                                               "enum": [
                                                 "pending",
                                                 "paid",
-                                                "failed",
-                                                "refunded"
+                                                "failed"
                                               ]
-                                            },
-                                            "providerPaymentId": {
-                                              "type": "string"
-                                            },
-                                            "providerTransactionId": {
-                                              "type": "string"
-                                            },
-                                            "idempotencyKey": {
-                                              "type": "string"
-                                            },
-                                            "settledAt": {
-                                              "type": "string",
-                                              "format": "date-time"
                                             },
                                             "notes": {
                                               "type": "string"
@@ -79605,9 +79341,6 @@
                                             "documentId": {
                                               "type": "string"
                                             },
-                                            "transactionId": {
-                                              "type": "string"
-                                            },
                                             "gym_membership": {
                                               "type": "object",
                                               "properties": {
@@ -79662,15 +79395,6 @@
                                                 }
                                               }
                                             },
-                                            "transactionType": {
-                                              "type": "string",
-                                              "enum": [
-                                                "charge",
-                                                "refund",
-                                                "adjustment",
-                                                "settlement"
-                                              ]
-                                            },
                                             "commissionMode": {
                                               "type": "string",
                                               "enum": [
@@ -79687,10 +79411,6 @@
                                               "type": "number",
                                               "format": "float"
                                             },
-                                            "gatewayFee": {
-                                              "type": "number",
-                                              "format": "float"
-                                            },
                                             "gymPayout": {
                                               "type": "number",
                                               "format": "float"
@@ -79701,30 +79421,13 @@
                                             "promotionApplied": {
                                               "type": "boolean"
                                             },
-                                            "promotionSequence": {
-                                              "type": "integer"
-                                            },
                                             "transactionStatus": {
                                               "type": "string",
                                               "enum": [
                                                 "pending",
                                                 "paid",
-                                                "failed",
-                                                "refunded"
+                                                "failed"
                                               ]
-                                            },
-                                            "providerPaymentId": {
-                                              "type": "string"
-                                            },
-                                            "providerTransactionId": {
-                                              "type": "string"
-                                            },
-                                            "idempotencyKey": {
-                                              "type": "string"
-                                            },
-                                            "settledAt": {
-                                              "type": "string",
-                                              "format": "date-time"
                                             },
                                             "notes": {
                                               "type": "string"
@@ -86853,9 +86556,6 @@
                                               "documentId": {
                                                 "type": "string"
                                               },
-                                              "transactionId": {
-                                                "type": "string"
-                                              },
                                               "gym_membership": {
                                                 "type": "object",
                                                 "properties": {
@@ -86910,15 +86610,6 @@
                                                   }
                                                 }
                                               },
-                                              "transactionType": {
-                                                "type": "string",
-                                                "enum": [
-                                                  "charge",
-                                                  "refund",
-                                                  "adjustment",
-                                                  "settlement"
-                                                ]
-                                              },
                                               "commissionMode": {
                                                 "type": "string",
                                                 "enum": [
@@ -86935,10 +86626,6 @@
                                                 "type": "number",
                                                 "format": "float"
                                               },
-                                              "gatewayFee": {
-                                                "type": "number",
-                                                "format": "float"
-                                              },
                                               "gymPayout": {
                                                 "type": "number",
                                                 "format": "float"
@@ -86949,30 +86636,13 @@
                                               "promotionApplied": {
                                                 "type": "boolean"
                                               },
-                                              "promotionSequence": {
-                                                "type": "integer"
-                                              },
                                               "transactionStatus": {
                                                 "type": "string",
                                                 "enum": [
                                                   "pending",
                                                   "paid",
-                                                  "failed",
-                                                  "refunded"
+                                                  "failed"
                                                 ]
-                                              },
-                                              "providerPaymentId": {
-                                                "type": "string"
-                                              },
-                                              "providerTransactionId": {
-                                                "type": "string"
-                                              },
-                                              "idempotencyKey": {
-                                                "type": "string"
-                                              },
-                                              "settledAt": {
-                                                "type": "string",
-                                                "format": "date-time"
                                               },
                                               "notes": {
                                                 "type": "string"
@@ -89965,9 +89635,6 @@
           "data": {
             "type": "object",
             "properties": {
-              "transactionId": {
-                "type": "string"
-              },
               "gym_membership": {
                 "oneOf": [
                   {
@@ -90001,15 +89668,6 @@
                 ],
                 "example": "string or id"
               },
-              "transactionType": {
-                "type": "string",
-                "enum": [
-                  "charge",
-                  "refund",
-                  "adjustment",
-                  "settlement"
-                ]
-              },
               "commissionMode": {
                 "type": "string",
                 "enum": [
@@ -90026,10 +89684,6 @@
                 "type": "number",
                 "format": "float"
               },
-              "gatewayFee": {
-                "type": "number",
-                "format": "float"
-              },
               "gymPayout": {
                 "type": "number",
                 "format": "float"
@@ -90040,30 +89694,13 @@
               "promotionApplied": {
                 "type": "boolean"
               },
-              "promotionSequence": {
-                "type": "integer"
-              },
               "transactionStatus": {
                 "type": "string",
                 "enum": [
                   "pending",
                   "paid",
-                  "failed",
-                  "refunded"
+                  "failed"
                 ]
-              },
-              "providerPaymentId": {
-                "type": "string"
-              },
-              "providerTransactionId": {
-                "type": "string"
-              },
-              "idempotencyKey": {
-                "type": "string"
-              },
-              "settledAt": {
-                "type": "string",
-                "format": "date-time"
               },
               "notes": {
                 "type": "string"
@@ -90138,9 +89775,6 @@
             ]
           },
           "documentId": {
-            "type": "string"
-          },
-          "transactionId": {
             "type": "string"
           },
           "gym_membership": {
@@ -95755,9 +95389,6 @@
                                             "documentId": {
                                               "type": "string"
                                             },
-                                            "transactionId": {
-                                              "type": "string"
-                                            },
                                             "gym_membership": {
                                               "type": "object",
                                               "properties": {
@@ -95812,15 +95443,6 @@
                                                 }
                                               }
                                             },
-                                            "transactionType": {
-                                              "type": "string",
-                                              "enum": [
-                                                "charge",
-                                                "refund",
-                                                "adjustment",
-                                                "settlement"
-                                              ]
-                                            },
                                             "commissionMode": {
                                               "type": "string",
                                               "enum": [
@@ -95837,10 +95459,6 @@
                                               "type": "number",
                                               "format": "float"
                                             },
-                                            "gatewayFee": {
-                                              "type": "number",
-                                              "format": "float"
-                                            },
                                             "gymPayout": {
                                               "type": "number",
                                               "format": "float"
@@ -95851,30 +95469,13 @@
                                             "promotionApplied": {
                                               "type": "boolean"
                                             },
-                                            "promotionSequence": {
-                                              "type": "integer"
-                                            },
                                             "transactionStatus": {
                                               "type": "string",
                                               "enum": [
                                                 "pending",
                                                 "paid",
-                                                "failed",
-                                                "refunded"
+                                                "failed"
                                               ]
-                                            },
-                                            "providerPaymentId": {
-                                              "type": "string"
-                                            },
-                                            "providerTransactionId": {
-                                              "type": "string"
-                                            },
-                                            "idempotencyKey": {
-                                              "type": "string"
-                                            },
-                                            "settledAt": {
-                                              "type": "string",
-                                              "format": "date-time"
                                             },
                                             "notes": {
                                               "type": "string"
@@ -97018,15 +96619,6 @@
               }
             }
           },
-          "transactionType": {
-            "type": "string",
-            "enum": [
-              "charge",
-              "refund",
-              "adjustment",
-              "settlement"
-            ]
-          },
           "commissionMode": {
             "type": "string",
             "enum": [
@@ -97043,10 +96635,6 @@
             "type": "number",
             "format": "float"
           },
-          "gatewayFee": {
-            "type": "number",
-            "format": "float"
-          },
           "gymPayout": {
             "type": "number",
             "format": "float"
@@ -97057,30 +96645,13 @@
           "promotionApplied": {
             "type": "boolean"
           },
-          "promotionSequence": {
-            "type": "integer"
-          },
           "transactionStatus": {
             "type": "string",
             "enum": [
               "pending",
               "paid",
-              "failed",
-              "refunded"
+              "failed"
             ]
-          },
-          "providerPaymentId": {
-            "type": "string"
-          },
-          "providerTransactionId": {
-            "type": "string"
-          },
-          "idempotencyKey": {
-            "type": "string"
-          },
-          "settledAt": {
-            "type": "string",
-            "format": "date-time"
           },
           "notes": {
             "type": "string"
@@ -102595,9 +102166,6 @@
                                                         "documentId": {
                                                           "type": "string"
                                                         },
-                                                        "transactionId": {
-                                                          "type": "string"
-                                                        },
                                                         "gym_membership": {
                                                           "type": "object",
                                                           "properties": {
@@ -102789,15 +102357,6 @@
                                                             }
                                                           }
                                                         },
-                                                        "transactionType": {
-                                                          "type": "string",
-                                                          "enum": [
-                                                            "charge",
-                                                            "refund",
-                                                            "adjustment",
-                                                            "settlement"
-                                                          ]
-                                                        },
                                                         "commissionMode": {
                                                           "type": "string",
                                                           "enum": [
@@ -102814,10 +102373,6 @@
                                                           "type": "number",
                                                           "format": "float"
                                                         },
-                                                        "gatewayFee": {
-                                                          "type": "number",
-                                                          "format": "float"
-                                                        },
                                                         "gymPayout": {
                                                           "type": "number",
                                                           "format": "float"
@@ -102828,30 +102383,13 @@
                                                         "promotionApplied": {
                                                           "type": "boolean"
                                                         },
-                                                        "promotionSequence": {
-                                                          "type": "integer"
-                                                        },
                                                         "transactionStatus": {
                                                           "type": "string",
                                                           "enum": [
                                                             "pending",
                                                             "paid",
-                                                            "failed",
-                                                            "refunded"
+                                                            "failed"
                                                           ]
-                                                        },
-                                                        "providerPaymentId": {
-                                                          "type": "string"
-                                                        },
-                                                        "providerTransactionId": {
-                                                          "type": "string"
-                                                        },
-                                                        "idempotencyKey": {
-                                                          "type": "string"
-                                                        },
-                                                        "settledAt": {
-                                                          "type": "string",
-                                                          "format": "date-time"
                                                         },
                                                         "notes": {
                                                           "type": "string"
@@ -109166,9 +108704,6 @@
                                             "documentId": {
                                               "type": "string"
                                             },
-                                            "transactionId": {
-                                              "type": "string"
-                                            },
                                             "gym_membership": {
                                               "type": "object",
                                               "properties": {
@@ -109223,15 +108758,6 @@
                                                 }
                                               }
                                             },
-                                            "transactionType": {
-                                              "type": "string",
-                                              "enum": [
-                                                "charge",
-                                                "refund",
-                                                "adjustment",
-                                                "settlement"
-                                              ]
-                                            },
                                             "commissionMode": {
                                               "type": "string",
                                               "enum": [
@@ -109248,10 +108774,6 @@
                                               "type": "number",
                                               "format": "float"
                                             },
-                                            "gatewayFee": {
-                                              "type": "number",
-                                              "format": "float"
-                                            },
                                             "gymPayout": {
                                               "type": "number",
                                               "format": "float"
@@ -109262,30 +108784,13 @@
                                             "promotionApplied": {
                                               "type": "boolean"
                                             },
-                                            "promotionSequence": {
-                                              "type": "integer"
-                                            },
                                             "transactionStatus": {
                                               "type": "string",
                                               "enum": [
                                                 "pending",
                                                 "paid",
-                                                "failed",
-                                                "refunded"
+                                                "failed"
                                               ]
-                                            },
-                                            "providerPaymentId": {
-                                              "type": "string"
-                                            },
-                                            "providerTransactionId": {
-                                              "type": "string"
-                                            },
-                                            "idempotencyKey": {
-                                              "type": "string"
-                                            },
-                                            "settledAt": {
-                                              "type": "string",
-                                              "format": "date-time"
                                             },
                                             "notes": {
                                               "type": "string"
@@ -115987,9 +115492,6 @@
                                                 "documentId": {
                                                   "type": "string"
                                                 },
-                                                "transactionId": {
-                                                  "type": "string"
-                                                },
                                                 "gym_membership": {
                                                   "type": "object",
                                                   "properties": {
@@ -116181,15 +115683,6 @@
                                                     }
                                                   }
                                                 },
-                                                "transactionType": {
-                                                  "type": "string",
-                                                  "enum": [
-                                                    "charge",
-                                                    "refund",
-                                                    "adjustment",
-                                                    "settlement"
-                                                  ]
-                                                },
                                                 "commissionMode": {
                                                   "type": "string",
                                                   "enum": [
@@ -116206,10 +115699,6 @@
                                                   "type": "number",
                                                   "format": "float"
                                                 },
-                                                "gatewayFee": {
-                                                  "type": "number",
-                                                  "format": "float"
-                                                },
                                                 "gymPayout": {
                                                   "type": "number",
                                                   "format": "float"
@@ -116220,30 +115709,13 @@
                                                 "promotionApplied": {
                                                   "type": "boolean"
                                                 },
-                                                "promotionSequence": {
-                                                  "type": "integer"
-                                                },
                                                 "transactionStatus": {
                                                   "type": "string",
                                                   "enum": [
                                                     "pending",
                                                     "paid",
-                                                    "failed",
-                                                    "refunded"
+                                                    "failed"
                                                   ]
-                                                },
-                                                "providerPaymentId": {
-                                                  "type": "string"
-                                                },
-                                                "providerTransactionId": {
-                                                  "type": "string"
-                                                },
-                                                "idempotencyKey": {
-                                                  "type": "string"
-                                                },
-                                                "settledAt": {
-                                                  "type": "string",
-                                                  "format": "date-time"
                                                 },
                                                 "notes": {
                                                   "type": "string"
@@ -125093,9 +124565,6 @@
                                                   "documentId": {
                                                     "type": "string"
                                                   },
-                                                  "transactionId": {
-                                                    "type": "string"
-                                                  },
                                                   "gym_membership": {
                                                     "type": "object",
                                                     "properties": {
@@ -125287,15 +124756,6 @@
                                                       }
                                                     }
                                                   },
-                                                  "transactionType": {
-                                                    "type": "string",
-                                                    "enum": [
-                                                      "charge",
-                                                      "refund",
-                                                      "adjustment",
-                                                      "settlement"
-                                                    ]
-                                                  },
                                                   "commissionMode": {
                                                     "type": "string",
                                                     "enum": [
@@ -125312,10 +124772,6 @@
                                                     "type": "number",
                                                     "format": "float"
                                                   },
-                                                  "gatewayFee": {
-                                                    "type": "number",
-                                                    "format": "float"
-                                                  },
                                                   "gymPayout": {
                                                     "type": "number",
                                                     "format": "float"
@@ -125326,30 +124782,13 @@
                                                   "promotionApplied": {
                                                     "type": "boolean"
                                                   },
-                                                  "promotionSequence": {
-                                                    "type": "integer"
-                                                  },
                                                   "transactionStatus": {
                                                     "type": "string",
                                                     "enum": [
                                                       "pending",
                                                       "paid",
-                                                      "failed",
-                                                      "refunded"
+                                                      "failed"
                                                     ]
-                                                  },
-                                                  "providerPaymentId": {
-                                                    "type": "string"
-                                                  },
-                                                  "providerTransactionId": {
-                                                    "type": "string"
-                                                  },
-                                                  "idempotencyKey": {
-                                                    "type": "string"
-                                                  },
-                                                  "settledAt": {
-                                                    "type": "string",
-                                                    "format": "date-time"
                                                   },
                                                   "notes": {
                                                     "type": "string"
@@ -130609,9 +130048,6 @@
                                       "documentId": {
                                         "type": "string"
                                       },
-                                      "transactionId": {
-                                        "type": "string"
-                                      },
                                       "gym_membership": {
                                         "type": "object",
                                         "properties": {
@@ -130803,15 +130239,6 @@
                                           }
                                         }
                                       },
-                                      "transactionType": {
-                                        "type": "string",
-                                        "enum": [
-                                          "charge",
-                                          "refund",
-                                          "adjustment",
-                                          "settlement"
-                                        ]
-                                      },
                                       "commissionMode": {
                                         "type": "string",
                                         "enum": [
@@ -130828,10 +130255,6 @@
                                         "type": "number",
                                         "format": "float"
                                       },
-                                      "gatewayFee": {
-                                        "type": "number",
-                                        "format": "float"
-                                      },
                                       "gymPayout": {
                                         "type": "number",
                                         "format": "float"
@@ -130842,30 +130265,13 @@
                                       "promotionApplied": {
                                         "type": "boolean"
                                       },
-                                      "promotionSequence": {
-                                        "type": "integer"
-                                      },
                                       "transactionStatus": {
                                         "type": "string",
                                         "enum": [
                                           "pending",
                                           "paid",
-                                          "failed",
-                                          "refunded"
+                                          "failed"
                                         ]
-                                      },
-                                      "providerPaymentId": {
-                                        "type": "string"
-                                      },
-                                      "providerTransactionId": {
-                                        "type": "string"
-                                      },
-                                      "idempotencyKey": {
-                                        "type": "string"
-                                      },
-                                      "settledAt": {
-                                        "type": "string",
-                                        "format": "date-time"
                                       },
                                       "notes": {
                                         "type": "string"
@@ -137774,9 +137180,6 @@
                                             "documentId": {
                                               "type": "string"
                                             },
-                                            "transactionId": {
-                                              "type": "string"
-                                            },
                                             "gym_membership": {
                                               "type": "object",
                                               "properties": {
@@ -137831,15 +137234,6 @@
                                                 }
                                               }
                                             },
-                                            "transactionType": {
-                                              "type": "string",
-                                              "enum": [
-                                                "charge",
-                                                "refund",
-                                                "adjustment",
-                                                "settlement"
-                                              ]
-                                            },
                                             "commissionMode": {
                                               "type": "string",
                                               "enum": [
@@ -137856,10 +137250,6 @@
                                               "type": "number",
                                               "format": "float"
                                             },
-                                            "gatewayFee": {
-                                              "type": "number",
-                                              "format": "float"
-                                            },
                                             "gymPayout": {
                                               "type": "number",
                                               "format": "float"
@@ -137870,30 +137260,13 @@
                                             "promotionApplied": {
                                               "type": "boolean"
                                             },
-                                            "promotionSequence": {
-                                              "type": "integer"
-                                            },
                                             "transactionStatus": {
                                               "type": "string",
                                               "enum": [
                                                 "pending",
                                                 "paid",
-                                                "failed",
-                                                "refunded"
+                                                "failed"
                                               ]
-                                            },
-                                            "providerPaymentId": {
-                                              "type": "string"
-                                            },
-                                            "providerTransactionId": {
-                                              "type": "string"
-                                            },
-                                            "idempotencyKey": {
-                                              "type": "string"
-                                            },
-                                            "settledAt": {
-                                              "type": "string",
-                                              "format": "date-time"
                                             },
                                             "notes": {
                                               "type": "string"
@@ -144836,9 +144209,6 @@
                                             "documentId": {
                                               "type": "string"
                                             },
-                                            "transactionId": {
-                                              "type": "string"
-                                            },
                                             "gym_membership": {
                                               "type": "object",
                                               "properties": {
@@ -144893,15 +144263,6 @@
                                                 }
                                               }
                                             },
-                                            "transactionType": {
-                                              "type": "string",
-                                              "enum": [
-                                                "charge",
-                                                "refund",
-                                                "adjustment",
-                                                "settlement"
-                                              ]
-                                            },
                                             "commissionMode": {
                                               "type": "string",
                                               "enum": [
@@ -144918,10 +144279,6 @@
                                               "type": "number",
                                               "format": "float"
                                             },
-                                            "gatewayFee": {
-                                              "type": "number",
-                                              "format": "float"
-                                            },
                                             "gymPayout": {
                                               "type": "number",
                                               "format": "float"
@@ -144932,30 +144289,13 @@
                                             "promotionApplied": {
                                               "type": "boolean"
                                             },
-                                            "promotionSequence": {
-                                              "type": "integer"
-                                            },
                                             "transactionStatus": {
                                               "type": "string",
                                               "enum": [
                                                 "pending",
                                                 "paid",
-                                                "failed",
-                                                "refunded"
+                                                "failed"
                                               ]
-                                            },
-                                            "providerPaymentId": {
-                                              "type": "string"
-                                            },
-                                            "providerTransactionId": {
-                                              "type": "string"
-                                            },
-                                            "idempotencyKey": {
-                                              "type": "string"
-                                            },
-                                            "settledAt": {
-                                              "type": "string",
-                                              "format": "date-time"
                                             },
                                             "notes": {
                                               "type": "string"
@@ -153570,9 +152910,6 @@
                                                   "documentId": {
                                                     "type": "string"
                                                   },
-                                                  "transactionId": {
-                                                    "type": "string"
-                                                  },
                                                   "gym_membership": {
                                                     "type": "object",
                                                     "properties": {
@@ -153764,15 +153101,6 @@
                                                       }
                                                     }
                                                   },
-                                                  "transactionType": {
-                                                    "type": "string",
-                                                    "enum": [
-                                                      "charge",
-                                                      "refund",
-                                                      "adjustment",
-                                                      "settlement"
-                                                    ]
-                                                  },
                                                   "commissionMode": {
                                                     "type": "string",
                                                     "enum": [
@@ -153789,10 +153117,6 @@
                                                     "type": "number",
                                                     "format": "float"
                                                   },
-                                                  "gatewayFee": {
-                                                    "type": "number",
-                                                    "format": "float"
-                                                  },
                                                   "gymPayout": {
                                                     "type": "number",
                                                     "format": "float"
@@ -153803,30 +153127,13 @@
                                                   "promotionApplied": {
                                                     "type": "boolean"
                                                   },
-                                                  "promotionSequence": {
-                                                    "type": "integer"
-                                                  },
                                                   "transactionStatus": {
                                                     "type": "string",
                                                     "enum": [
                                                       "pending",
                                                       "paid",
-                                                      "failed",
-                                                      "refunded"
+                                                      "failed"
                                                     ]
-                                                  },
-                                                  "providerPaymentId": {
-                                                    "type": "string"
-                                                  },
-                                                  "providerTransactionId": {
-                                                    "type": "string"
-                                                  },
-                                                  "idempotencyKey": {
-                                                    "type": "string"
-                                                  },
-                                                  "settledAt": {
-                                                    "type": "string",
-                                                    "format": "date-time"
                                                   },
                                                   "notes": {
                                                     "type": "string"
@@ -160786,9 +160093,6 @@
                                                   "documentId": {
                                                     "type": "string"
                                                   },
-                                                  "transactionId": {
-                                                    "type": "string"
-                                                  },
                                                   "gym_membership": {
                                                     "type": "object",
                                                     "properties": {
@@ -160980,15 +160284,6 @@
                                                       }
                                                     }
                                                   },
-                                                  "transactionType": {
-                                                    "type": "string",
-                                                    "enum": [
-                                                      "charge",
-                                                      "refund",
-                                                      "adjustment",
-                                                      "settlement"
-                                                    ]
-                                                  },
                                                   "commissionMode": {
                                                     "type": "string",
                                                     "enum": [
@@ -161005,10 +160300,6 @@
                                                     "type": "number",
                                                     "format": "float"
                                                   },
-                                                  "gatewayFee": {
-                                                    "type": "number",
-                                                    "format": "float"
-                                                  },
                                                   "gymPayout": {
                                                     "type": "number",
                                                     "format": "float"
@@ -161019,30 +160310,13 @@
                                                   "promotionApplied": {
                                                     "type": "boolean"
                                                   },
-                                                  "promotionSequence": {
-                                                    "type": "integer"
-                                                  },
                                                   "transactionStatus": {
                                                     "type": "string",
                                                     "enum": [
                                                       "pending",
                                                       "paid",
-                                                      "failed",
-                                                      "refunded"
+                                                      "failed"
                                                     ]
-                                                  },
-                                                  "providerPaymentId": {
-                                                    "type": "string"
-                                                  },
-                                                  "providerTransactionId": {
-                                                    "type": "string"
-                                                  },
-                                                  "idempotencyKey": {
-                                                    "type": "string"
-                                                  },
-                                                  "settledAt": {
-                                                    "type": "string",
-                                                    "format": "date-time"
                                                   },
                                                   "notes": {
                                                     "type": "string"
@@ -165999,9 +165273,6 @@
                                                       "documentId": {
                                                         "type": "string"
                                                       },
-                                                      "transactionId": {
-                                                        "type": "string"
-                                                      },
                                                       "gym_membership": {
                                                         "type": "object",
                                                         "properties": {
@@ -166193,15 +165464,6 @@
                                                           }
                                                         }
                                                       },
-                                                      "transactionType": {
-                                                        "type": "string",
-                                                        "enum": [
-                                                          "charge",
-                                                          "refund",
-                                                          "adjustment",
-                                                          "settlement"
-                                                        ]
-                                                      },
                                                       "commissionMode": {
                                                         "type": "string",
                                                         "enum": [
@@ -166218,10 +165480,6 @@
                                                         "type": "number",
                                                         "format": "float"
                                                       },
-                                                      "gatewayFee": {
-                                                        "type": "number",
-                                                        "format": "float"
-                                                      },
                                                       "gymPayout": {
                                                         "type": "number",
                                                         "format": "float"
@@ -166232,30 +165490,13 @@
                                                       "promotionApplied": {
                                                         "type": "boolean"
                                                       },
-                                                      "promotionSequence": {
-                                                        "type": "integer"
-                                                      },
                                                       "transactionStatus": {
                                                         "type": "string",
                                                         "enum": [
                                                           "pending",
                                                           "paid",
-                                                          "failed",
-                                                          "refunded"
+                                                          "failed"
                                                         ]
-                                                      },
-                                                      "providerPaymentId": {
-                                                        "type": "string"
-                                                      },
-                                                      "providerTransactionId": {
-                                                        "type": "string"
-                                                      },
-                                                      "idempotencyKey": {
-                                                        "type": "string"
-                                                      },
-                                                      "settledAt": {
-                                                        "type": "string",
-                                                        "format": "date-time"
                                                       },
                                                       "notes": {
                                                         "type": "string"
@@ -173075,9 +172316,6 @@
                                                   "documentId": {
                                                     "type": "string"
                                                   },
-                                                  "transactionId": {
-                                                    "type": "string"
-                                                  },
                                                   "gym_membership": {
                                                     "type": "object",
                                                     "properties": {
@@ -173269,15 +172507,6 @@
                                                       }
                                                     }
                                                   },
-                                                  "transactionType": {
-                                                    "type": "string",
-                                                    "enum": [
-                                                      "charge",
-                                                      "refund",
-                                                      "adjustment",
-                                                      "settlement"
-                                                    ]
-                                                  },
                                                   "commissionMode": {
                                                     "type": "string",
                                                     "enum": [
@@ -173294,10 +172523,6 @@
                                                     "type": "number",
                                                     "format": "float"
                                                   },
-                                                  "gatewayFee": {
-                                                    "type": "number",
-                                                    "format": "float"
-                                                  },
                                                   "gymPayout": {
                                                     "type": "number",
                                                     "format": "float"
@@ -173308,30 +172533,13 @@
                                                   "promotionApplied": {
                                                     "type": "boolean"
                                                   },
-                                                  "promotionSequence": {
-                                                    "type": "integer"
-                                                  },
                                                   "transactionStatus": {
                                                     "type": "string",
                                                     "enum": [
                                                       "pending",
                                                       "paid",
-                                                      "failed",
-                                                      "refunded"
+                                                      "failed"
                                                     ]
-                                                  },
-                                                  "providerPaymentId": {
-                                                    "type": "string"
-                                                  },
-                                                  "providerTransactionId": {
-                                                    "type": "string"
-                                                  },
-                                                  "idempotencyKey": {
-                                                    "type": "string"
-                                                  },
-                                                  "settledAt": {
-                                                    "type": "string",
-                                                    "format": "date-time"
                                                   },
                                                   "notes": {
                                                     "type": "string"
@@ -182844,9 +182052,6 @@
                                                         "documentId": {
                                                           "type": "string"
                                                         },
-                                                        "transactionId": {
-                                                          "type": "string"
-                                                        },
                                                         "gym_membership": {
                                                           "type": "object",
                                                           "properties": {
@@ -183038,15 +182243,6 @@
                                                             }
                                                           }
                                                         },
-                                                        "transactionType": {
-                                                          "type": "string",
-                                                          "enum": [
-                                                            "charge",
-                                                            "refund",
-                                                            "adjustment",
-                                                            "settlement"
-                                                          ]
-                                                        },
                                                         "commissionMode": {
                                                           "type": "string",
                                                           "enum": [
@@ -183063,10 +182259,6 @@
                                                           "type": "number",
                                                           "format": "float"
                                                         },
-                                                        "gatewayFee": {
-                                                          "type": "number",
-                                                          "format": "float"
-                                                        },
                                                         "gymPayout": {
                                                           "type": "number",
                                                           "format": "float"
@@ -183077,30 +182269,13 @@
                                                         "promotionApplied": {
                                                           "type": "boolean"
                                                         },
-                                                        "promotionSequence": {
-                                                          "type": "integer"
-                                                        },
                                                         "transactionStatus": {
                                                           "type": "string",
                                                           "enum": [
                                                             "pending",
                                                             "paid",
-                                                            "failed",
-                                                            "refunded"
+                                                            "failed"
                                                           ]
-                                                        },
-                                                        "providerPaymentId": {
-                                                          "type": "string"
-                                                        },
-                                                        "providerTransactionId": {
-                                                          "type": "string"
-                                                        },
-                                                        "idempotencyKey": {
-                                                          "type": "string"
-                                                        },
-                                                        "settledAt": {
-                                                          "type": "string",
-                                                          "format": "date-time"
                                                         },
                                                         "notes": {
                                                           "type": "string"
@@ -190188,9 +189363,6 @@
                                                   "documentId": {
                                                     "type": "string"
                                                   },
-                                                  "transactionId": {
-                                                    "type": "string"
-                                                  },
                                                   "gym_membership": {
                                                     "type": "object",
                                                     "properties": {
@@ -190382,15 +189554,6 @@
                                                       }
                                                     }
                                                   },
-                                                  "transactionType": {
-                                                    "type": "string",
-                                                    "enum": [
-                                                      "charge",
-                                                      "refund",
-                                                      "adjustment",
-                                                      "settlement"
-                                                    ]
-                                                  },
                                                   "commissionMode": {
                                                     "type": "string",
                                                     "enum": [
@@ -190407,10 +189570,6 @@
                                                     "type": "number",
                                                     "format": "float"
                                                   },
-                                                  "gatewayFee": {
-                                                    "type": "number",
-                                                    "format": "float"
-                                                  },
                                                   "gymPayout": {
                                                     "type": "number",
                                                     "format": "float"
@@ -190421,30 +189580,13 @@
                                                   "promotionApplied": {
                                                     "type": "boolean"
                                                   },
-                                                  "promotionSequence": {
-                                                    "type": "integer"
-                                                  },
                                                   "transactionStatus": {
                                                     "type": "string",
                                                     "enum": [
                                                       "pending",
                                                       "paid",
-                                                      "failed",
-                                                      "refunded"
+                                                      "failed"
                                                     ]
-                                                  },
-                                                  "providerPaymentId": {
-                                                    "type": "string"
-                                                  },
-                                                  "providerTransactionId": {
-                                                    "type": "string"
-                                                  },
-                                                  "idempotencyKey": {
-                                                    "type": "string"
-                                                  },
-                                                  "settledAt": {
-                                                    "type": "string",
-                                                    "format": "date-time"
                                                   },
                                                   "notes": {
                                                     "type": "string"
@@ -197561,9 +196703,6 @@
                                                         "documentId": {
                                                           "type": "string"
                                                         },
-                                                        "transactionId": {
-                                                          "type": "string"
-                                                        },
                                                         "gym_membership": {
                                                           "type": "object",
                                                           "properties": {
@@ -197755,15 +196894,6 @@
                                                             }
                                                           }
                                                         },
-                                                        "transactionType": {
-                                                          "type": "string",
-                                                          "enum": [
-                                                            "charge",
-                                                            "refund",
-                                                            "adjustment",
-                                                            "settlement"
-                                                          ]
-                                                        },
                                                         "commissionMode": {
                                                           "type": "string",
                                                           "enum": [
@@ -197780,10 +196910,6 @@
                                                           "type": "number",
                                                           "format": "float"
                                                         },
-                                                        "gatewayFee": {
-                                                          "type": "number",
-                                                          "format": "float"
-                                                        },
                                                         "gymPayout": {
                                                           "type": "number",
                                                           "format": "float"
@@ -197794,30 +196920,13 @@
                                                         "promotionApplied": {
                                                           "type": "boolean"
                                                         },
-                                                        "promotionSequence": {
-                                                          "type": "integer"
-                                                        },
                                                         "transactionStatus": {
                                                           "type": "string",
                                                           "enum": [
                                                             "pending",
                                                             "paid",
-                                                            "failed",
-                                                            "refunded"
+                                                            "failed"
                                                           ]
-                                                        },
-                                                        "providerPaymentId": {
-                                                          "type": "string"
-                                                        },
-                                                        "providerTransactionId": {
-                                                          "type": "string"
-                                                        },
-                                                        "idempotencyKey": {
-                                                          "type": "string"
-                                                        },
-                                                        "settledAt": {
-                                                          "type": "string",
-                                                          "format": "date-time"
                                                         },
                                                         "notes": {
                                                           "type": "string"
@@ -205194,9 +204303,6 @@
                                                         "documentId": {
                                                           "type": "string"
                                                         },
-                                                        "transactionId": {
-                                                          "type": "string"
-                                                        },
                                                         "gym_membership": {
                                                           "type": "object",
                                                           "properties": {
@@ -205388,15 +204494,6 @@
                                                             }
                                                           }
                                                         },
-                                                        "transactionType": {
-                                                          "type": "string",
-                                                          "enum": [
-                                                            "charge",
-                                                            "refund",
-                                                            "adjustment",
-                                                            "settlement"
-                                                          ]
-                                                        },
                                                         "commissionMode": {
                                                           "type": "string",
                                                           "enum": [
@@ -205413,10 +204510,6 @@
                                                           "type": "number",
                                                           "format": "float"
                                                         },
-                                                        "gatewayFee": {
-                                                          "type": "number",
-                                                          "format": "float"
-                                                        },
                                                         "gymPayout": {
                                                           "type": "number",
                                                           "format": "float"
@@ -205427,30 +204520,13 @@
                                                         "promotionApplied": {
                                                           "type": "boolean"
                                                         },
-                                                        "promotionSequence": {
-                                                          "type": "integer"
-                                                        },
                                                         "transactionStatus": {
                                                           "type": "string",
                                                           "enum": [
                                                             "pending",
                                                             "paid",
-                                                            "failed",
-                                                            "refunded"
+                                                            "failed"
                                                           ]
-                                                        },
-                                                        "providerPaymentId": {
-                                                          "type": "string"
-                                                        },
-                                                        "providerTransactionId": {
-                                                          "type": "string"
-                                                        },
-                                                        "idempotencyKey": {
-                                                          "type": "string"
-                                                        },
-                                                        "settledAt": {
-                                                          "type": "string",
-                                                          "format": "date-time"
                                                         },
                                                         "notes": {
                                                           "type": "string"

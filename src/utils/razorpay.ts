@@ -197,7 +197,6 @@ export async function createMembershipOrder(
 
     const now = new Date();
     let selectedPromotion: any = null;
-    let promotionSequence = 0;
 
     for (const promotion of promotions) {
       if (promotion.startDate && new Date(promotion.startDate) > now) {
@@ -221,12 +220,6 @@ export async function createMembershipOrder(
 
       if (reserved) {
         selectedPromotion = promotion;
-        const refreshed = await (strapi.documents(GYM_PROMOTION_UID) as any)
-          .findOne({ documentId: promotion.documentId });
-
-        promotionSequence =
-          Number(refreshed?.usedUserCount ?? 0) +
-          Number(refreshed?.reservedUserCount ?? 0);
         break;
       }
     }
@@ -251,7 +244,6 @@ export async function createMembershipOrder(
         planPriceDocumentId,
         promotionDocumentId: selectedPromotion?.documentId || "",
         promotionId: selectedPromotion?.id ? String(selectedPromotion.id) : "",
-        promotionSequence: String(promotionSequence),
         commissionMode: finalCommissionMode,
         commissionPaise: String(finalCommissionPaise),
         gymPayoutPaise: String(gymPayoutPaise),
@@ -413,7 +405,6 @@ export async function finalizeGymMembershipPayment(
     const contract = current.gym_contract;
     let selectedPromotion: any = null;
     let promotionApplied = false;
-    let promotionSequence = 0;
 
     if (orderNotes?.promotionId || orderNotes?.promotionDocumentId) {
       const promoId = orderNotes.promotionId;
@@ -424,7 +415,6 @@ export async function finalizeGymMembershipPayment(
 
       if (selectedPromotion) {
         promotionApplied = true;
-        promotionSequence = Number(orderNotes.promotionSequence || 0);
       }
     }
 
@@ -442,11 +432,10 @@ export async function finalizeGymMembershipPayment(
       if (contractPromo) {
         selectedPromotion = contractPromo;
         promotionApplied = true;
-        promotionSequence = Number(contractPromo.used_user_count || 0) + 1;
       }
     }
 
-    // Confirm promotion reservation
+    // Confirm promotion reservation: reduce reserved_user_count and increase used_user_count
     if (promotionApplied && selectedPromotion?.id) {
       const promotionUpdated = await trx("gym_promotions")
         .where({ id: selectedPromotion.id })
@@ -470,7 +459,7 @@ export async function finalizeGymMembershipPayment(
 
     // Calculate commission
     const customerPrice = Number(current.customerPriceSnapshot);
-    let commissionMode = "default";
+    let commissionMode: "default" | "custom" | "promotion" = "default";
     let commissionAmount = 0;
 
     if (promotionApplied) {
@@ -501,7 +490,7 @@ export async function finalizeGymMembershipPayment(
       }
     }
 
-    const gatewayFee = payment.fee ? Number((payment.fee / 100).toFixed(2)) : 0;
+    // gym payout value will be customerprice - commisson amount
     const gymPayout = Number(Math.max(0, customerPrice - commissionAmount).toFixed(2));
     const membershipId = current.membershipId || `MEM-${Date.now()}-${Math.random().toString(36).substring(2, 7).toUpperCase()}`;
 
@@ -519,16 +508,24 @@ export async function finalizeGymMembershipPayment(
       },
     });
 
-    const commissionIdempotencyKey =
-      `gym-commission-${current.documentId}`;
-
+    // Check if commission transaction already exists for this membership
     const existingCommission = await findOneDocument(
       COMMISSION_UID,
-      { idempotencyKey: commissionIdempotencyKey }
+      { gym_membership: { documentId: current.documentId } }
     );
 
     if (!existingCommission && contract?.documentId) {
       const promoDocId = selectedPromotion?.document_id || selectedPromotion?.documentId;
+
+      const durationMap: Record<string, string> = {
+        monthly: "Monthly",
+        six_months: "6 Months",
+        twelve_months: "12 Months",
+      };
+      const durationLabel =
+        durationMap[current.duration] || current.duration || "Gym";
+      const notes = `This commission entry is created for ${durationLabel} membership purchased.`;
+
       await (strapi.documents(COMMISSION_UID) as any).create({
         data: {
           gym_membership: {
@@ -537,27 +534,21 @@ export async function finalizeGymMembershipPayment(
           gym_contract: {
             connect: [{ documentId: contract.documentId }],
           },
-          ...(promoDocId
+          ...(promoDocId && promotionApplied
             ? {
                 gym_promotion: {
                   connect: [{ documentId: promoDocId }],
                 },
               }
             : {}),
-          transactionType: "charge",
           commissionMode,
           customerPrice,
           commissionAmount,
-          gatewayFee,
           gymPayout,
-          currency: current.currency,
+          currency: current.currency || "INR",
           promotionApplied,
-          promotionSequence: promotionSequence || 1,
           transactionStatus: "paid",
-          providerPaymentId: razorpayPaymentId,
-          providerTransactionId: razorpayPaymentId,
-          idempotencyKey: commissionIdempotencyKey,
-          notes: "Membership payment captured through Razorpay.",
+          notes,
         },
       });
     }

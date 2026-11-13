@@ -956,7 +956,6 @@ export interface ApiCommissionTransactionCommissionTransaction
       Schema.Attribute.Private;
     currency: Schema.Attribute.String & Schema.Attribute.DefaultTo<'INR'>;
     customerPrice: Schema.Attribute.Decimal;
-    gatewayFee: Schema.Attribute.Decimal;
     gym_contract: Schema.Attribute.Relation<
       'manyToOne',
       'api::gym-contract.gym-contract'
@@ -970,7 +969,6 @@ export interface ApiCommissionTransactionCommissionTransaction
       'api::gym-promotion.gym-promotion'
     >;
     gymPayout: Schema.Attribute.Decimal;
-    idempotencyKey: Schema.Attribute.String & Schema.Attribute.Unique;
     locale: Schema.Attribute.String & Schema.Attribute.Private;
     localizations: Schema.Attribute.Relation<
       'oneToMany',
@@ -980,17 +978,9 @@ export interface ApiCommissionTransactionCommissionTransaction
     notes: Schema.Attribute.Text;
     promotionApplied: Schema.Attribute.Boolean &
       Schema.Attribute.DefaultTo<false>;
-    promotionSequence: Schema.Attribute.Integer;
-    providerPaymentId: Schema.Attribute.String;
-    providerTransactionId: Schema.Attribute.String;
     publishedAt: Schema.Attribute.DateTime;
-    settledAt: Schema.Attribute.DateTime;
-    transactionId: Schema.Attribute.UID;
     transactionStatus: Schema.Attribute.Enumeration<
-      ['pending', 'paid', 'failed', 'refunded']
-    >;
-    transactionType: Schema.Attribute.Enumeration<
-      ['charge', 'refund', 'adjustment', 'settlement']
+      ['pending', 'paid', 'failed']
     >;
     updatedAt: Schema.Attribute.DateTime;
     updatedBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
