@@ -196,76 +196,55 @@ export default {
         `data:image/png;base64,${styledQR.toString("base64")}`;
 
       /* ============================================
-         FETCH LATEST SUBSCRIPTIONS
+         FETCH LATEST GYM MEMBERSHIP
       ============================================ */
 
-      const [latestLocalSubscription, latestOutdoorSubscription] =
-        await Promise.all([
-          strapi.db
-            .query("api::local-subscription.local-subscription")
-            .findOne({
-              where: {
-                client_detail: client.id,
-              },
-              populate: {
-                local_membership_plan: true,
-              },
-              orderBy: { id: "desc" },
-            }),
+      let latestGymMembership: any = await strapi.db
+        .query("api::gym-membership.gym-membership")
+        .findOne({
+          where: {
+            client_detail: client.id,
+          },
+          orderBy: { id: "desc" },
+        });
 
-          strapi.db
-            .query("api::outdoor-subscription.outdoor-subscription")
-            .findOne({
-              where: {
-                client_detail: client.id,
+      if (
+        !latestGymMembership &&
+        client.documentId &&
+        (strapi as any).documents
+      ) {
+        const docs = await (strapi as any)
+          .documents("api::gym-membership.gym-membership")
+          .findMany({
+            filters: {
+              client_detail: {
+                documentId: client.documentId,
               },
-              populate: {
-                outdoor_membership_plan: true,
-              },
-              orderBy: { id: "desc" },
-            }),
-        ]);
+            },
+            sort: "createdAt:desc",
+            limit: 1,
+          });
+        latestGymMembership = docs?.[0] || null;
+      }
 
-      const formattedLocalSubscription = latestLocalSubscription
+      const formattedGymMembership = latestGymMembership
         ? {
-            startDate: latestLocalSubscription.startDate,
-            endDate: latestLocalSubscription.endDate,
-            membershipType: latestLocalSubscription.membershipType,
-            planName:
-              latestLocalSubscription.local_membership_plan?.planName || null,
-            monthDuration:
-              latestLocalSubscription.local_membership_plan?.monthDuration || null,
-            price:
-              typeof latestLocalSubscription.local_membership_plan?.price === "string"
-                ? parseFloat(latestLocalSubscription.local_membership_plan.price)
-                : latestLocalSubscription.local_membership_plan?.price ?? null,
-            subscriptionStatus: latestLocalSubscription.subscriptionStatus,
-          }
-        : null;
-
-      const formattedOutdoorSubscription = latestOutdoorSubscription
-        ? {
-            membershipType: latestOutdoorSubscription.membershipType,
-            totalVisitsAllowed: latestOutdoorSubscription.totalVisitsAllowed,
-            usedVisits: latestOutdoorSubscription.usedVisits,
-            remainingVisits: latestOutdoorSubscription.remainingVisits,
-            subscriptionStatus: latestOutdoorSubscription.subscriptionStatus,
-            planName:
-              latestOutdoorSubscription.outdoor_membership_plan?.planName || null,
-            price:
-              typeof latestOutdoorSubscription.outdoor_membership_plan?.price === "string"
-                ? parseFloat(latestOutdoorSubscription.outdoor_membership_plan.price)
-                : latestOutdoorSubscription.outdoor_membership_plan?.price ?? null,
+            plan: latestGymMembership.duration ?? null,
+            duration: latestGymMembership.durationMonths ?? null,
+            customerPrice:
+              typeof latestGymMembership.customerPriceSnapshot === "string"
+                ? parseFloat(latestGymMembership.customerPriceSnapshot)
+                : latestGymMembership.customerPriceSnapshot ?? null,
+            membershipStatus: latestGymMembership.membershipStatus ?? null,
+            startDate: latestGymMembership.startDate ?? null,
+            endDate: latestGymMembership.endDate ?? null,
           }
         : null;
 
       ctx.send({
         clientId: client.clientId,
         qrCode,
-        subscription: {
-          local_subscription: formattedLocalSubscription,
-          outdoor_subscription: formattedOutdoorSubscription,
-        },
+        gymMembership: formattedGymMembership,
       });
     } catch (error) {
       console.error("QR generation error:", error);
