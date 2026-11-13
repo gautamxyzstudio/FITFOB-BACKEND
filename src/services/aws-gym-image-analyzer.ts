@@ -13,225 +13,221 @@ export interface DetectedLabelItem {
   confidence: number;
 }
 
-export interface GymPhotoAnalysisResult {
+export interface PhotoAnalysisResult {
   description: string;
-  detailedDescription: string;
-  category: string;
-  confidence: number;
   suggestedTitles: string[];
   detectedLabels: DetectedLabelItem[];
   detectedText?: string[];
-  isGymPhoto: boolean;
-}
-
-interface CategoryDefinition {
-  id: string;
-  title: string;
-  suggestedTitles: string[];
-  baseDescription: string;
-  primaryKeywords: string[];
-  secondaryKeywords: string[];
 }
 
 /**
- * Specific gym zones prioritized over generic scene labels.
- * If any of these score >= 2.5, they take priority over "Main Gym Floor".
+ * Intelligent, generalized title generator for any uploaded image
+ * using AWS Rekognition labels, scene elements, and detected text.
  */
-export const SPECIFIC_GYM_CATEGORIES: CategoryDefinition[] = [
-  {
-    id: "strength_area",
-    title: "Strength Area",
-    suggestedTitles: [
-      "Strength Area",
-      "Free Weights Area",
-      "Strength Training Area",
-      "Dumbbells & Barbells Zone",
-      "Weightlifting Section",
-    ],
-    baseDescription:
-      "Strength area equipped with free weights, dumbbells, barbells, weight plates, and resistance machines.",
-    primaryKeywords: [
+function generateSuggestedTitles(
+  labels: AWS.Rekognition.Label[],
+  textLines: string[]
+): string[] {
+  const labelNames = labels.map((l) => (l.Name || "").toLowerCase());
+  const textJoined = textLines.join(" ");
+  const textLower = textJoined.toLowerCase();
+
+  const titles: string[] = [];
+
+  const hasLabel = (...keywords: string[]) =>
+    keywords.some((k) =>
+      labelNames.some((l) => l === k.toLowerCase() || l.includes(k.toLowerCase()))
+    );
+
+  const hasText = (...keywords: string[]) =>
+    keywords.some((k) => textLower.includes(k.toLowerCase()));
+
+  // 1. Digital UI / Mobile App / Web / Software Screenshot
+  const isDigitalUI =
+    hasLabel(
+      "webpage",
+      "screenshot",
+      "user interface",
+      "text message",
+      "mobile phone",
+      "operating system",
+      "software"
+    ) && (labels[0]?.Confidence || 0) > 48;
+
+  if (isDigitalUI) {
+    if (hasText("real estate", "property", "properties", "home", "homes", "condo", "mls")) {
+      return [
+        "Real Estate Application",
+        "Property Listings View",
+        "Real Estate Market Overview",
+        "Mobile App Interface",
+      ];
+    }
+    if (hasText("postman", "http", "api", "headers", "params", "form-data", "request", "endpoint")) {
+      return [
+        "API Client Interface",
+        "Postman Request Screen",
+        "Developer Tool View",
+        "Software Interface",
+      ];
+    }
+    if (hasText("dashboard", "analytics", "stats", "metrics", "chart", "report")) {
+      return [
+        "Dashboard Overview",
+        "Analytics Screen",
+        "Performance Metrics View",
+        "System Dashboard",
+      ];
+    }
+    if (hasText("fitness", "gym", "workout", "tracker", "calories", "training")) {
+      return [
+        "Fitness App Interface",
+        "Workout Tracker Screen",
+        "Fitness Mobile App",
+        "Training Overview",
+      ];
+    }
+
+    const prominentHeadline = textLines.find(
+      (t) => t.length >= 4 && t.length <= 32 && !/^\d+$/.test(t)
+    );
+    if (prominentHeadline) {
+      return [
+        prominentHeadline,
+        `${prominentHeadline} Screen`,
+        "Mobile Application View",
+        "Digital Interface",
+      ];
+    }
+    return [
+      "Mobile Application Interface",
+      "Application View",
+      "Digital Interface",
+      "System Screen",
+    ];
+  }
+
+  // 2. Strength / Weights / Bodybuilding / Gym Equipment
+  if (
+    hasLabel(
       "gym weights",
-      "weight plate",
-      "weight plates",
-      "free weights",
+      "weightlifting",
       "dumbbell",
-      "dumbbells",
       "barbell",
-      "barbells",
-      "kettlebell",
-      "kettlebells",
       "dead lift",
-      "deadlift",
       "leg press",
       "bench press",
-      "bicep curl",
       "bicep curls",
       "overhead press",
       "squat",
-      "squats",
-      "weightlifting",
+      "kettlebell",
+      "weight plate",
       "powerlifting",
-      "squat rack",
-      "cable machine",
-      "smith machine",
-      "lat pulldown",
-      "chest press",
-      "shoulder press",
       "weight machine",
-      "resistance machine",
-      "leg curl",
-      "leg extension",
-      "pec fly",
-      "tricep",
-      "pull up",
-      "pull-up",
-      "dip station",
-      "barbell rack",
-      "weight rack",
-      "weight tree",
-      "weight bench",
-      "olympic bar",
-    ],
-    secondaryKeywords: [
-      "weights",
-      "weight",
-      "plate",
-      "iron",
-      "lifting",
-      "lift",
-      "bodybuilding",
-      "muscle",
-      "resistance training",
-      "strength training",
-      "heavy weights",
-    ],
-  },
-  {
-    id: "cardio_area",
-    title: "Cardio Area",
-    suggestedTitles: [
+      "cable machine",
+      "smith machine"
+    )
+  ) {
+    return [
+      "Strength Area",
+      "Free Weights Area",
+      "Strength Training Area",
+      "Weightlifting Zone",
+      "Dumbbells & Barbells Section",
+    ];
+  }
+
+  // 3. Cardio & Aerobic Machines
+  if (
+    hasLabel(
+      "treadmill",
+      "stationary bike",
+      "exercise bike",
+      "elliptical",
+      "rowing machine",
+      "stair climber",
+      "cardio",
+      "spin bike",
+      "spinning bike"
+    )
+  ) {
+    return [
       "Cardio Area",
       "Cardio Zone",
       "Treadmills Section",
       "Cardiovascular Fitness Area",
-      "Spin & Cycle Studio",
-    ],
-    baseDescription:
-      "Cardio area equipped with cardiovascular workout machines including treadmills, stationary bikes, and ellipticals.",
-    primaryKeywords: [
-      "treadmill",
-      "treadmills",
-      "stationary bike",
-      "exercise bike",
-      "elliptical",
-      "stair climber",
-      "rowing machine",
-      "cardio",
-      "spinning bike",
-      "step mill",
-      "spin bike",
-      "stepper",
-      "cross trainer",
-      "skierg",
-      "assault bike",
-      "air bike",
-      "running machine",
-      "cardio machine",
-    ],
-    secondaryKeywords: [
-      "aerobic",
-      "aerobics",
-      "running track",
-      "bicycle",
-      "jogging",
-      "running",
-      "cardiovascular",
-      "cycling",
-      "endurance",
-      "rowing",
-    ],
-  },
-  {
-    id: "yoga_area",
-    title: "Yoga Area",
-    suggestedTitles: [
-      "Yoga Area",
-      "Yoga Studio",
-      "Pilates & Stretching Area",
-      "Mind & Body Studio",
-      "Stretching Zone",
-    ],
-    baseDescription:
-      "Calm and spacious studio dedicated to yoga, pilates, stretching, and mindfulness practices.",
-    primaryKeywords: [
+      "Cycling & Spin Studio",
+    ];
+  }
+
+  // 4. Yoga / Pilates / Meditation
+  if (
+    hasLabel(
       "yoga",
       "yoga mat",
       "pilates",
       "meditation",
       "stretching mat",
-      "yoga pose",
       "asana",
-      "lotus position",
-      "namaste",
-      "pranayama",
-      "stretching",
-    ],
-    secondaryKeywords: [
-      "flexibility",
-      "mindfulness",
-      "wellness",
-      "zen",
-      "mat",
-    ],
-  },
-  {
-    id: "dance_studio",
-    title: "Dance Studio",
-    suggestedTitles: [
-      "Dance Studio",
-      "Aerobics Studio",
-      "Zumba Studio",
-      "Group Fitness Studio",
-      "Dance & Aerobics Studio",
-    ],
-    baseDescription:
-      "Dedicated wooden-floor group fitness studio for dance, Zumba, aerobics, and choreographed group workouts.",
-    primaryKeywords: [
+      "pranayama"
+    )
+  ) {
+    return [
+      "Yoga Area",
+      "Yoga Studio",
+      "Pilates & Stretching Studio",
+      "Mind & Body Area",
+      "Wellness & Meditation Zone",
+    ];
+  }
+
+  // 5. Dance / Zumba / Aerobics Studio
+  if (
+    hasLabel(
       "dance",
       "dancing",
-      "dancer",
       "zumba",
       "aerobics studio",
       "dance studio",
       "ballet",
-      "ballet barre",
-      "choreography",
-      "mirror wall",
-      "group fitness studio",
-      "dance floor",
-    ],
-    secondaryKeywords: [
-      "studio",
-      "aerobics",
-      "performance",
-      "stage",
-      "rhythm",
-    ],
-  },
-  {
-    id: "functional_crossfit",
-    title: "Functional & CrossFit Area",
-    suggestedTitles: [
-      "Functional & CrossFit Area",
-      "Functional Training Zone",
-      "CrossFit Area",
-      "HIIT & Conditioning Zone",
-      "Athletic Turf Area",
-    ],
-    baseDescription:
-      "High-intensity functional training and CrossFit area equipped with battle ropes, turf track, and conditioning equipment.",
-    primaryKeywords: [
+      "choreography"
+    )
+  ) {
+    return [
+      "Dance Studio",
+      "Aerobics Studio",
+      "Zumba Studio",
+      "Group Fitness Studio",
+      "Dance & Movement Studio",
+    ];
+  }
+
+  // 6. Boxing & Combat Sports
+  if (
+    hasLabel(
+      "boxing",
+      "punching bag",
+      "heavy bag",
+      "boxing ring",
+      "boxing glove",
+      "martial arts",
+      "mma",
+      "kickboxing",
+      "muay thai"
+    )
+  ) {
+    return [
+      "Boxing Area",
+      "Combat Sports Zone",
+      "Punching Bags Area",
+      "Boxing Ring Section",
+      "Martial Arts Studio",
+    ];
+  }
+
+  // 7. Functional & CrossFit Area
+  if (
+    hasLabel(
       "crossfit",
       "battle ropes",
       "trx",
@@ -240,247 +236,185 @@ export const SPECIFIC_GYM_CATEGORIES: CategoryDefinition[] = [
       "agility ladder",
       "tire flip",
       "slam ball",
-      "medicine ball",
-      "wall ball",
-      "suspension training",
-      "rope climbing",
-      "monkey bars",
       "calisthenics",
-      "sled push",
-      "turf",
-      "sled",
-      "kettlebell swing",
-    ],
-    secondaryKeywords: [
-      "functional training",
-      "functional fitness",
-      "pull-up bar",
-      "gymnastic rings",
-      "athletics",
-      "hiit",
-      "agility",
-    ],
-  },
-  {
-    id: "combat_sports",
-    title: "Boxing & Combat Sports Area",
-    suggestedTitles: [
-      "Boxing Area",
-      "Combat Sports Zone",
-      "Punching Bags Area",
-      "Boxing Ring Section",
-      "Martial Arts Studio",
-    ],
-    baseDescription:
-      "Combat sports area equipped with boxing bags, sparring ring, and martial arts training gear.",
-    primaryKeywords: [
-      "boxing",
-      "punching bag",
-      "heavy bag",
-      "boxing ring",
-      "boxing glove",
-      "boxing gloves",
-      "kickboxing",
-      "martial arts",
-      "mma",
-      "muay thai",
-      "wrestling ring",
-      "octagon",
-      "karate",
-      "taekwondo",
-      "judo",
-      "sparring",
-    ],
-    secondaryKeywords: [
-      "combat sport",
-      "wrestling",
-      "sparring",
-      "self defense",
-      "gloves",
-    ],
-  },
-  {
-    id: "swimming_pool",
-    title: "Swimming Pool Area",
-    suggestedTitles: [
+      "turf"
+    )
+  ) {
+    return [
+      "Functional & CrossFit Area",
+      "Functional Training Zone",
+      "CrossFit Area",
+      "HIIT & Conditioning Zone",
+      "Athletic Turf Area",
+    ];
+  }
+
+  // 8. Swimming Pool & Aquatics
+  if (hasLabel("swimming pool", "lap pool", "aquatics center", "pool", "swimmer")) {
+    return [
       "Swimming Pool Area",
       "Indoor Pool",
       "Aquatics Center",
-      "Lap Pool Zone",
-      "Pool & Wet Area",
-    ],
-    baseDescription:
-      "Swimming pool facility suitable for aquatic fitness, lap swimming, and water workouts.",
-    primaryKeywords: [
-      "swimming pool",
-      "pool",
-      "swimmer",
-      "lap pool",
-      "water sports",
-      "diving board",
-      "indoor pool",
-      "outdoor pool",
-    ],
-    secondaryKeywords: [
-      "aquatic",
-      "water",
-      "swimming",
-      "swimwear",
-    ],
-  },
-  {
-    id: "locker_spa",
-    title: "Locker Room & Spa Area",
-    suggestedTitles: [
-      "Locker Room & Spa Area",
+      "Pool & Aquatic Zone",
+    ];
+  }
+
+  // 9. Locker Room & Spa
+  if (hasLabel("locker room", "sauna", "steam room", "changing room", "lockers")) {
+    return [
       "Locker Room",
       "Sauna & Steam Area",
-      "Wellness & Spa Zone",
-      "Changing Room",
-    ],
-    baseDescription:
-      "Clean and well-maintained locker room with secure lockers, changing facilities, and wellness amenities.",
-    primaryKeywords: [
-      "sauna",
-      "steam room",
-      "locker room",
-      "locker",
-      "jacuzzi",
-      "hot tub",
-      "spa",
-      "shower room",
-      "changing room",
-    ],
-    secondaryKeywords: [
-      "showers",
-      "relaxation",
-      "wellness",
-      "bath",
-      "lockers",
-    ],
-  },
-  {
-    id: "reception",
-    title: "Reception & Welcome Lounge",
-    suggestedTitles: [
-      "Reception & Welcome Lounge",
-      "Front Desk Area",
-      "Club Entrance & Lobby",
-      "Client Welcome Desk",
-      "Reception Area",
-    ],
-    baseDescription:
-      "Front desk and reception lounge area welcoming members and visitors to the club.",
-    primaryKeywords: [
-      "reception",
-      "front desk",
-      "lobby",
-      "lounge",
-      "counter",
-      "waiting area",
-      "entrance",
-      "foyer",
-    ],
-    secondaryKeywords: [
-      "customer service",
-      "office desk",
-      "hall",
-      "interior entrance",
-    ],
-  },
-  {
-    id: "cafeteria",
-    title: "Cafeteria & Nutrition Bar",
-    suggestedTitles: [
-      "Cafeteria & Nutrition Bar",
-      "Juice Bar & Cafe",
-      "Protein Bar & Lounge",
-      "Club Cafeteria",
-      "Health Cafe",
-    ],
-    baseDescription:
-      "Nutrition bar and cafeteria providing healthy drinks, protein shakes, and recovery meals.",
-    primaryKeywords: [
+      "Changing Facilities",
+      "Wellness & Locker Zone",
+    ];
+  }
+
+  // 10. Reception / Front Desk / Lobby
+  if (
+    hasLabel("reception", "front desk", "welcome desk", "lobby", "lounge", "foyer", "waiting room")
+  ) {
+    return [
+      "Reception & Front Desk",
+      "Welcome Lounge",
+      "Lobby Area",
+      "Customer Service Desk",
+    ];
+  }
+
+  // 11. Cafeteria / Juice Bar / Restaurant
+  if (
+    hasLabel(
       "cafeteria",
       "juice bar",
-      "protein bar",
-      "cafe",
-      "coffee shop",
       "smoothie",
-      "shake",
-      "supplements",
-      "smoothie bar",
-    ],
-    secondaryKeywords: [
-      "dining table",
-      "drink",
-      "beverage",
-      "nutrition",
-      "bar",
-    ],
-  },
-];
+      "cafe",
+      "restaurant",
+      "coffee shop",
+      "dining"
+    )
+  ) {
+    return [
+      "Cafeteria & Lounge",
+      "Juice Bar & Cafe",
+      "Dining Area",
+      "Refreshment Zone",
+    ];
+  }
 
-/**
- * Fallback category for general gym scenes when no specific zone is dominant.
- */
-export const GENERAL_GYM_CATEGORY: CategoryDefinition = {
-  id: "general_gym",
-  title: "Main Gym Floor",
-  suggestedTitles: [
-    "Main Gym Floor",
-    "General Workout Area",
-    "Fitness Training Zone",
-    "Club Gym Floor",
-  ],
-  baseDescription:
-    "Main gym floor featuring an extensive range of fitness and training equipment.",
-  primaryKeywords: [
-    "gym",
-    "fitness center",
-    "physical fitness",
-    "sports club",
-    "exercise",
-    "workout",
-    "working out",
-    "gymnasium",
-    "fitness",
-  ],
-  secondaryKeywords: [
-    "sport",
-    "athlete",
-    "training",
-  ],
-};
+  // 12. General Fitness / Gym
+  if (
+    hasLabel(
+      "gym",
+      "fitness",
+      "working out",
+      "exercise",
+      "physical fitness",
+      "bodybuilding"
+    )
+  ) {
+    return [
+      "Main Gym Floor",
+      "Fitness Training Zone",
+      "General Workout Area",
+      "Club Gym Floor",
+    ];
+  }
 
-/**
- * Format a list of items into an English sentence (e.g. ["treadmills", "bikes"] -> "treadmills and bikes")
- */
-function formatItemNames(items: string[]): string {
-  if (items.length === 0) return "";
-  if (items.length === 1) return items[0];
-  if (items.length === 2) return `${items[0]} and ${items[1]}`;
-  return `${items.slice(0, -1).join(", ")}, and ${items[items.length - 1]}`;
+  // 13. Real Estate / Housing / Architecture
+  if (
+    hasLabel(
+      "house",
+      "housing",
+      "villa",
+      "building",
+      "architecture",
+      "residence",
+      "apartment",
+      "home",
+      "interior design"
+    )
+  ) {
+    return [
+      "Property Overview",
+      "Architecture & Building",
+      "Residential Property",
+      "Exterior View",
+    ];
+  }
+
+  // 14. Nature / Landscape / Outdoors
+  if (
+    hasLabel(
+      "nature",
+      "landscape",
+      "mountain",
+      "forest",
+      "park",
+      "garden",
+      "outdoor",
+      "sky",
+      "beach",
+      "sea"
+    )
+  ) {
+    return [
+      "Outdoor Scenery",
+      "Landscape View",
+      "Nature & Scenic Area",
+      "Outdoor Grounds",
+    ];
+  }
+
+  // 15. Dynamic Fallback: Compose natural titles from top detected labels
+  const filterWords = [
+    "file",
+    "text",
+    "line",
+    "paper",
+    "black",
+    "white",
+    "grey",
+    "pattern",
+    "symbol",
+    "sign",
+    "font",
+  ];
+  const cleanLabels = labels
+    .map((l) => l.Name || "")
+    .filter((n) => n && !filterWords.includes(n.toLowerCase()))
+    .slice(0, 4);
+
+  if (cleanLabels.length > 0) {
+    titles.push(
+      cleanLabels[0],
+      cleanLabels.slice(0, 2).join(" & "),
+      `${cleanLabels[0]} Area`,
+      `${cleanLabels[0]} Overview`
+    );
+  } else {
+    titles.push("Facility Overview", "Uploaded Image", "Photo View");
+  }
+
+  return Array.from(new Set(titles));
 }
 
 /**
- * Analyze a gym photo buffer using AWS Rekognition detectLabels (and detectText)
- * and classify the gym area with high accuracy.
+ * Analyze any uploaded image buffer using AWS Rekognition detectLabels (and detectText)
+ * and suggest titles without keyword or gym restrictions.
  */
 export async function analyzeGymPhoto(
   imageBuffer: Buffer
-): Promise<GymPhotoAnalysisResult> {
+): Promise<PhotoAnalysisResult> {
   if (!imageBuffer || !Buffer.isBuffer(imageBuffer) || imageBuffer.length === 0) {
     throw new Error("Valid image buffer is required for analysis.");
   }
 
-  // 1. Run Rekognition detectLabels (MinConfidence 35 to capture specific gym equipment) and detectText
   const [labelsRes, textRes] = await Promise.all([
     rekognition
       .detectLabels({
         Image: { Bytes: imageBuffer },
         MaxLabels: 50,
-        MinConfidence: 35,
+        MinConfidence: 40,
       })
       .promise(),
     rekognition
@@ -488,10 +422,7 @@ export async function analyzeGymPhoto(
         Image: { Bytes: imageBuffer },
       })
       .promise()
-      .catch(() => {
-        // Non-fatal if detectText fails
-        return { TextDetections: [] };
-      }),
+      .catch(() => ({ TextDetections: [] })),
   ]);
 
   const rawLabels = labelsRes.Labels || [];
@@ -504,177 +435,13 @@ export async function analyzeGymPhoto(
     .filter((t) => t.Type === "LINE" && t.DetectedText)
     .map((t) => (t.DetectedText || "").trim());
 
-  const textLower = detectedTextLines.join(" ").toLowerCase();
-
-  // 2. Score each specific category
-  const scoredSpecific = SPECIFIC_GYM_CATEGORIES.map((cat) => {
-    let score = 0;
-    let highestConfidence = 0;
-    const matchedLabels: string[] = [];
-
-    for (const lbl of rawLabels) {
-      const labelName = (lbl.Name || "").toLowerCase();
-      const conf = lbl.Confidence || 0;
-      const confWeight = conf / 100;
-
-      // Check parents for weights / weightlifting
-      const hasParentWeight = (lbl.Parents || []).some(
-        (p) =>
-          p.Name?.toLowerCase().includes("weights") ||
-          p.Name?.toLowerCase().includes("weightlifting")
-      );
-
-      // Primary keyword match
-      const isPrimary = cat.primaryKeywords.some(
-        (kw) => labelName === kw || labelName.includes(kw)
-      );
-
-      if (isPrimary || (cat.id === "strength_area" && hasParentWeight)) {
-        score += 10 * confWeight;
-        if (conf > highestConfidence) highestConfidence = conf;
-        matchedLabels.push(lbl.Name || "");
-        continue;
-      }
-
-      // Secondary keyword match
-      const isSecondary = cat.secondaryKeywords.some(
-        (kw) => labelName === kw || labelName.includes(kw)
-      );
-
-      if (isSecondary) {
-        score += 4 * confWeight;
-        if (conf > highestConfidence) highestConfidence = conf;
-        matchedLabels.push(lbl.Name || "");
-      }
-    }
-
-    // Text bonus
-    for (const kw of cat.primaryKeywords) {
-      if (textLower.includes(kw)) {
-        score += 6;
-      }
-    }
-
-    // Strength specific bonus from weight plates text (e.g. "20", "25", "15", "10", "5", "kg", "lbs")
-    if (cat.id === "strength_area") {
-      const weightNumberMatch = textLower.match(/\b(2\.5|5|10|15|20|25|30|35|40|45|50|kg|lbs)\b/);
-      if (weightNumberMatch) {
-        score += 5;
-      }
-    }
-
-    return {
-      category: cat,
-      score,
-      highestConfidence,
-      matchedLabels: Array.from(new Set(matchedLabels)),
-    };
-  });
-
-  // Sort specific categories by score descending
-  scoredSpecific.sort((a, b) => b.score - a.score);
-  const topSpecific = scoredSpecific[0];
-
-  // 3. Check for general gym labels
-  const gymRelatedKeywords = [
-    "gym",
-    "fitness",
-    "exercise",
-    "sport",
-    "workout",
-    "working out",
-    "bodybuilding",
-    "training",
-    "athletic",
-  ];
-
-  const hasAnyGymLabel = rawLabels.some((lbl) => {
-    const n = (lbl.Name || "").toLowerCase();
-    return gymRelatedKeywords.some((kw) => n.includes(kw));
-  });
-
-  const isGymPhoto = hasAnyGymLabel || (topSpecific && topSpecific.score > 2.0);
-
-  // If not gym-related and low score
-  if (!isGymPhoto && (!topSpecific || topSpecific.score < 2.0)) {
-    const topLabelNames = detectedLabels.slice(0, 3).map((l) => l.name);
-    return {
-      description: "Club Area",
-      detailedDescription:
-        topLabelNames.length > 0
-          ? `Club area featuring ${formatItemNames(topLabelNames.map((s) => s.toLowerCase()))}.`
-          : "Club facility and general area.",
-      category: "other",
-      confidence: detectedLabels[0]?.confidence || 50,
-      suggestedTitles: ["Club Area", "Facility Overview", "Club Photos"],
-      detectedLabels,
-      detectedText: detectedTextLines.length > 0 ? detectedTextLines : undefined,
-      isGymPhoto: false,
-    };
-  }
-
-  // 4. Decision: If a specific zone has a score >= 2.5, select that specific zone!
-  // Otherwise, if it's a gym photo, fall back to "Main Gym Floor".
-  let chosenCategory = GENERAL_GYM_CATEGORY;
-  let chosenConfidence = 85;
-  let matchedEquipments: string[] = [];
-
-  if (topSpecific && topSpecific.score >= 2.5) {
-    chosenCategory = topSpecific.category;
-    chosenConfidence = topSpecific.highestConfidence || 90;
-    matchedEquipments = topSpecific.matchedLabels;
-  } else {
-    // Fallback to Main Gym Floor
-    const topGymLabel = detectedLabels.find((l) =>
-      gymRelatedKeywords.some((kw) => l.name.toLowerCase().includes(kw))
-    );
-    if (topGymLabel) {
-      chosenConfidence = topGymLabel.confidence;
-    }
-    matchedEquipments = detectedLabels
-      .filter((l) => !["clothing", "footwear", "shoe", "person", "floor", "indoors", "room"].includes(l.name.toLowerCase()))
-      .slice(0, 3)
-      .map((l) => l.name);
-  }
-
-  // Filter generic non-equipment names for detailed description
-  const cleanEquipments = matchedEquipments
-    .filter(
-      (m) =>
-        ![
-          "gym",
-          "fitness",
-          "sport",
-          "workout",
-          "working out",
-          "exercise",
-          "physical fitness",
-          "person",
-          "clothing",
-          "footwear",
-          "shoe",
-          "floor",
-          "flooring",
-        ].includes(m.toLowerCase())
-    )
-    .slice(0, 4)
-    .map((m) => m.toLowerCase());
-
-  let detailedDescription = chosenCategory.baseDescription;
-  if (cleanEquipments.length > 0) {
-    detailedDescription = `${chosenCategory.title} featuring ${formatItemNames(
-      cleanEquipments
-    )}.`;
-  }
+  const suggestedTitles = generateSuggestedTitles(rawLabels, detectedTextLines);
+  const description = suggestedTitles[0] || "Uploaded Photo";
 
   return {
-    description: chosenCategory.title,
-    detailedDescription,
-    category: chosenCategory.id,
-    confidence: Number(chosenConfidence.toFixed(1)),
-    suggestedTitles: chosenCategory.suggestedTitles,
+    description,
+    suggestedTitles,
     detectedLabels,
     detectedText: detectedTextLines.length > 0 ? detectedTextLines : undefined,
-    isGymPhoto: true,
   };
 }

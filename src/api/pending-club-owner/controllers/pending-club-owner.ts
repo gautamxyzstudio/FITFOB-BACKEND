@@ -1983,7 +1983,6 @@ export default {
       return ctx.send({
         message: "Image analyzed successfully",
         suggestedTitles: result.suggestedTitles,
-        isGymPhoto: result.isGymPhoto,
       });
     } catch (error: any) {
       strapi.log.error("[analyzeClubPhoto] AWS Rekognition Error:", error);
