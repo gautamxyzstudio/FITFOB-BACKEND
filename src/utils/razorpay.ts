@@ -249,6 +249,12 @@ export async function createMembershipOrder(
         clientDocumentId,
         contractDocumentId,
         planPriceDocumentId,
+        promotionDocumentId: selectedPromotion?.documentId || "",
+        promotionId: selectedPromotion?.id ? String(selectedPromotion.id) : "",
+        promotionSequence: String(promotionSequence),
+        commissionMode: finalCommissionMode,
+        commissionPaise: String(finalCommissionPaise),
+        gymPayoutPaise: String(gymPayoutPaise),
       },
     });
 
@@ -319,7 +325,7 @@ export async function finalizeGymMembershipPayment(
     const membership = await findOneDocument(
       GYM_MEMBERSHIP_UID,
       { providerOrderId: razorpayOrderId },
-      { gym_promotion: true, gym_contract: true }
+      { gym_contract: true, membership_plan_price: true, client_detail: true }
     );
 
     if (!membership) {
@@ -335,8 +341,9 @@ export async function finalizeGymMembershipPayment(
       .findOne({
         documentId: membership.documentId,
         populate: {
-          gym_promotion: true,
           gym_contract: true,
+          membership_plan_price: true,
+          client_detail: true,
         },
       });
 
@@ -396,9 +403,53 @@ export async function finalizeGymMembershipPayment(
       Number(current.durationMonths)
     );
 
-    if (current.promotionApplied && current.gym_promotion?.id) {
+    // Fetch Razorpay order notes to retrieve promotion / commission metadata
+    let orderNotes: any = payment.notes || {};
+    try {
+      const rzOrder = await razorpay.orders.fetch(razorpayOrderId);
+      orderNotes = { ...(rzOrder?.notes || {}), ...orderNotes };
+    } catch (_) {}
+
+    const contract = current.gym_contract;
+    let selectedPromotion: any = null;
+    let promotionApplied = false;
+    let promotionSequence = 0;
+
+    if (orderNotes?.promotionId || orderNotes?.promotionDocumentId) {
+      const promoId = orderNotes.promotionId;
+      const promoDocId = orderNotes.promotionDocumentId;
+      selectedPromotion = promoId
+        ? await trx("gym_promotions").where({ id: Number(promoId) }).first()
+        : await trx("gym_promotions").where({ document_id: promoDocId }).first();
+
+      if (selectedPromotion) {
+        promotionApplied = true;
+        promotionSequence = Number(orderNotes.promotionSequence || 0);
+      }
+    }
+
+    // Fallback: If not specified in notes, check if this contract has an active zero_commission promotion with reserved slots
+    if (!selectedPromotion && contract?.id) {
+      const contractPromo = await trx("gym_promotions as p")
+        .join("gym_promotions_gym_contract_lnk as lnk", "lnk.gym_promotion_id", "p.id")
+        .where("lnk.gym_contract_id", contract.id)
+        .where("p.is_active", true)
+        .where("p.promotion_type", "zero_commission")
+        .where("p.reserved_user_count", ">", 0)
+        .orderBy("p.id", "asc")
+        .first();
+
+      if (contractPromo) {
+        selectedPromotion = contractPromo;
+        promotionApplied = true;
+        promotionSequence = Number(contractPromo.used_user_count || 0) + 1;
+      }
+    }
+
+    // Confirm promotion reservation
+    if (promotionApplied && selectedPromotion?.id) {
       const promotionUpdated = await trx("gym_promotions")
-        .where({ id: current.gym_promotion.id })
+        .where({ id: selectedPromotion.id })
         .where("reserved_user_count", ">", 0)
         .update({
           reserved_user_count: trx.raw(
@@ -411,18 +462,59 @@ export async function finalizeGymMembershipPayment(
         });
 
       if (!promotionUpdated) {
-        throw new Error("Promotion reservation could not be confirmed.");
+        strapi.log.warn(
+          `[finalizeGymMembershipPayment] Promotion reservation count could not be decremented for promo id ${selectedPromotion.id}`
+        );
       }
     }
 
+    // Calculate commission
+    const customerPrice = Number(current.customerPriceSnapshot);
+    let commissionMode = "default";
+    let commissionAmount = 0;
+
+    if (promotionApplied) {
+      commissionMode = "promotion";
+      commissionAmount = 0;
+    } else if (orderNotes?.commissionMode === "custom" && orderNotes?.commissionPaise) {
+      commissionMode = "custom";
+      commissionAmount = fromPaise(Number(orderNotes.commissionPaise));
+    } else {
+      const planPriceId = current.membership_plan_price?.id;
+      let planRate: any = null;
+      if (contract?.id && planPriceId) {
+        planRate = await trx("gym_contract_plan_rates as r")
+          .join("gym_contract_plan_rates_gym_contract_lnk as clnk", "clnk.gym_contract_plan_rate_id", "r.id")
+          .join("gym_contract_plan_rates_membership_plan_price_lnk as plnk", "plnk.gym_contract_plan_rate_id", "r.id")
+          .where("clnk.gym_contract_id", contract.id)
+          .where("plnk.membership_plan_price_id", planPriceId)
+          .where("r.is_active", true)
+          .first();
+      }
+
+      if (planRate?.commission_mode === "custom" && planRate.custom_commission != null) {
+        commissionMode = "custom";
+        commissionAmount = Number(planRate.custom_commission);
+      } else {
+        commissionMode = "default";
+        commissionAmount = Number(current.membership_plan_price?.defaultCommission ?? 0);
+      }
+    }
+
+    const gatewayFee = payment.fee ? Number((payment.fee / 100).toFixed(2)) : 0;
+    const gymPayout = Number(Math.max(0, customerPrice - commissionAmount).toFixed(2));
+    const membershipId = current.membershipId || `MEM-${Date.now()}-${Math.random().toString(36).substring(2, 7).toUpperCase()}`;
+
+    // Update gym membership to active and paid
     await (strapi.documents(GYM_MEMBERSHIP_UID) as any).update({
       documentId: current.documentId,
       data: {
+        membershipId,
         membershipStatus: "active",
         paymentStatus: "paid",
-        startDate: paidAt,
-        endDate,
-        paidAt,
+        startDate: paidAt.toISOString().slice(0, 10),
+        endDate: endDate.toISOString().slice(0, 10),
+        paidAt: paidAt.toISOString(),
         providerPaymentId: razorpayPaymentId,
       },
     });
@@ -435,31 +527,32 @@ export async function finalizeGymMembershipPayment(
       { idempotencyKey: commissionIdempotencyKey }
     );
 
-    if (!existingCommission) {
+    if (!existingCommission && contract?.documentId) {
+      const promoDocId = selectedPromotion?.document_id || selectedPromotion?.documentId;
       await (strapi.documents(COMMISSION_UID) as any).create({
         data: {
           gym_membership: {
             connect: [{ documentId: current.documentId }],
           },
           gym_contract: {
-            connect: [{ documentId: current.gym_contract.documentId }],
+            connect: [{ documentId: contract.documentId }],
           },
-          ...(current.gym_promotion?.documentId
+          ...(promoDocId
             ? {
                 gym_promotion: {
-                  connect: [{ documentId: current.gym_promotion.documentId }],
+                  connect: [{ documentId: promoDocId }],
                 },
               }
             : {}),
           transactionType: "charge",
-          commissionMode: current.commissionModeSnapshot,
-          customerPrice: current.customerPriceSnapshot,
-          commissionAmount: current.commissionSnapshot,
-          gatewayFee: current.gatewayFeeSnapshot ?? 0,
-          gymPayout: current.gymPayoutSnapshot,
+          commissionMode,
+          customerPrice,
+          commissionAmount,
+          gatewayFee,
+          gymPayout,
           currency: current.currency,
-          promotionApplied: current.promotionApplied,
-          promotionSequence: current.promotionSequence,
+          promotionApplied,
+          promotionSequence: promotionSequence || 1,
           transactionStatus: "paid",
           providerPaymentId: razorpayPaymentId,
           providerTransactionId: razorpayPaymentId,
