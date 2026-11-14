@@ -122,6 +122,100 @@ async function getAuthUser(ctx: Context) {
   return null;
 }
 
+async function getUserRole(user: any): Promise<string> {
+  if (!user) return "";
+  if (user._cachedRole) return user._cachedRole;
+
+  if (user.role?.name || user.role?.type) {
+    const role =
+      user.role.name?.toLowerCase().replace(/[\s_-]+/g, "") ||
+      user.role.type?.toLowerCase().replace(/[\s_-]+/g, "") ||
+      "";
+    user._cachedRole = role;
+    return role;
+  }
+
+  const fullUser: any = await strapi.db
+    .query("plugin::users-permissions.user")
+    .findOne({
+      where: { id: user.id },
+      select: ["id"],
+      populate: {
+        role: {
+          select: ["id", "name", "type"],
+        },
+      },
+    });
+
+  const role =
+    fullUser?.role?.name?.toLowerCase().replace(/[\s_-]+/g, "") ||
+    fullUser?.role?.type?.toLowerCase().replace(/[\s_-]+/g, "") ||
+    "";
+  user._cachedRole = role;
+  return role;
+}
+
+async function resolveClubOwnerForTrial(ctx: Context, user: any) {
+  const roleName = await getUserRole(user);
+  const isAdmin = roleName === "admin" || roleName === "superadmin";
+
+  if (isAdmin) {
+    const body = (ctx.request.body as any) ?? {};
+    const data = body.data ?? body;
+
+    const targetDocId =
+      ctx.query?.ownerDocumentId ||
+      ctx.query?.ownerdocumentid ||
+      ctx.params?.ownerDocumentId ||
+      ctx.params?.documentId ||
+      data?.ownerDocumentId ||
+      data?.ownerdocumentid;
+
+    if (!targetDocId || !String(targetDocId).trim()) {
+      return {
+        clubOwner: null,
+        isAdmin: true,
+        error: "ownerDocumentId is required in params for admin/superadmin",
+      };
+    }
+
+    const docIdStr = String(targetDocId).trim();
+
+    const clubOwner = await strapi.db
+      .query("api::club-owner.club-owner")
+      .findOne({
+        where: { documentId: docIdStr },
+      });
+
+    if (!clubOwner) {
+      return {
+        clubOwner: null,
+        isAdmin: true,
+        notFound: "Club owner not found with the provided ownerDocumentId",
+      };
+    }
+
+    return { clubOwner, isAdmin: true };
+  }
+
+  // If user is club owner, resolve their own profile from token
+  const clubOwner = await strapi.db
+    .query("api::club-owner.club-owner")
+    .findOne({
+      where: { user: user.id },
+    });
+
+  if (!clubOwner) {
+    return {
+      clubOwner: null,
+      isAdmin: false,
+      notFound: "Club owner profile not found for this user",
+    };
+  }
+
+  return { clubOwner, isAdmin: false };
+}
+
 async function resolveClubOwner(ctx: Context, user: any) {
   const roleName = (user.role?.name || user.role?.type || "").toLowerCase();
   const isAdmin = roleName === "admin" || roleName === "superadmin";
@@ -589,10 +683,14 @@ export default {
         return ctx.unauthorized("Authentication required");
       }
 
-      const clubOwner = await resolveClubOwner(ctx, user);
+      const { clubOwner, error, notFound } =
+        await resolveClubOwnerForTrial(ctx, user);
 
-      if (!clubOwner) {
-        return ctx.notFound("Club owner profile not found for this user");
+      if (error) {
+        return ctx.badRequest(error);
+      }
+      if (notFound || !clubOwner) {
+        return ctx.notFound(notFound || "Club owner profile not found");
       }
 
       return ctx.send({
@@ -613,10 +711,14 @@ export default {
         return ctx.unauthorized("Authentication required");
       }
 
-      const clubOwner = await resolveClubOwner(ctx, user);
+      const { clubOwner, isAdmin, error, notFound } =
+        await resolveClubOwnerForTrial(ctx, user);
 
-      if (!clubOwner) {
-        return ctx.notFound("Club owner profile not found for this user");
+      if (error) {
+        return ctx.badRequest(error);
+      }
+      if (notFound || !clubOwner) {
+        return ctx.notFound(notFound || "Club owner profile not found");
       }
 
       const body = (ctx.request.body as any) ?? {};
@@ -676,9 +778,6 @@ export default {
         });
 
       // Build change description
-      const roleName = (user.role?.name || user.role?.type || "").toLowerCase();
-      const isAdmin = roleName === "admin" || roleName === "superadmin";
-
       const clubTitle = clubOwner.clubName || "club";
       const statusChanged =
         isTrialEnabled !== undefined && isTrialEnabled !== oldEnabled;
