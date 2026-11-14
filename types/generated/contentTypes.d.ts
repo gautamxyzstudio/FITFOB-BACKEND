@@ -476,7 +476,7 @@ export interface ApiActivityLogActivityLog extends Struct.CollectionTypeSchema {
     createdAt: Schema.Attribute.DateTime;
     createdBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
       Schema.Attribute.Private;
-    description: Schema.Attribute.String;
+    description: Schema.Attribute.Text;
     entityId: Schema.Attribute.String;
     entityName: Schema.Attribute.String;
     locale: Schema.Attribute.String & Schema.Attribute.Private;

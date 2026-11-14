@@ -553,6 +553,40 @@ export async function finalizeGymMembershipPayment(
       });
     }
 
+    // Log client activity for successful membership purchase
+    try {
+      const clientDocId =
+        current.client_detail?.documentId || current.client_detail?.id;
+      if (clientDocId) {
+        const unifiedService: any = strapi.service(
+          "api::activity-log.activity-log"
+        );
+        if (unifiedService?.createActivityLog) {
+          const durationLabel =
+            current.duration === "monthly"
+              ? "Monthly"
+              : current.duration === "six_months"
+                ? "6 Months"
+                : current.duration === "twelve_months"
+                  ? "12 Months"
+                  : current.duration || "";
+          await unifiedService.createActivityLog({
+            actorType: "client",
+            actorId: clientDocId,
+            entityName: "gym-membership",
+            entityId: current.documentId,
+            actionType: "buyMembership",
+            description: `Client purchased a ${durationLabel} membership.`.trim(),
+          });
+        }
+      }
+    } catch (logErr) {
+      strapi.log.warn(
+        "[finalizeGymMembershipPayment] Activity logging failed:",
+        logErr
+      );
+    }
+
     return {
       alreadyProcessed: false,
       membershipDocumentId: current.documentId,

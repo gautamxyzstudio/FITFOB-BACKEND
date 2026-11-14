@@ -160,11 +160,12 @@ export default () => ({
 
         const gymName = clubOwner.clubName || clubOwner.club_name || "gym";
         await strapi
-          .service("api::client-activity-log.client-activity-log")
-          .logActivity({
-            clientId: client.id,
+          .service("api::activity-log.activity-log")
+          .createActivityLog({
+            actorType: "client",
+            actorId: client.documentId || client.id,
             actionType: "checkin",
-            entityName: "Client Checkin",
+            entityName: "client-checkin",
             entityId: checkin?.documentId || checkin?.id,
             description: `Checked in to ${gymName}`,
           });
@@ -366,11 +367,12 @@ export default () => ({
       );
 
       await strapi
-        .service("api::client-activity-log.client-activity-log")
-        .logActivity({
-          clientId: client.id,
+        .service("api::activity-log.activity-log")
+        .createActivityLog({
+          actorType: "client",
+          actorId: client.documentId || client.id,
           actionType: "checkin",
-          entityName: "Client Checkin",
+          entityName: "client-checkin",
           entityId: checkin?.documentId || checkin?.id,
           description: `Checked in to ${gymName || "gym"}`,
         });

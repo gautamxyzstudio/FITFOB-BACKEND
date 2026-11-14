@@ -1,11 +1,8 @@
 import { factories } from "@strapi/strapi";
 
-const CLIENT_ACTIVITY_LOG_UID =
-  "api::client-activity-log.client-activity-log" as any;
-
 export interface LogClientActivityParams {
   clientId: string | number | { id?: number; documentId?: string };
-  actionType: "buy-membership" | "checkin" | string;
+  actionType: string;
   entityName?: string;
   entityId?: string | number;
   description: string;
@@ -14,37 +11,25 @@ export interface LogClientActivityParams {
 export default factories.createCoreService(
   "api::client-activity-log.client-activity-log",
   ({ strapi }) => ({
+    /**
+     * Backward-compatible delegation to the unified activity log service
+     */
     async logActivity(params: LogClientActivityParams) {
       try {
-        const { clientId, actionType, entityName, entityId, description } =
-          params;
-
-        if (!clientId) {
-          strapi.log.warn(
-            "[ClientActivityLog] Missing clientId for activity log.",
-          );
-          return null;
+        const unifiedService: any = strapi.service("api::activity-log.activity-log");
+        if (unifiedService?.createActivityLog) {
+          return await unifiedService.createActivityLog({
+            actorType: "client",
+            actorId: params.clientId,
+            entityName: params.entityName || "Client Activity",
+            entityId: params.entityId || "",
+            actionType: params.actionType,
+            description: params.description,
+          });
         }
-
-        let targetClientId: any = clientId;
-        if (typeof clientId === "object" && clientId !== null) {
-          targetClientId = (clientId as any).id || (clientId as any).documentId;
-        }
-
-        return await strapi.entityService.create(CLIENT_ACTIVITY_LOG_UID, {
-          data: {
-            client_detail: targetClientId,
-            actionType,
-            entityName: entityName || "Client Activity",
-            entityId: entityId ? String(entityId) : null,
-            description,
-          },
-        });
+        return null;
       } catch (err) {
-        strapi.log.error(
-          "[ClientActivityLog] Failed to log client activity:",
-          err,
-        );
+        strapi.log.error("[ClientActivityLog Service] Failed:", err);
         return null;
       }
     },

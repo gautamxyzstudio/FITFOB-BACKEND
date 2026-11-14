@@ -380,14 +380,14 @@ export default factories.createCoreController(
         setImmediate(async () => {
           try {
             const activityLogService: any = strapi.service(
-              "api::club-owner-activity-log.club-owner-activity-log"
+              "api::activity-log.activity-log"
             );
-            if (activityLogService?.logActivity) {
+            if (activityLogService?.createActivityLog) {
               const targetOwnerId = targetOwner.document_id || targetOwner.id;
-              await activityLogService.logActivity({
-                clubOwnerId: targetOwnerId,
-                category: "profile",
-                actionType: "CREATE",
+              await activityLogService.createActivityLog({
+                actorType: "club_owner",
+                actorId: targetOwnerId,
+                actionType: "create",
                 entityName: "Club Document",
                 entityId: newDoc.document_id || targetOwnerId,
                 description: `Uploaded document: ${documentName}`,

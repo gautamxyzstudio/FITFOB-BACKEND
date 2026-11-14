@@ -573,13 +573,13 @@ export default factories.createCoreController(
         if (!isAdmin && roleName === "clubowner") {
           try {
             const activityLogService: any = strapi.service(
-              "api::club-owner-activity-log.club-owner-activity-log",
+              "api::activity-log.activity-log",
             );
-            if (activityLogService?.logActivity) {
-              await activityLogService.logActivity({
-                clubOwnerId: targetClubOwnerDocId || targetClubOwnerId,
-                category: "subscriptions",
-                actionType: "CREATE",
+            if (activityLogService?.createActivityLog) {
+              await activityLogService.createActivityLog({
+                actorType: "club_owner",
+                actorId: targetClubOwnerDocId || targetClubOwnerId,
+                actionType: "create",
                 entityName: "Local Subscription",
                 entityId: createdSub?.documentId || createdSub?.id,
                 description: `Assigned offline membership to client '${
@@ -992,9 +992,9 @@ export default factories.createCoreController(
         if (!isAdmin && roleName === "clubowner") {
           try {
             const activityLogService: any = strapi.service(
-              "api::club-owner-activity-log.club-owner-activity-log",
+              "api::activity-log.activity-log",
             );
-            if (activityLogService?.logActivity) {
+            if (activityLogService?.createActivityLog) {
               const ownerIdentifier =
                 existing.club_owner?.documentId ||
                 existing.club_owner?.id ||
@@ -1036,10 +1036,10 @@ export default factories.createCoreController(
                   ? ` (Changed: ${changedDetails.join(", ")})`
                   : "";
 
-              await activityLogService.logActivity({
-                clubOwnerId: ownerIdentifier,
-                category: "subscriptions",
-                actionType: "UPDATE",
+              await activityLogService.createActivityLog({
+                actorType: "club_owner",
+                actorId: ownerIdentifier,
+                actionType: "update",
                 entityName: "Local Subscription",
                 entityId: existing.documentId || existing.id,
                 description: `Updated subscription of client '${clientName}' for plan '${planName}'${changeSummary}`,
@@ -1127,9 +1127,9 @@ export default factories.createCoreController(
         if (!isAdmin && roleName === "clubowner") {
           try {
             const activityLogService: any = strapi.service(
-              "api::club-owner-activity-log.club-owner-activity-log",
+              "api::activity-log.activity-log",
             );
-            if (activityLogService?.logActivity) {
+            if (activityLogService?.createActivityLog) {
               const ownerIdentifier =
                 existing.club_owner?.documentId ||
                 existing.club_owner?.id ||
@@ -1142,10 +1142,10 @@ export default factories.createCoreController(
               const planName =
                 existing.local_membership_plan?.planName || "Membership";
 
-              await activityLogService.logActivity({
-                clubOwnerId: ownerIdentifier,
-                category: "subscriptions",
-                actionType: "DELETE",
+              await activityLogService.createActivityLog({
+                actorType: "club_owner",
+                actorId: ownerIdentifier,
+                actionType: "delete",
                 entityName: "Local Subscription",
                 entityId: existing.documentId || existing.id,
                 description: `Deleted subscription of client '${clientName}' for plan '${planName}'`,

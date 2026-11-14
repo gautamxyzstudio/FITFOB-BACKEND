@@ -71,8 +71,8 @@ export default {
         adminUserId: getAdminActivityUserId(ctx),
         category: "club_owner",
         actionType: "approve",
-        entityName: "Club Owner Verification",
-        entityId: user.id,
+        entityName: "club-owner",
+        entityId: updatedUser.club_owner?.documentId || user.id,
         description: `Approved club owner verification for ${
           user.username || user.email
         }.`,
@@ -201,7 +201,7 @@ export default {
         adminUserId: getAdminActivityUserId(ctx),
         category: "club_owner",
         actionType: "rejected",
-        entityName: "Club Owner Verification",
+        entityName: "club-owner",
         entityId: user.id,
         description: `Rejected club owner verification for ${
           user.username || user.email
