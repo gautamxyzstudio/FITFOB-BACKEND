@@ -96,5 +96,30 @@ export default {
         auth: {},
       },
     },
+    {
+      method: "GET",
+      path: "/member-list",
+      handler: "custom-club-owner.memberList",
+      config: {
+        auth: {},
+      },
+    },
+    {
+      method: "GET",
+      path: "/member-list/:documentId",
+      handler: "custom-club-owner.memberMemberships",
+      config: {
+        auth: {},
+      },
+    },
+    {
+      method: "GET",
+      path: "/member-memberships/:documentId",
+      handler: "custom-club-owner.memberMemberships",
+      config: {
+        auth: {},
+      },
+    },
+
   ],
 };
