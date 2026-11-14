@@ -158,6 +158,14 @@
       "relation": "oneToMany",
       "target": "api::activity-log.activity-log",
       "mappedBy": "club_owner"
+    },
+    "isTrialEnabled": {
+      "type": "boolean",
+      "default": false
+    },
+    "dailyTrialLimit": {
+      "type": "integer",
+      "default": 3
     }
   }
 }

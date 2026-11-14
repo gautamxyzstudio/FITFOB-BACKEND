@@ -120,6 +120,22 @@ export default {
         auth: {},
       },
     },
+    {
+      method: "GET",
+      path: "/club-owner/trial-settings",
+      handler: "custom-club-owner.getTrialSettings",
+      config: {
+        auth: {},
+      },
+    },
+    {
+      method: "PUT",
+      path: "/club-owner/trial-settings",
+      handler: "custom-club-owner.updateTrialSettings",
+      config: {
+        auth: {},
+      },
+    }
 
   ],
 };

@@ -873,6 +873,7 @@ export interface ApiClubOwnerClubOwner extends Struct.CollectionTypeSchema {
     createdAt: Schema.Attribute.DateTime;
     createdBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
       Schema.Attribute.Private;
+    dailyTrialLimit: Schema.Attribute.Integer & Schema.Attribute.DefaultTo<3>;
     email: Schema.Attribute.Email;
     facilities: Schema.Attribute.JSON;
     favorited_by: Schema.Attribute.Relation<
@@ -884,6 +885,8 @@ export interface ApiClubOwnerClubOwner extends Struct.CollectionTypeSchema {
       'api::gym-contract.gym-contract'
     >;
     holdidays: Schema.Attribute.Relation<'oneToMany', 'api::holdiday.holdiday'>;
+    isTrialEnabled: Schema.Attribute.Boolean &
+      Schema.Attribute.DefaultTo<false>;
     latitude: Schema.Attribute.String;
     local_membership_plans: Schema.Attribute.Relation<
       'oneToMany',
