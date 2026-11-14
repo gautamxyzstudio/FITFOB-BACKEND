@@ -443,6 +443,59 @@ export interface AdminUser extends Struct.CollectionTypeSchema {
   };
 }
 
+export interface ApiActivityLogActivityLog extends Struct.CollectionTypeSchema {
+  collectionName: 'activity_logs';
+  info: {
+    displayName: 'Activity Log';
+    pluralName: 'activity-logs';
+    singularName: 'activity-log';
+  };
+  options: {
+    draftAndPublish: false;
+  };
+  attributes: {
+    actionType: Schema.Attribute.Enumeration<
+      [
+        'create',
+        'update',
+        'delete',
+        'approve',
+        'rejected',
+        'checkin',
+        'buyMembership',
+      ]
+    >;
+    client_detail: Schema.Attribute.Relation<
+      'manyToOne',
+      'api::client-detail.client-detail'
+    >;
+    club_owner: Schema.Attribute.Relation<
+      'manyToOne',
+      'api::club-owner.club-owner'
+    >;
+    createdAt: Schema.Attribute.DateTime;
+    createdBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
+      Schema.Attribute.Private;
+    description: Schema.Attribute.String;
+    entityId: Schema.Attribute.String;
+    entityName: Schema.Attribute.String;
+    locale: Schema.Attribute.String & Schema.Attribute.Private;
+    localizations: Schema.Attribute.Relation<
+      'oneToMany',
+      'api::activity-log.activity-log'
+    > &
+      Schema.Attribute.Private;
+    publishedAt: Schema.Attribute.DateTime;
+    updatedAt: Schema.Attribute.DateTime;
+    updatedBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
+      Schema.Attribute.Private;
+    users_permissions_user: Schema.Attribute.Relation<
+      'manyToOne',
+      'plugin::users-permissions.user'
+    >;
+  };
+}
+
 export interface ApiAdminActivityLogAdminActivityLog
   extends Struct.CollectionTypeSchema {
   collectionName: 'admin_activity_logs';
@@ -585,6 +638,10 @@ export interface ApiClientDetailClientDetail
     draftAndPublish: false;
   };
   attributes: {
+    activity_logs: Schema.Attribute.Relation<
+      'oneToMany',
+      'api::activity-log.activity-log'
+    >;
     client_activity_logs: Schema.Attribute.Relation<
       'oneToMany',
       'api::client-activity-log.client-activity-log'
@@ -778,6 +835,10 @@ export interface ApiClubOwnerClubOwner extends Struct.CollectionTypeSchema {
     draftAndPublish: false;
   };
   attributes: {
+    activity_logs: Schema.Attribute.Relation<
+      'oneToMany',
+      'api::activity-log.activity-log'
+    >;
     city: Schema.Attribute.String;
     client_checkins: Schema.Attribute.Relation<
       'oneToMany',
@@ -2329,6 +2390,10 @@ export interface PluginUsersPermissionsUser
     draftAndPublish: false;
   };
   attributes: {
+    activity_logs: Schema.Attribute.Relation<
+      'oneToMany',
+      'api::activity-log.activity-log'
+    >;
     admin_activity_logs: Schema.Attribute.Relation<
       'oneToMany',
       'api::admin-activity-log.admin-activity-log'
@@ -2420,6 +2485,7 @@ declare module '@strapi/strapi' {
       'admin::transfer-token': AdminTransferToken;
       'admin::transfer-token-permission': AdminTransferTokenPermission;
       'admin::user': AdminUser;
+      'api::activity-log.activity-log': ApiActivityLogActivityLog;
       'api::admin-activity-log.admin-activity-log': ApiAdminActivityLogAdminActivityLog;
       'api::client-activity-log.client-activity-log': ApiClientActivityLogClientActivityLog;
       'api::client-checkin.client-checkin': ApiClientCheckinClientCheckin;

@@ -152,6 +152,12 @@
       "relation": "oneToMany",
       "target": "api::gym-contract.gym-contract",
       "mappedBy": "club_owner"
+    },
+    "activity_logs": {
+      "type": "relation",
+      "relation": "oneToMany",
+      "target": "api::activity-log.activity-log",
+      "mappedBy": "club_owner"
     }
   }
 }
