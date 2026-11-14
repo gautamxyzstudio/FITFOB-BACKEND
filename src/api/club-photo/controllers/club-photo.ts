@@ -255,14 +255,14 @@ export default factories.createCoreController(
         if (!isAdmin && targetOwner) {
           try {
             const activityLogService: any = strapi.service(
-              "api::club-owner-activity-log.club-owner-activity-log",
+              "api::activity-log.activity-log",
             );
-            if (activityLogService?.logActivity) {
+            if (activityLogService?.createActivityLog) {
               const targetOwnerId = targetOwner.documentId || targetOwner.id;
-              await activityLogService.logActivity({
-                clubOwnerId: targetOwnerId,
-                category: "profile",
-                actionType: "UPDATE",
+              await activityLogService.createActivityLog({
+                actorType: "club_owner",
+                actorId: targetOwnerId,
+                actionType: "update",
                 entityName: "Club Profile",
                 entityId: targetOwnerId,
                 description: `Updated club profile: Added club photo${
@@ -579,9 +579,9 @@ export default factories.createCoreController(
           if (targetOwnerId) {
             try {
               const activityLogService: any = strapi.service(
-                "api::club-owner-activity-log.club-owner-activity-log",
+                "api::activity-log.activity-log",
               );
-              if (activityLogService?.logActivity) {
+              if (activityLogService?.createActivityLog) {
                 const changedParts: string[] = [];
                 if (
                   updateData.imageInfo !== undefined &&
@@ -602,10 +602,10 @@ export default factories.createCoreController(
                     ? ` (Changed: ${changedParts.join(", ")})`
                     : "";
 
-                await activityLogService.logActivity({
-                  clubOwnerId: targetOwnerId,
-                  category: "profile",
-                  actionType: "UPDATE",
+                await activityLogService.createActivityLog({
+                  actorType: "club_owner",
+                  actorId: targetOwnerId,
+                  actionType: "update",
                   entityName: "Club Profile",
                   entityId: targetOwnerId,
                   description: `Updated club profile: Updated club photo${
@@ -734,13 +734,13 @@ export default factories.createCoreController(
           if (targetOwnerId) {
             try {
               const activityLogService: any = strapi.service(
-                "api::club-owner-activity-log.club-owner-activity-log",
+                "api::activity-log.activity-log",
               );
-              if (activityLogService?.logActivity) {
-                await activityLogService.logActivity({
-                  clubOwnerId: targetOwnerId,
-                  category: "profile",
-                  actionType: "UPDATE",
+              if (activityLogService?.createActivityLog) {
+                await activityLogService.createActivityLog({
+                  actorType: "club_owner",
+                  actorId: targetOwnerId,
+                  actionType: "update",
                   entityName: "Club Profile",
                   entityId: targetOwnerId,
                   description: `Updated club profile: Deleted club photo${

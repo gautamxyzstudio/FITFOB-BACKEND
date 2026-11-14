@@ -2239,14 +2239,14 @@ export default factories.createCoreController(
         // Log Activity
         try {
           const activityLogService: any = strapi.service(
-            "api::club-owner-activity-log.club-owner-activity-log",
+            "api::activity-log.activity-log",
           );
-          if (activityLogService?.logActivity) {
-            await activityLogService.logActivity({
-              clubOwnerId: clubOwner.documentId || clubOwner.id,
-              category: "profile",
-              actionType: "UPDATE",
-              entityName: "Club Profile",
+          if (activityLogService?.createActivityLog) {
+            await activityLogService.createActivityLog({
+              actorType: "club_owner",
+              actorId: clubOwner.documentId || clubOwner.id,
+              actionType: "update",
+              entityName: "club-owner",
               entityId: clubOwner.documentId || clubOwner.id,
               description: `Verified and updated ${
                 isEmail ? "email" : "phone number"
@@ -2810,14 +2810,14 @@ export default factories.createCoreController(
           if (targetOwnerId) {
             try {
               const activityLogService: any = strapi.service(
-                "api::club-owner-activity-log.club-owner-activity-log",
+                "api::activity-log.activity-log",
               );
-              if (activityLogService?.logActivity) {
-                await activityLogService.logActivity({
-                  clubOwnerId: targetOwnerId,
-                  category: "profile",
-                  actionType: "UPDATE",
-                  entityName: "Club Profile",
+              if (activityLogService?.createActivityLog) {
+                await activityLogService.createActivityLog({
+                  actorType: "club_owner",
+                  actorId: targetOwnerId,
+                  actionType: "update",
+                  entityName: "club-owner",
                   entityId: targetOwnerId,
                   description: `Updated club profile details for ${
                     entity?.clubName || existing?.clubName || "club"
@@ -2903,6 +2903,22 @@ export default factories.createCoreController(
           });
         } else {
           await strapi.entityService.delete(CLUB_OWNER_UID, entity.id || id);
+        }
+
+        // 📝 Log Admin Activity for deleting club owner
+        try {
+          await logAdminActivity({
+            adminUserId: getAdminActivityUserId(ctx),
+            category: "club_owner",
+            actionType: "delete",
+            entityName: "club-owner",
+            entityId: entity.documentId || entity.id,
+            description: `Deleted club owner: ${
+              entity.clubName || entity.ownerName || "Club Owner"
+            }`,
+          });
+        } catch (logErr) {
+          strapi.log.warn("[club-owner delete] Failed to log activity:", logErr);
         }
 
         ctx.body = {
@@ -2999,6 +3015,28 @@ export default factories.createCoreController(
           ...existing,
           send_notifications: targetStatus,
         };
+
+        // 📝 Log Admin Activity
+        try {
+          await logAdminActivity({
+            adminUserId: getAdminActivityUserId(ctx),
+            category: "club_owner",
+            actionType: "update",
+            entityName: "club-owner",
+            entityId:
+              updated.document_id || existing.document_id || existing.id,
+            description: `Admin ${
+              targetStatus ? "enabled" : "disabled"
+            } push notifications for ${
+              updated.club_name || existing.club_name || "club"
+            }`,
+          });
+        } catch (logErr) {
+          strapi.log.warn(
+            "[toggleSendNotifications] Failed to log activity:",
+            logErr,
+          );
+        }
 
         return ctx.send({
           message: `Notifications ${

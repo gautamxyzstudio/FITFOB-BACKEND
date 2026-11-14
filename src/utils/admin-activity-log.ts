@@ -1,72 +1,56 @@
-
 type AdminActivityCategory =
   | "club_contract"
   | "club_owner"
   | "club_services"
   | "club_facilities"
-  | "global_pricing";
+  | "global_pricing"
+  | string;
 
 type AdminActivityActionType =
   | "create"
   | "update"
   | "delete"
   | "approve"
-  | "rejected";
+  | "rejected"
+  | string;
 
-interface LogAdminActivityParams {
+export interface LogAdminActivityParams {
   adminUserId?: number | string | null;
-  category: AdminActivityCategory;
+  category?: AdminActivityCategory;
   actionType: AdminActivityActionType;
   entityName: string;
   entityId?: number | string | null;
   description: string;
 }
 
-const ADMIN_ACTIVITY_LOG_UID =
-  "api::admin-activity-log.admin-activity-log";
-
 export async function logAdminActivity(
-  params: LogAdminActivityParams
+  params: LogAdminActivityParams,
 ): Promise<void> {
   try {
     const {
       adminUserId,
-      category,
       actionType,
       entityName,
       entityId,
       description,
     } = params;
 
-    if (!category || !actionType || !entityName || !description) {
+    if (!actionType || !entityName || !description) {
       strapi.log.warn("[AdminActivityLog] Missing required fields.");
       return;
     }
 
-    const data: Record<string, any> = {
-      category,
-      actionType,
-      entityName: entityName.trim(),
-      entityId:
-        entityId !== null && entityId !== undefined
-          ? String(entityId)
-          : null,
-      description: description.trim(),
-    };
-
-    if (adminUserId !== null && adminUserId !== undefined) {
-      const userId = Number(adminUserId);
-
-      if (!Number.isInteger(userId) || userId <= 0) {
-        throw new Error("Invalid admin user ID.");
-      }
-
-      data.users_permissions_user = userId;
+    const unifiedService: any = strapi.service("api::activity-log.activity-log");
+    if (unifiedService?.createActivityLog) {
+      await unifiedService.createActivityLog({
+        actorType: "admin",
+        actorId: adminUserId || 1, // Fallback to 1 if no admin ID is in context
+        entityName,
+        entityId: entityId !== null && entityId !== undefined ? String(entityId) : "",
+        actionType,
+        description,
+      });
     }
-
-    await strapi.db.query(ADMIN_ACTIVITY_LOG_UID).create({
-      data,
-    });
   } catch (error) {
     strapi.log.error("[AdminActivityLog] Failed:", error);
   }

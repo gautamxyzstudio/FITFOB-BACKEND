@@ -365,13 +365,13 @@ export default factories.createCoreController(
         // 📝 Log Activity
         try {
           const activityLogService: any = strapi.service(
-            "api::club-owner-activity-log.club-owner-activity-log",
+            "api::activity-log.activity-log",
           );
-          if (activityLogService?.logActivity) {
-            await activityLogService.logActivity({
-              clubOwnerId: ownerDocId || ownerId,
-              category: "membership_plans",
-              actionType: "CREATE",
+          if (activityLogService?.createActivityLog) {
+            await activityLogService.createActivityLog({
+              actorType: "club_owner",
+              actorId: ownerDocId || ownerId,
+              actionType: "create",
               entityName: "Local Membership Plan",
               entityId: createdPlan?.documentId || createdPlan?.id,
               description: `Created local membership plan '${planName.trim()}' (Price: ₹${price}, Duration: ${monthDuration} months)`,
@@ -908,9 +908,9 @@ export default factories.createCoreController(
           if (targetOwnerId) {
             try {
               const activityLogService: any = strapi.service(
-                "api::club-owner-activity-log.club-owner-activity-log",
+                "api::activity-log.activity-log",
               );
-              if (activityLogService?.logActivity) {
+              if (activityLogService?.createActivityLog) {
                 const changedDetails: string[] = [];
 
                 if (
@@ -974,10 +974,10 @@ export default factories.createCoreController(
                     ? ` (Changed: ${changedDetails.join(", ")})`
                     : "";
 
-                await activityLogService.logActivity({
-                  clubOwnerId: targetOwnerId,
-                  category: "membership_plans",
-                  actionType: "UPDATE",
+                await activityLogService.createActivityLog({
+                  actorType: "club_owner",
+                  actorId: targetOwnerId,
+                  actionType: "update",
                   entityName: "Local Membership Plan",
                   entityId: existing.documentId || existing.id,
                   description: `Updated local membership plan '${
@@ -1090,13 +1090,13 @@ export default factories.createCoreController(
           if (targetOwnerId) {
             try {
               const activityLogService: any = strapi.service(
-                "api::club-owner-activity-log.club-owner-activity-log",
+                "api::activity-log.activity-log",
               );
-              if (activityLogService?.logActivity) {
-                await activityLogService.logActivity({
-                  clubOwnerId: targetOwnerId,
-                  category: "membership_plans",
-                  actionType: "DELETE",
+              if (activityLogService?.createActivityLog) {
+                await activityLogService.createActivityLog({
+                  actorType: "club_owner",
+                  actorId: targetOwnerId,
+                  actionType: "delete",
                   entityName: "Local Membership Plan",
                   entityId: existing.documentId || existing.id,
                   description: `Deleted local membership plan '${
@@ -1276,13 +1276,13 @@ export default factories.createCoreController(
           if (targetOwnerId) {
             try {
               const activityLogService: any = strapi.service(
-                "api::club-owner-activity-log.club-owner-activity-log",
+                "api::activity-log.activity-log",
               );
-              if (activityLogService?.logActivity) {
-                await activityLogService.logActivity({
-                  clubOwnerId: targetOwnerId,
-                  category: "membership_plans",
-                  actionType: "UPDATE",
+              if (activityLogService?.createActivityLog) {
+                await activityLogService.createActivityLog({
+                  actorType: "club_owner",
+                  actorId: targetOwnerId,
+                  actionType: "update",
                   entityName: "Local Membership Plan",
                   entityId: existing.documentId || existing.id,
                   description: `${

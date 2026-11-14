@@ -734,6 +734,112 @@ export default factories.createCoreController(
           }
         }
 
+        // 📝 Track changed fields for detailed activity log
+        const changedDetails: string[] = [];
+        const trackFields: { key: string; label: string }[] = [
+          { key: "name", label: "name" },
+          { key: "email", label: "email" },
+          { key: "phoneNumber", label: "phoneNumber" },
+          { key: "gender", label: "gender" },
+          { key: "weight", label: "weight" },
+          { key: "height", label: "height" },
+          { key: "date_of_birth", label: "date_of_birth" },
+          { key: "clientId", label: "clientId" },
+          { key: "faceSimilarity", label: "faceSimilarity" },
+        ];
+
+        for (const field of trackFields) {
+          if (
+            payload[field.key] !== undefined &&
+            String(payload[field.key]).trim() !==
+              String(existing[field.key] ?? "").trim()
+          ) {
+            changedDetails.push(
+              `${field.label}: '${existing[field.key] ?? ""}' -> '${payload[field.key]}'`,
+            );
+          }
+        }
+
+        if (payload.selfieUpload !== undefined) {
+          changedDetails.push("selfieUpload");
+        }
+        if (payload.governmentId !== undefined) {
+          changedDetails.push("governmentId");
+        }
+
+        const oldStatus =
+          existing.user?.verification_status || existing.verification_status;
+        if (status && String(status).trim() !== String(oldStatus ?? "").trim()) {
+          changedDetails.push(`status: '${oldStatus ?? ""}' -> '${status}'`);
+        }
+
+        if (payload.blocked !== undefined || payload.user?.blocked !== undefined) {
+          const newBlocked = Boolean(
+            payload.blocked !== undefined ? payload.blocked : payload.user?.blocked,
+          );
+          const oldBlocked = Boolean(existing.user?.blocked);
+          if (newBlocked !== oldBlocked) {
+            changedDetails.push(`blocked: '${oldBlocked}' -> '${newBlocked}'`);
+          }
+        }
+
+        if (
+          payload.confirmed !== undefined ||
+          payload.user?.confirmed !== undefined
+        ) {
+          const newConfirmed = Boolean(
+            payload.confirmed !== undefined
+              ? payload.confirmed
+              : payload.user?.confirmed,
+          );
+          const oldConfirmed = Boolean(existing.user?.confirmed);
+          if (newConfirmed !== oldConfirmed) {
+            changedDetails.push(`confirmed: '${oldConfirmed}' -> '${newConfirmed}'`);
+          }
+        }
+
+        const changeSummary =
+          changedDetails.length > 0
+            ? ` (Changed: ${changedDetails.join(", ")})`
+            : "";
+
+        // 📝 Log Admin Activity for client update
+        try {
+          const unifiedService: any = strapi.service(
+            "api::activity-log.activity-log",
+          );
+          if (unifiedService?.createActivityLog) {
+            let actionType = "update";
+            const clientName =
+              existing.name || existing.clientId || "client";
+            let desc = `Admin updated client details for ${clientName}${changeSummary}`;
+
+            if (status === "approved" && oldStatus !== "approved") {
+              actionType = "approve";
+              desc = `Admin approved client account for ${clientName}${changeSummary}`;
+            } else if (status === "rejected" && oldStatus !== "rejected") {
+              actionType = "rejected";
+              desc = `Admin rejected client account for ${clientName}${
+                rejectionReason ? `. Reason: ${rejectionReason}` : ""
+              }${changeSummary}`;
+            }
+
+            await unifiedService.createActivityLog({
+              actorType: "admin",
+              actorId: user.id,
+              actionType,
+              entityName: "client-detail",
+              entityId: existing.documentId || existing.id,
+              description: desc,
+            });
+          }
+        } catch (logErr) {
+          strapi.log.warn(
+            "[client-detail update] Failed to log activity:",
+            logErr,
+          );
+        }
+
         const isRead = Array.isArray(updatedItem?.read_by_admins)
           ? updatedItem.read_by_admins.includes(user.id)
           : Boolean(updatedItem?.read_by_admins?.length > 0);

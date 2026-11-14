@@ -711,6 +711,25 @@ export async function createClubOwnerFromPending(
   // Remove pending links in batch
   await deletePendingClubOwner(draft.id);
 
+  // 📝 Log activity for club owner creation
+  try {
+    const unifiedService: any = strapi.service("api::activity-log.activity-log");
+    if (unifiedService?.createActivityLog) {
+      await unifiedService.createActivityLog({
+        actorType: "admin",
+        actorId: 1,
+        actionType: "create",
+        entityName: "club-owner",
+        entityId: clubOwner.documentId || clubOwner.id,
+        description: `Created club owner account for ${
+          clubOwner.clubName || draft.clubName || "club"
+        }.`,
+      });
+    }
+  } catch (e) {
+    strapi.log.warn("[createClubOwnerFromPending] Failed to log activity:", e);
+  }
+
   return clubOwner;
 }
 

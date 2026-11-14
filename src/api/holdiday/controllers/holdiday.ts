@@ -459,9 +459,9 @@ export default factories.createCoreController(
         // 📝 Log Activity
         try {
           const activityLogService: any = strapi.service(
-            "api::club-owner-activity-log.club-owner-activity-log",
+            "api::activity-log.activity-log",
           );
-          if (activityLogService?.logActivity) {
+          if (activityLogService?.createActivityLog) {
             const targetOwnerId = targetOwner.documentId || targetOwner.id;
             const closureLabel =
               created?.closureType === "partial_day"
@@ -472,10 +472,10 @@ export default factories.createCoreController(
                 ? created?.startDate
                 : `${created?.startDate} to ${created?.endDate}`;
 
-            await activityLogService.logActivity({
-              clubOwnerId: targetOwnerId,
-              category: "holidays",
-              actionType: "CREATE",
+            await activityLogService.createActivityLog({
+              actorType: "club_owner",
+              actorId: targetOwnerId,
+              actionType: "create",
               entityName: "Holiday",
               entityId: created?.documentId || created?.id,
               description: `Created holiday '${created?.title || payload.title}' (${closureLabel}, Date: ${dateRange})`,
@@ -599,9 +599,9 @@ export default factories.createCoreController(
         if (targetOwnerId) {
           try {
             const activityLogService: any = strapi.service(
-              "api::club-owner-activity-log.club-owner-activity-log",
+              "api::activity-log.activity-log",
             );
-            if (activityLogService?.logActivity) {
+            if (activityLogService?.createActivityLog) {
               const changedDetails: string[] = [];
 
               if (
@@ -658,10 +658,10 @@ export default factories.createCoreController(
                   ? ` (${changedDetails.join(", ")})`
                   : "";
 
-              await activityLogService.logActivity({
-                clubOwnerId: targetOwnerId,
-                category: "holidays",
-                actionType: "UPDATE",
+              await activityLogService.createActivityLog({
+                actorType: "club_owner",
+                actorId: targetOwnerId,
+                actionType: "update",
                 entityName: "Holiday",
                 entityId: existing.documentId || existing.id,
                 description: `Updated holiday '${existing.title || "Holiday"}'${changesStr}`,
@@ -767,9 +767,9 @@ export default factories.createCoreController(
         if (targetOwnerId) {
           try {
             const activityLogService: any = strapi.service(
-              "api::club-owner-activity-log.club-owner-activity-log",
+              "api::activity-log.activity-log",
             );
-            if (activityLogService?.logActivity) {
+            if (activityLogService?.createActivityLog) {
               const closureLabel =
                 existing.closureType === "partial_day"
                   ? `Partial Day (${existing.startTime || ""} - ${existing.endtime || ""})`
@@ -779,10 +779,10 @@ export default factories.createCoreController(
                   ? existing.startDate
                   : `${existing.startDate} to ${existing.endDate}`;
 
-              await activityLogService.logActivity({
-                clubOwnerId: targetOwnerId,
-                category: "holidays",
-                actionType: "DELETE",
+              await activityLogService.createActivityLog({
+                actorType: "club_owner",
+                actorId: targetOwnerId,
+                actionType: "delete",
                 entityName: "Holiday",
                 entityId: existing.documentId || existing.id,
                 description: `Deleted holiday '${existing.title || "Holiday"}' (${closureLabel}, Date: ${dateRange})`,
