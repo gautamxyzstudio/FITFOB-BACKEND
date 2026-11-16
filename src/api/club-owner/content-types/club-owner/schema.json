@@ -166,6 +166,12 @@
     "dailyTrialLimit": {
       "type": "integer",
       "default": 3
+    },
+    "gym_trials": {
+      "type": "relation",
+      "relation": "oneToMany",
+      "target": "api::gym-trial.gym-trial",
+      "mappedBy": "club_owner"
     }
   }
 }

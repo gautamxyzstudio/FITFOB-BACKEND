@@ -50,12 +50,6 @@
         "expired"
       ]
     },
-    "client_checkins": {
-      "type": "relation",
-      "relation": "oneToMany",
-      "target": "api::client-checkin.client-checkin",
-      "mappedBy": "outdoor_subscription"
-    },
     "membership_payment": {
       "type": "relation",
       "relation": "oneToOne",

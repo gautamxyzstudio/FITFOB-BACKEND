@@ -23,11 +23,11 @@
       "target": "api::club-owner.club-owner",
       "inversedBy": "client_checkins"
     },
-    "subscriptionType": {
+    "checkinType": {
       "type": "enumeration",
       "enum": [
-        "local",
-        "outdoor"
+        "membership",
+        "trial"
       ]
     },
     "checkinTime": {
@@ -36,16 +36,10 @@
     "checkoutTime": {
       "type": "datetime"
     },
-    "local_subscription": {
+    "gym_membership": {
       "type": "relation",
       "relation": "manyToOne",
-      "target": "api::local-subscription.local-subscription",
-      "inversedBy": "client_checkins"
-    },
-    "outdoor_subscription": {
-      "type": "relation",
-      "relation": "manyToOne",
-      "target": "api::outdoor-subscription.outdoor-subscription",
+      "target": "api::gym-membership.gym-membership",
       "inversedBy": "client_checkins"
     }
   }

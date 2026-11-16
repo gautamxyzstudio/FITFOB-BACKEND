@@ -121,6 +121,12 @@
       "relation": "oneToMany",
       "target": "api::activity-log.activity-log",
       "mappedBy": "client_detail"
+    },
+    "gym_trials": {
+      "type": "relation",
+      "relation": "oneToMany",
+      "target": "api::gym-trial.gym-trial",
+      "mappedBy": "client_detail"
     }
   }
 }

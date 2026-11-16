@@ -52,12 +52,6 @@
         "cancelled"
       ]
     },
-    "client_checkins": {
-      "type": "relation",
-      "relation": "oneToMany",
-      "target": "api::client-checkin.client-checkin",
-      "mappedBy": "local_subscription"
-    },
     "membership_payment": {
       "type": "relation",
       "relation": "oneToOne",

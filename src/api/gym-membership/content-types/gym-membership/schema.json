@@ -97,6 +97,12 @@
       "relation": "oneToMany",
       "target": "api::commission-transaction.commission-transaction",
       "mappedBy": "gym_membership"
+    },
+    "client_checkins": {
+      "type": "relation",
+      "relation": "oneToMany",
+      "target": "api::client-checkin.client-checkin",
+      "mappedBy": "gym_membership"
     }
   }
 }

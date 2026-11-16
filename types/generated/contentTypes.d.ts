@@ -592,6 +592,7 @@ export interface ApiClientCheckinClientCheckin
   };
   attributes: {
     checkinTime: Schema.Attribute.DateTime;
+    checkinType: Schema.Attribute.Enumeration<['membership', 'trial']>;
     checkoutTime: Schema.Attribute.DateTime;
     client_detail: Schema.Attribute.Relation<
       'manyToOne',
@@ -604,9 +605,9 @@ export interface ApiClientCheckinClientCheckin
     createdAt: Schema.Attribute.DateTime;
     createdBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
       Schema.Attribute.Private;
-    local_subscription: Schema.Attribute.Relation<
+    gym_membership: Schema.Attribute.Relation<
       'manyToOne',
-      'api::local-subscription.local-subscription'
+      'api::gym-membership.gym-membership'
     >;
     locale: Schema.Attribute.String & Schema.Attribute.Private;
     localizations: Schema.Attribute.Relation<
@@ -614,12 +615,7 @@ export interface ApiClientCheckinClientCheckin
       'api::client-checkin.client-checkin'
     > &
       Schema.Attribute.Private;
-    outdoor_subscription: Schema.Attribute.Relation<
-      'manyToOne',
-      'api::outdoor-subscription.outdoor-subscription'
-    >;
     publishedAt: Schema.Attribute.DateTime;
-    subscriptionType: Schema.Attribute.Enumeration<['local', 'outdoor']>;
     updatedAt: Schema.Attribute.DateTime;
     updatedBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
       Schema.Attribute.Private;
@@ -668,6 +664,10 @@ export interface ApiClientDetailClientDetail
     gym_memberships: Schema.Attribute.Relation<
       'oneToMany',
       'api::gym-membership.gym-membership'
+    >;
+    gym_trials: Schema.Attribute.Relation<
+      'oneToMany',
+      'api::gym-trial.gym-trial'
     >;
     height: Schema.Attribute.String;
     latitude: Schema.Attribute.String;
@@ -883,6 +883,10 @@ export interface ApiClubOwnerClubOwner extends Struct.CollectionTypeSchema {
     gym_contracts: Schema.Attribute.Relation<
       'oneToMany',
       'api::gym-contract.gym-contract'
+    >;
+    gym_trials: Schema.Attribute.Relation<
+      'oneToMany',
+      'api::gym-trial.gym-trial'
     >;
     holdidays: Schema.Attribute.Relation<'oneToMany', 'api::holdiday.holdiday'>;
     isTrialEnabled: Schema.Attribute.Boolean &
@@ -1226,6 +1230,10 @@ export interface ApiGymMembershipGymMembership
     draftAndPublish: false;
   };
   attributes: {
+    client_checkins: Schema.Attribute.Relation<
+      'oneToMany',
+      'api::client-checkin.client-checkin'
+    >;
     client_detail: Schema.Attribute.Relation<
       'manyToOne',
       'api::client-detail.client-detail'
@@ -1322,6 +1330,45 @@ export interface ApiGymPromotionGymPromotion
   };
 }
 
+export interface ApiGymTrialGymTrial extends Struct.CollectionTypeSchema {
+  collectionName: 'gym_trials';
+  info: {
+    displayName: 'gym-trial';
+    pluralName: 'gym-trials';
+    singularName: 'gym-trial';
+  };
+  options: {
+    draftAndPublish: false;
+  };
+  attributes: {
+    client_detail: Schema.Attribute.Relation<
+      'manyToOne',
+      'api::client-detail.client-detail'
+    >;
+    club_owner: Schema.Attribute.Relation<
+      'manyToOne',
+      'api::club-owner.club-owner'
+    >;
+    createdAt: Schema.Attribute.DateTime;
+    createdBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
+      Schema.Attribute.Private;
+    locale: Schema.Attribute.String & Schema.Attribute.Private;
+    localizations: Schema.Attribute.Relation<
+      'oneToMany',
+      'api::gym-trial.gym-trial'
+    > &
+      Schema.Attribute.Private;
+    publishedAt: Schema.Attribute.DateTime;
+    trialDate: Schema.Attribute.Date;
+    trialstatus: Schema.Attribute.Enumeration<
+      ['booked', 'completed', 'cancelled']
+    >;
+    updatedAt: Schema.Attribute.DateTime;
+    updatedBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
+      Schema.Attribute.Private;
+  };
+}
+
 export interface ApiHoldidayHoldiday extends Struct.CollectionTypeSchema {
   collectionName: 'holdidays';
   info: {
@@ -1414,10 +1461,6 @@ export interface ApiLocalSubscriptionLocalSubscription
     draftAndPublish: false;
   };
   attributes: {
-    client_checkins: Schema.Attribute.Relation<
-      'oneToMany',
-      'api::client-checkin.client-checkin'
-    >;
     client_detail: Schema.Attribute.Relation<
       'manyToOne',
       'api::client-detail.client-detail'
@@ -1700,10 +1743,6 @@ export interface ApiOutdoorSubscriptionOutdoorSubscription
     draftAndPublish: false;
   };
   attributes: {
-    client_checkins: Schema.Attribute.Relation<
-      'oneToMany',
-      'api::client-checkin.client-checkin'
-    >;
     client_detail: Schema.Attribute.Relation<
       'manyToOne',
       'api::client-detail.client-detail'
@@ -2506,6 +2545,7 @@ declare module '@strapi/strapi' {
       'api::gym-contract.gym-contract': ApiGymContractGymContract;
       'api::gym-membership.gym-membership': ApiGymMembershipGymMembership;
       'api::gym-promotion.gym-promotion': ApiGymPromotionGymPromotion;
+      'api::gym-trial.gym-trial': ApiGymTrialGymTrial;
       'api::holdiday.holdiday': ApiHoldidayHoldiday;
       'api::local-membership-plan.local-membership-plan': ApiLocalMembershipPlanLocalMembershipPlan;
       'api::local-subscription.local-subscription': ApiLocalSubscriptionLocalSubscription;

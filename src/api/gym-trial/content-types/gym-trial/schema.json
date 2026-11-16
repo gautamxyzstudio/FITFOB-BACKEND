@@ -1,0 +1,38 @@
+{
+  "kind": "collectionType",
+  "collectionName": "gym_trials",
+  "info": {
+    "singularName": "gym-trial",
+    "pluralName": "gym-trials",
+    "displayName": "gym-trial"
+  },
+  "options": {
+    "draftAndPublish": false
+  },
+  "pluginOptions": {},
+  "attributes": {
+    "trialDate": {
+      "type": "date"
+    },
+    "client_detail": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::client-detail.client-detail",
+      "inversedBy": "gym_trials"
+    },
+    "club_owner": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::club-owner.club-owner",
+      "inversedBy": "gym_trials"
+    },
+    "trialstatus": {
+      "type": "enumeration",
+      "enum": [
+        "booked",
+        "completed",
+        "cancelled"
+      ]
+    }
+  }
+}
