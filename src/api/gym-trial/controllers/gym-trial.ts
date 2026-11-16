@@ -527,5 +527,7 @@ export default factories.createCoreController(
         return ctx.internalServerError("Failed to create gym trial");
       }
     },
+
+    
   }),
 );

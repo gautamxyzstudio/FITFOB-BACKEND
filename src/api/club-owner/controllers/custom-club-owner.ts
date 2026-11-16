@@ -194,67 +194,6 @@ async function getUserRole(user: any): Promise<string> {
   return role;
 }
 
-async function resolveClubOwnerForTrial(ctx: Context, user: any) {
-  const roleName = await getUserRole(user);
-  const isAdmin = roleName === "admin" || roleName === "superadmin";
-
-  if (isAdmin) {
-    const body = (ctx.request.body as any) ?? {};
-    const data = body.data ?? body;
-
-    const targetDocId =
-      ctx.query?.ownerDocumentId ||
-      ctx.query?.ownerdocumentid ||
-      ctx.params?.ownerDocumentId ||
-      ctx.params?.documentId ||
-      data?.ownerDocumentId ||
-      data?.ownerdocumentid;
-
-    if (!targetDocId || !String(targetDocId).trim()) {
-      return {
-        clubOwner: null,
-        isAdmin: true,
-        error: "ownerDocumentId is required in params for admin/superadmin",
-      };
-    }
-
-    const docIdStr = String(targetDocId).trim();
-
-    const clubOwner = await strapi.db
-      .query("api::club-owner.club-owner")
-      .findOne({
-        where: { documentId: docIdStr },
-      });
-
-    if (!clubOwner) {
-      return {
-        clubOwner: null,
-        isAdmin: true,
-        notFound: "Club owner not found with the provided ownerDocumentId",
-      };
-    }
-
-    return { clubOwner, isAdmin: true };
-  }
-
-  // If user is club owner, resolve their own profile from token
-  const clubOwner = await strapi.db
-    .query("api::club-owner.club-owner")
-    .findOne({
-      where: { user: user.id },
-    });
-
-  if (!clubOwner) {
-    return {
-      clubOwner: null,
-      isAdmin: false,
-      notFound: "Club owner profile not found for this user",
-    };
-  }
-
-  return { clubOwner, isAdmin: false };
-}
-
 async function resolveClubOwner(ctx: Context, user: any) {
   const roleName = (user.role?.name || user.role?.type || "").toLowerCase();
   const isAdmin = roleName === "admin" || roleName === "superadmin";
@@ -769,16 +708,14 @@ export default {
         return ctx.unauthorized("Authentication required");
       }
 
-      const { clubOwner, error, notFound } = await resolveClubOwnerForTrial(
-        ctx,
-        user,
-      );
+      const clubOwner = await strapi.db
+        .query("api::club-owner.club-owner")
+        .findOne({
+          where: { user: user.id },
+        });
 
-      if (error) {
-        return ctx.badRequest(error);
-      }
-      if (notFound || !clubOwner) {
-        return ctx.notFound(notFound || "Club owner profile not found");
+      if (!clubOwner) {
+        return ctx.notFound("Club owner profile not found for this user");
       }
 
       const todayDateStr =
@@ -898,14 +835,14 @@ export default {
         return ctx.unauthorized("Authentication required");
       }
 
-      const { clubOwner, isAdmin, error, notFound } =
-        await resolveClubOwnerForTrial(ctx, user);
+      const clubOwner = await strapi.db
+        .query("api::club-owner.club-owner")
+        .findOne({
+          where: { user: user.id },
+        });
 
-      if (error) {
-        return ctx.badRequest(error);
-      }
-      if (notFound || !clubOwner) {
-        return ctx.notFound(notFound || "Club owner profile not found");
+      if (!clubOwner) {
+        return ctx.notFound("Club owner profile not found for this user");
       }
 
       const body = (ctx.request.body as any) ?? {};
@@ -981,35 +918,26 @@ export default {
 
       // Construct activity description showing both old and new values
       let ownerAction = "Updated trial settings";
-      let adminAction = "Admin updated trial settings";
       const detailParts: string[] = [];
 
       if (statusChanged && limitChanged) {
         ownerAction = newStatus
           ? `Enabled gym trials for ${clubTitle}`
           : `Disabled gym trials for ${clubTitle}`;
-        adminAction = newStatus
-          ? `Admin enabled gym trials for ${clubTitle}`
-          : `Admin disabled gym trials for ${clubTitle}`;
         detailParts.push(`Trial: ${oldStatusStr} -> ${newStatusStr}`);
         detailParts.push(`Daily limit: ${oldLimit} -> ${newLimit}`);
       } else if (statusChanged) {
         ownerAction = newStatus
           ? `Enabled gym trials for ${clubTitle}`
           : `Disabled gym trials for ${clubTitle}`;
-        adminAction = newStatus
-          ? `Admin enabled gym trials for ${clubTitle}`
-          : `Admin disabled gym trials for ${clubTitle}`;
         detailParts.push(`Trial: ${oldStatusStr} -> ${newStatusStr}`);
         detailParts.push(`Daily limit: ${newLimit}`);
       } else if (limitChanged) {
         ownerAction = `Updated daily trial limit for ${clubTitle}`;
-        adminAction = `Admin updated daily trial limit for ${clubTitle}`;
         detailParts.push(`Daily limit: ${oldLimit} -> ${newLimit}`);
         detailParts.push(`Trial: ${newStatusStr}`);
       } else {
         ownerAction = `Updated trial settings for ${clubTitle}`;
-        adminAction = `Admin updated trial settings for ${clubTitle}`;
         detailParts.push(`Trial: ${newStatusStr}`);
         detailParts.push(`Daily limit: ${newLimit}`);
       }
@@ -1017,7 +945,6 @@ export default {
       const detailsStr =
         detailParts.length > 0 ? ` (${detailParts.join(", ")})` : "";
       const ownerDescription = `${ownerAction}${detailsStr}`;
-      const adminDescription = `${adminAction}${detailsStr}`;
 
       // 📝 Activity Log for Club Owner
       const targetOwnerId = clubOwner.documentId || clubOwner.id;
@@ -1029,12 +956,12 @@ export default {
           );
           if (activityLogService?.createActivityLog) {
             await activityLogService.createActivityLog({
-              actorType: isAdmin ? "admin" : "club_owner",
-              actorId: isAdmin ? user.id : targetOwnerId,
+              actorType: "club_owner",
+              actorId: targetOwnerId,
               actionType: "update",
               entityName: "club-owner",
               entityId: targetOwnerId,
-              description: isAdmin ? adminDescription : ownerDescription,
+              description: ownerDescription,
             });
           }
         } catch (logErr) {
@@ -1044,24 +971,255 @@ export default {
           );
         }
       }
+      
+      return ctx.send({
+        message: "Trial settings updated successfully",
+        isTrialEnabled:
+          updatedOwner?.isTrialEnabled ??
+          (isTrialEnabled !== undefined ? isTrialEnabled : oldEnabled),
+        dailyTrialLimit:
+          updatedOwner?.dailyTrialLimit ??
+          (dailyTrialLimit !== undefined ? dailyTrialLimit : oldLimit),
+      });
+    } catch (error) {
+      strapi.log.error("Error updating trial settings:", error);
+      return ctx.internalServerError("Failed to update trial settings");
+    }
+  },
 
-      // 📝 Admin Activity Log (if triggered by Admin/SuperAdmin)
-      if (isAdmin) {
-        try {
-          await logAdminActivity({
-            adminUserId: getAdminActivityUserId(ctx),
-            category: "club_owner",
-            actionType: "update",
-            entityName: "Club Owner",
-            entityId: targetOwnerId,
-            description: adminDescription,
-          });
-        } catch (adminLogErr) {
-          strapi.log.warn(
-            "[AdminActivityLog] Failed to log trial settings update by admin:",
-            adminLogErr,
+  /* =======================================================
+     ADMIN: GET TRIAL SETTINGS BY CLUB OWNER DOCUMENT ID
+     GET /api/trial-settings/:documentId
+  ======================================================= */
+  async getAdminTrialSettings(ctx: Context) {
+    try {
+      const user = await getAuthUser(ctx);
+
+      if (!user?.id) {
+        return ctx.unauthorized("Authentication required");
+      }
+
+      const roleName = await getUserRole(user);
+      const isAdmin = roleName === "admin" || roleName === "superadmin";
+
+      if (!isAdmin) {
+        return ctx.forbidden("Access denied. Admin role required.");
+      }
+
+      const targetDocId =
+        ctx.params?.documentId || ctx.params?.id || ctx.query?.documentId;
+
+      if (!targetDocId || !String(targetDocId).trim()) {
+        return ctx.badRequest("Club owner documentId is required");
+      }
+
+      const docIdStr = String(targetDocId).trim();
+      const isNum = !isNaN(Number(docIdStr)) && /^\d+$/.test(docIdStr);
+
+      const clubOwner = await strapi.db
+        .query("api::club-owner.club-owner")
+        .findOne({
+          where: isNum
+            ? { $or: [{ id: Number(docIdStr) }, { documentId: docIdStr }] }
+            : { documentId: docIdStr },
+        });
+
+      if (!clubOwner) {
+        return ctx.notFound("Club owner not found");
+      }
+
+      return ctx.send({
+        isTrialEnabled: Boolean(clubOwner.isTrialEnabled),
+        dailyTrialLimit: clubOwner.dailyTrialLimit ?? 3,
+      });
+    } catch (error) {
+      strapi.log.error("Error fetching admin trial settings:", error);
+      return ctx.internalServerError("Failed to fetch trial settings");
+    }
+  },
+
+  /* =======================================================
+     ADMIN: UPDATE TRIAL SETTINGS BY CLUB OWNER DOCUMENT ID
+     PUT /api/trial-settings/:documentId
+  ======================================================= */
+  async updateAdminTrialSettings(ctx: Context) {
+    try {
+      const user = await getAuthUser(ctx);
+
+      if (!user?.id) {
+        return ctx.unauthorized("Authentication required");
+      }
+
+      const roleName = await getUserRole(user);
+      const isAdmin = roleName === "admin" || roleName === "superadmin";
+
+      if (!isAdmin) {
+        return ctx.forbidden("Access denied. Admin role required.");
+      }
+
+      const targetDocId =
+        ctx.params?.documentId || ctx.params?.id || ctx.query?.documentId;
+
+      if (!targetDocId || !String(targetDocId).trim()) {
+        return ctx.badRequest("Club owner documentId is required");
+      }
+
+      const docIdStr = String(targetDocId).trim();
+      const isNum = !isNaN(Number(docIdStr)) && /^\d+$/.test(docIdStr);
+
+      const clubOwner = await strapi.db
+        .query("api::club-owner.club-owner")
+        .findOne({
+          where: isNum
+            ? { $or: [{ id: Number(docIdStr) }, { documentId: docIdStr }] }
+            : { documentId: docIdStr },
+        });
+
+      if (!clubOwner) {
+        return ctx.notFound("Club owner not found");
+      }
+
+      const body = (ctx.request.body as any) ?? {};
+      const data = body.data ?? body;
+
+      let isTrialEnabled: boolean | undefined = undefined;
+      if (data.isTrialEnabled !== undefined) {
+        if (typeof data.isTrialEnabled === "boolean") {
+          isTrialEnabled = data.isTrialEnabled;
+        } else if (typeof data.isTrialEnabled === "string") {
+          const lower = data.isTrialEnabled.toLowerCase().trim();
+          if (lower === "true" || lower === "1") isTrialEnabled = true;
+          else if (lower === "false" || lower === "0") isTrialEnabled = false;
+          else {
+            return ctx.badRequest(
+              "isTrialEnabled must be a boolean (true or false)",
+            );
+          }
+        } else {
+          return ctx.badRequest(
+            "isTrialEnabled must be a boolean (true or false)",
           );
         }
+      }
+
+      let dailyTrialLimit: number | undefined = undefined;
+      if (data.dailyTrialLimit !== undefined) {
+        const parsed = Number(data.dailyTrialLimit);
+        if (!Number.isInteger(parsed) || parsed < 1) {
+          return ctx.badRequest(
+            "dailyTrialLimit must be an integer greater than or equal to 1",
+          );
+        }
+        dailyTrialLimit = parsed;
+      }
+
+      if (isTrialEnabled === undefined && dailyTrialLimit === undefined) {
+        return ctx.badRequest(
+          "Please provide isTrialEnabled or dailyTrialLimit to update",
+        );
+      }
+
+      const updateData: any = {};
+      if (isTrialEnabled !== undefined)
+        updateData.isTrialEnabled = isTrialEnabled;
+      if (dailyTrialLimit !== undefined)
+        updateData.dailyTrialLimit = dailyTrialLimit;
+
+      const oldEnabled = Boolean(clubOwner.isTrialEnabled);
+      const oldLimit = clubOwner.dailyTrialLimit ?? 3;
+
+      const updatedOwner: any = await strapi.db
+        .query("api::club-owner.club-owner")
+        .update({
+          where: { id: clubOwner.id },
+          data: updateData,
+        });
+
+      // Build change description
+      const clubTitle = clubOwner.clubName || "club";
+      const statusChanged =
+        isTrialEnabled !== undefined && isTrialEnabled !== oldEnabled;
+      const limitChanged =
+        dailyTrialLimit !== undefined && dailyTrialLimit !== oldLimit;
+
+      const oldStatusStr = oldEnabled ? "Enabled" : "Disabled";
+      const newStatus =
+        isTrialEnabled !== undefined ? isTrialEnabled : oldEnabled;
+      const newStatusStr = newStatus ? "Enabled" : "Disabled";
+
+      const newLimit =
+        dailyTrialLimit !== undefined ? dailyTrialLimit : oldLimit;
+
+      let adminAction = "Admin updated trial settings";
+      const detailParts: string[] = [];
+
+      if (statusChanged && limitChanged) {
+        adminAction = newStatus
+          ? `Admin enabled gym trials for ${clubTitle}`
+          : `Admin disabled gym trials for ${clubTitle}`;
+        detailParts.push(`Trial: ${oldStatusStr} -> ${newStatusStr}`);
+        detailParts.push(`Daily limit: ${oldLimit} -> ${newLimit}`);
+      } else if (statusChanged) {
+        adminAction = newStatus
+          ? `Admin enabled gym trials for ${clubTitle}`
+          : `Admin disabled gym trials for ${clubTitle}`;
+        detailParts.push(`Trial: ${oldStatusStr} -> ${newStatusStr}`);
+        detailParts.push(`Daily limit: ${newLimit}`);
+      } else if (limitChanged) {
+        adminAction = `Admin updated daily trial limit for ${clubTitle}`;
+        detailParts.push(`Daily limit: ${oldLimit} -> ${newLimit}`);
+        detailParts.push(`Trial: ${newStatusStr}`);
+      } else {
+        adminAction = `Admin updated trial settings for ${clubTitle}`;
+        detailParts.push(`Trial: ${newStatusStr}`);
+        detailParts.push(`Daily limit: ${newLimit}`);
+      }
+
+      const detailsStr =
+        detailParts.length > 0 ? ` (${detailParts.join(", ")})` : "";
+      const adminDescription = `${adminAction}${detailsStr}`;
+
+      const targetOwnerId = clubOwner.documentId || clubOwner.id;
+
+      // 📝 Activity Log for Admin action on Club Owner
+      if (targetOwnerId) {
+        try {
+          const activityLogService: any = strapi.service(
+            "api::activity-log.activity-log",
+          );
+          if (activityLogService?.createActivityLog) {
+            await activityLogService.createActivityLog({
+              actorType: "admin",
+              actorId: user.id,
+              actionType: "update",
+              entityName: "club-owner",
+              entityId: targetOwnerId,
+              description: adminDescription,
+            });
+          }
+        } catch (logErr) {
+          strapi.log.warn(
+            "[ActivityLog] Failed to log admin trial settings update:",
+            logErr,
+          );
+        }
+      }
+
+      // 📝 Admin Activity Log
+      try {
+        await logAdminActivity({
+          adminUserId: getAdminActivityUserId(ctx) || user.id,
+          category: "club_owner",
+          actionType: "update",
+          entityName: "Club Owner",
+          entityId: targetOwnerId,
+          description: adminDescription,
+        });
+      } catch (adminLogErr) {
+        strapi.log.warn(
+          "[AdminActivityLog] Failed to log trial settings update by admin:",
+          adminLogErr,
+        );
       }
 
       return ctx.send({
@@ -1074,7 +1232,7 @@ export default {
           (dailyTrialLimit !== undefined ? dailyTrialLimit : oldLimit),
       });
     } catch (error) {
-      strapi.log.error("Error updating trial settings:", error);
+      strapi.log.error("Error updating admin trial settings:", error);
       return ctx.internalServerError("Failed to update trial settings");
     }
   },

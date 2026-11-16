@@ -136,5 +136,13 @@ export default {
         auth: {},
       },
     },
+    {
+      method: "GET",
+      path: "/trial-settings/:documentId",
+      handler: "custom-club-owner.getAdminTrialSettings",
+      config: {
+        auth: {},
+      },
+    },
   ],
 };
