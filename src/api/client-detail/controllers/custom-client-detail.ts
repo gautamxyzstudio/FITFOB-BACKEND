@@ -839,7 +839,7 @@ export default {
   },
 
   /* ======================================================
-     FETCH CLIENT LOCAL & OUTDOOR SUBSCRIPTIONS (POSTGRES)
+     FETCH CLIENT GYM MEMBERSHIPS
   ====================================================== */
   async getSubscriptions(ctx: any) {
     try {
@@ -849,92 +849,132 @@ export default {
         return ctx.unauthorized("Authentication required");
       }
 
-      const knex = strapi.db.connection;
+      /* 1. FIND CLIENT DETAIL FOR AUTH USER */
+      let client = await strapi.db
+        .query("api::client-detail.client-detail")
+        .findOne({
+          where: { user: user.id },
+          select: ["id", "documentId", "name", "clientId"],
+        });
 
-      /* 1. FIND CLIENT DETAIL FOR AUTH USER VIA POSTGRES */
-      const clientRes = await knex.raw(
-        `SELECT c.id, c.name, c.client_id as "clientId" 
-         FROM client_details c 
-         LEFT JOIN up_users_client_detail_lnk l ON l.client_detail_id = c.id 
-         WHERE l.user_id = ? OR (c.email IS NOT NULL AND LOWER(c.email) = LOWER(?))
-         LIMIT 1`,
-        [user.id, user.email || ""]
-      );
-
-      const client = clientRes.rows?.[0];
+      if (!client && user.email) {
+        client = await strapi.db
+          .query("api::client-detail.client-detail")
+          .findOne({
+            where: { email: user.email },
+            select: ["id", "documentId", "name", "clientId"],
+          });
+      }
 
       if (!client) {
         return ctx.notFound("Client profile not found for this account");
       }
 
-      /* 2. FETCH LATEST LOCAL & OUTDOOR SUBSCRIPTIONS BASED ON CREATED_AT */
-      const [localSubsRes, outdoorSubsRes] = await Promise.all([
-        knex.raw(
-          `SELECT 
-             ls.id,
-             ls.start_date as "startDate",
-             ls.end_date as "endDate",
-             ls.subscription_status as "subscriptionStatus",
-             COALESCE(co_direct.club_name, co_plan.club_name) as "clubName",
-             ls.created_at as "createdAt"
-           FROM local_subscriptions ls
-           JOIN local_subscriptions_client_detail_lnk cd_lnk ON cd_lnk.local_subscription_id = ls.id
-           LEFT JOIN local_subscriptions_club_owner_lnk co_direct_lnk ON co_direct_lnk.local_subscription_id = ls.id
-           LEFT JOIN club_owners co_direct ON co_direct.id = co_direct_lnk.club_owner_id
-           LEFT JOIN local_subscriptions_local_membership_plan_lnk lmp_lnk ON lmp_lnk.local_subscription_id = ls.id
-           LEFT JOIN local_membership_plans lmp ON lmp.id = lmp_lnk.local_membership_plan_id
-           LEFT JOIN local_membership_plans_club_owner_lnk co_plan_lnk ON co_plan_lnk.local_membership_plan_id = lmp.id
-           LEFT JOIN club_owners co_plan ON co_plan.id = co_plan_lnk.club_owner_id
-           WHERE cd_lnk.client_detail_id = ?
-           ORDER BY ls.created_at DESC, ls.id DESC
-           LIMIT 1`,
-          [client.id]
-        ),
-        knex.raw(
-          `SELECT 
-             os.id,
-             os.total_visits_allowed as "totalVisitsAllowed",
-             os.used_visits as "usedVisits",
-             os.remaining_visits as "remainingVisits",
-             os.subscription_status as "subscriptionStatus",
-             os.created_at as "createdAt"
-           FROM outdoor_subscriptions os
-           JOIN outdoor_subscriptions_client_detail_lnk cd_lnk ON cd_lnk.outdoor_subscription_id = os.id
-           WHERE cd_lnk.client_detail_id = ?
-           ORDER BY os.created_at DESC, os.id DESC
-           LIMIT 1`,
-          [client.id]
-        ),
-      ]);
+      /* 2. FETCH ALL GYM MEMBERSHIPS FOR THIS CLIENT */
+      const memberships = await strapi.db
+        .query("api::gym-membership.gym-membership")
+        .findMany({
+          where: {
+            $or: [
+              { client_detail: client.id },
+              ...(client.documentId
+                ? [{ client_detail: { documentId: client.documentId } }]
+                : []),
+            ],
+            paymentStatus: { $ne: "failed" },
+          },
+          populate: {
+            gym_contract: {
+              populate: {
+                club_owner: {
+                  select: [
+                    "id",
+                    "documentId",
+                    "clubId",
+                    "clubName",
+                    "clubCategory",
+                  ],
+                },
+              },
+            },
+          },
+          orderBy: { id: "desc" },
+        });
 
-      const latestLocal = localSubsRes.rows?.[0] || null;
-      const latestOutdoor = outdoorSubsRes.rows?.[0] || null;
+      /* 3. ENSURE CLUB OWNER DETAILS ARE RESOLVED */
+      const missingContractIds = (memberships || [])
+        .filter((m: any) => m.gym_contract && !m.gym_contract.club_owner)
+        .map((m: any) => m.gym_contract.id);
 
-      const localSubscription = latestLocal
-        ? {
-            startDate: latestLocal.startDate,
-            endDate:
-              latestLocal.endDate instanceof Date
-                ? latestLocal.endDate.toISOString().split("T")[0]
-                : latestLocal.endDate,
-            subscriptionStatus: latestLocal.subscriptionStatus,
-            clubName: latestLocal.clubName ?? null,
+      if (missingContractIds.length > 0) {
+        try {
+          const contractsWithOwners = await strapi.db
+            .query("api::gym-contract.gym-contract")
+            .findMany({
+              where: { id: { $in: missingContractIds } },
+              populate: {
+                club_owner: {
+                  select: [
+                    "id",
+                    "documentId",
+                    "clubId",
+                    "clubName",
+                    "clubCategory",
+                  ],
+                },
+              },
+            });
+
+          const contractOwnerMap = new Map();
+          for (const c of contractsWithOwners) {
+            contractOwnerMap.set(c.id, c.club_owner);
           }
-        : null;
 
-      const outdoorSubscription = latestOutdoor
-        ? {
-            totalVisitsAllowed: Number(latestOutdoor.totalVisitsAllowed),
-            totalVisits: Number(latestOutdoor.totalVisitsAllowed),
-            usedVisits: Number(latestOutdoor.usedVisits),
-            remainingVisits: Number(latestOutdoor.remainingVisits),
-            subscriptionStatus: latestOutdoor.subscriptionStatus,
+          for (const m of memberships) {
+            if (m.gym_contract && !m.gym_contract.club_owner) {
+              m.gym_contract.club_owner = contractOwnerMap.get(
+                m.gym_contract.id,
+              );
+            }
           }
-        : null;
+        } catch (resolveErr) {
+          strapi.log.warn(
+            "[getSubscriptions] Fallback contract resolution error:",
+            resolveErr,
+          );
+        }
+      }
+
+      /* 4. FORMAT RESPONSE WITH REQUESTED FIELDS */
+      const formattedMemberships = (memberships || []).map((m: any) => {
+        const club = m.gym_contract?.club_owner || null;
+        const clubName = club?.clubName || club?.club_name || null;
+        const clubCategory = club?.clubCategory || club?.club_category || null;
+
+        const startDate =
+          m.startDate instanceof Date
+            ? m.startDate.toISOString().split("T")[0]
+            : m.startDate || null;
+
+        const endDate =
+          m.endDate instanceof Date
+            ? m.endDate.toISOString().split("T")[0]
+            : m.endDate || null;
+
+        return {
+          membershipId: m.membershipId || null,
+          clubName,
+          startDate,
+          endDate,
+          plan: m.duration || null,
+          membershipStatus: m.membershipStatus || null,
+          clubCategory,
+       
+        };
+      });
 
       ctx.body = {
-        local_subscription: localSubscription,
-        outdoor_subscription: outdoorSubscription,
+        data: formattedMemberships,
       };
     } catch (error) {
       strapi.log.error("GET CLIENT SUBSCRIPTIONS ERROR:", error);

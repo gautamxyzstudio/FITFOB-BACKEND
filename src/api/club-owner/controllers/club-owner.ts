@@ -667,11 +667,10 @@ async function resolveClientFavorites(ctx: Context): Promise<any[]> {
   }
 }
 
-/* ---------- DIRECT POSTGRES FAVORITE CHECK HELPER ---------- */
-async function checkIsClubFavoritedDirect(
+/* ---------- DIRECT POSTGRES CLIENT RESOLVER & FAVORITE CHECK HELPERS ---------- */
+async function resolveClientDetailIdFromCtx(
   ctx: Context,
-  clubOwnerId: number,
-): Promise<boolean> {
+): Promise<number | null> {
   try {
     let userId: any = ctx.state?.user?.id;
 
@@ -745,6 +744,19 @@ async function checkIsClubFavoritedDirect(
       }
     }
 
+    return clientDetailIdNum;
+  } catch (err) {
+    strapi.log.warn("[resolveClientDetailIdFromCtx] Error:", err);
+    return null;
+  }
+}
+
+async function checkIsClubFavoritedDirect(
+  ctx: Context,
+  clubOwnerId: number,
+): Promise<boolean> {
+  try {
+    const clientDetailIdNum = await resolveClientDetailIdFromCtx(ctx);
     if (clientDetailIdNum) {
       const favRes = await strapi.db.connection.raw(
         `SELECT 1 FROM client_details_favorites_lnk WHERE client_detail_id = ? AND club_owner_id = ? LIMIT 1`,
@@ -752,10 +764,52 @@ async function checkIsClubFavoritedDirect(
       );
       return Boolean(favRes?.rows?.length && favRes.rows.length > 0);
     }
-
     return false;
   } catch (err) {
     strapi.log.warn("[checkIsClubFavoritedDirect] Error:", err);
+    return false;
+  }
+}
+
+async function checkClientHasActiveMembership(ctx: Context): Promise<boolean> {
+  try {
+    const clientDetailIdNum = await resolveClientDetailIdFromCtx(ctx);
+    if (!clientDetailIdNum) {
+      return false;
+    }
+
+    const today = getTodayDateString();
+
+    const activeMembership = await strapi.db
+      .query("api::gym-membership.gym-membership")
+      .findOne({
+        where: {
+          client_detail: clientDetailIdNum,
+          $or: [
+            { membershipStatus: "active" },
+            { membershipStatus: "true" },
+          ],
+          $and: [
+            {
+              $or: [
+                { paymentStatus: { $ne: "failed" } },
+                { paymentStatus: { $null: true } },
+              ],
+            },
+            {
+              $or: [
+                { endDate: { $gte: today } },
+                { endDate: { $null: true } },
+              ],
+            },
+          ],
+        },
+        select: ["id", "membershipStatus"],
+      });
+
+    return Boolean(activeMembership);
+  } catch (err) {
+    strapi.log.warn("[checkClientHasActiveMembership] Error:", err);
     return false;
   }
 }
@@ -1656,6 +1710,7 @@ export default factories.createCoreController(
           facilitiesRes,
           plansRes,
           isFav,
+          membership,
         ] = await Promise.all([
           // Club photos with image urls
           strapi.db.connection.raw(
@@ -1756,6 +1811,8 @@ export default factories.createCoreController(
           ),
           // Favorite check
           checkIsClubFavoritedDirect(ctx, ownerId),
+          // Active gym membership check for logged-in client
+          checkClientHasActiveMembership(ctx),
         ]);
 
         // 3. Format club_photos: return small url (with fallback) and imageInfo
@@ -1884,6 +1941,7 @@ export default factories.createCoreController(
           weekdayScheduling,
           clubCategory: owner.club_category || null,
           isFav,
+          membership,
           club_photos,
           holidays,
           membershipPlans,
@@ -3267,7 +3325,7 @@ export default factories.createCoreController(
             clientName: checkin.client_detail?.name || null,
             selfieUploadUrl: checkin.client_detail?.selfieUpload?.url || null,
             checkinTime: checkin.checkinTime,
-            subscriptionType: checkin.subscriptionType,
+            checkinType: checkin.checkinType,
           }),
         );
 
