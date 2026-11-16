@@ -38,6 +38,16 @@ function getMediaUrl(media: any): string | null {
   return formatMediaUrl(rawUrl);
 }
 
+function getTodayDateString(): string {
+  const now = new Date();
+  const IST_OFFSET = 5.5 * 60 * 60 * 1000;
+  const nowIST = new Date(now.getTime() + IST_OFFSET);
+  const year = nowIST.getUTCFullYear();
+  const month = String(nowIST.getUTCMonth() + 1).padStart(2, "0");
+  const day = String(nowIST.getUTCDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
 function getCommissionDetails(membership: any) {
   let commTx: any = null;
   if (
@@ -547,7 +557,47 @@ export default {
         return ctx.notFound("Client profile not found");
       }
 
-      // 2. Fetch gym contracts for this club owner
+      // 2. Fetch check-ins for this client related to this gym owner only (both membership and trial)
+      const checkinWhere: any = {
+        client_detail: client.id,
+        club_owner: clubOwner.id,
+      };
+
+      const rawCheckinType = ctx.query.checkinType || ctx.query.type;
+      if (rawCheckinType) {
+        const normType = String(rawCheckinType).toLowerCase().trim();
+        if (normType === "membership" || normType === "trial") {
+          checkinWhere.checkinType = normType;
+        }
+      }
+
+      const checkins: any[] = await strapi.db
+        .query("api::client-checkin.client-checkin")
+        .findMany({
+          where: checkinWhere,
+          populate: {
+            gym_membership: {
+              select: ["id", "documentId", "membershipId", "duration", "durationMonths"],
+            },
+          },
+          orderBy: { checkinTime: "desc", id: "desc" },
+        });
+
+      const formattedCheckins = (checkins || []).map((c: any) => {
+
+        const isCheckedOut = Boolean(c.checkoutTime);
+        const checkinType = c.checkinType || "membership";
+
+        return {
+          checkinType,
+          checkinTime: c.checkinTime || null,
+          checkoutTime: c.checkoutTime || null,
+          status: isCheckedOut ? "checked-out" : "checked-in",
+          createdAt:c.createdAt
+        };
+      });
+
+      // 3. Fetch gym contracts for this club owner
       const contracts = await strapi.db
         .query("api::gym-contract.gym-contract")
         .findMany({
@@ -565,12 +615,13 @@ export default {
             phoneNumber: client.phoneNumber || client.user?.phoneNumber || null,
           },
           memberships: [],
+          checkins: formattedCheckins,
         });
       }
 
       const contractIds = contracts.map((c: any) => c.id);
 
-      // 3. Fetch all paid gym memberships for this client under this owner's contracts
+      // 4. Fetch all paid gym memberships for this client under this owner's contracts
       const memberships: any[] = await strapi.db
         .query("api::gym-membership.gym-membership")
         .findMany({
@@ -589,7 +640,7 @@ export default {
           orderBy: { id: "desc" },
         });
 
-      // 3b. Fallback: resolve missing commission transactions if any
+      // 4b. Fallback: resolve missing commission transactions if any
       const membershipIdsWithoutComm = memberships
         .filter(
           (m: any) =>
@@ -641,7 +692,7 @@ export default {
         }
       }
 
-      // 4. Format memberships
+      // 5. Format memberships
       const clientName = client.name || client.user?.username || null;
       const selfieUrl = getMediaUrl(client.selfieUpload);
 
@@ -668,6 +719,7 @@ export default {
           phoneNumber: client.phoneNumber || client.user?.phoneNumber || null,
         },
         memberships: formattedMemberships,
+        checkins: formattedCheckins,
       });
     } catch (error) {
       strapi.log.error("Error fetching member memberships:", error);
@@ -693,9 +745,65 @@ export default {
         return ctx.notFound(notFound || "Club owner profile not found");
       }
 
+      const todayDateStr =
+        ctx.query.date && String(ctx.query.date).trim()
+          ? String(ctx.query.date).trim()
+          : getTodayDateString();
+
+      // Fetch trials booked for today for this club
+      const trialsWhere: any = {
+        club_owner: clubOwner.id,
+        trialDate: todayDateStr,
+      };
+
+      const rawStatus = ctx.query.status
+        ? String(ctx.query.status).toLowerCase().trim()
+        : "";
+
+      if (rawStatus && rawStatus !== "all") {
+        trialsWhere.trialstatus = rawStatus;
+      } else if (!rawStatus) {
+        // By default, return active/completed trials for today (exclude cancelled)
+        trialsWhere.trialstatus = { $ne: "cancelled" };
+      }
+
+      const trials: any[] = await strapi.db
+        .query("api::gym-trial.gym-trial")
+        .findMany({
+          where: trialsWhere,
+          populate: {
+            client_detail: {
+              populate: {
+                selfieUpload: true,
+                user: {
+                  select: ["id", "username", "email", "phoneNumber"],
+                },
+              },
+            },
+          },
+          orderBy: { id: "desc" },
+        });
+
+      const formattedTrials = (trials || []).map((t: any) => {
+        const c = t.client_detail;
+        return {
+          trialDate: t.trialDate || null,
+          trialstatus: t.trialstatus || "booked",
+          client: c
+            ? {
+                clientId: c.clientId || null,
+                name: c.name || c.user?.username || null,
+                gender: c.gender || null,
+                selfieUrl: getMediaUrl(c.selfieUpload),
+              }
+            : null,
+        };
+      });
+
       return ctx.send({
         isTrialEnabled: Boolean(clubOwner.isTrialEnabled),
         dailyTrialLimit: clubOwner.dailyTrialLimit ?? 3,
+        trials: formattedTrials,
       });
     } catch (error) {
       strapi.log.error("Error fetching trial settings:", error);

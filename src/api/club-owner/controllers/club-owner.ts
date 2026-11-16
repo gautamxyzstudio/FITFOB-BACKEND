@@ -3325,7 +3325,7 @@ export default factories.createCoreController(
             clientName: checkin.client_detail?.name || null,
             selfieUploadUrl: checkin.client_detail?.selfieUpload?.url || null,
             checkinTime: checkin.checkinTime,
-            subscriptionType: checkin.subscriptionType,
+            checkinType: checkin.checkinType,
           }),
         );
 
