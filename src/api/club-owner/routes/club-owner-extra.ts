@@ -147,7 +147,7 @@ export default {
       {
       method: "PUT",
       path: "/trial-settings/:documentId",
-      handler: "custom-club-owner.getAdminTrialSettings",
+      handler: "custom-club-owner.updateAdminTrialSettings",
       config: {
         auth: {},
       },
