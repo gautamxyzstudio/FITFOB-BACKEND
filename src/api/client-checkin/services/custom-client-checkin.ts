@@ -354,6 +354,22 @@ export default () => ({
       throw new Error("Free trial for today has already been completed");
     }
 
+    // Check if free trial was marked as no-show today
+    const noShowTrialToday = await strapi.db
+      .query("api::gym-trial.gym-trial")
+      .findOne({
+        where: {
+          client_detail: client.id,
+          club_owner: clubOwner.id,
+          trialDate: todayDateStr,
+          $or: [{ trialstatus: "no-show" }, { trialstatus: "no_show" }],
+        },
+      });
+
+    if (noShowTrialToday) {
+      throw new Error("Free trial for today was marked as no-show");
+    }
+
     // Check if trial is booked for a different date
     const otherDateTrial = await strapi.db
       .query("api::gym-trial.gym-trial")

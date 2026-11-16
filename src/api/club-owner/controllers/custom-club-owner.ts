@@ -48,6 +48,35 @@ function getTodayDateString(): string {
   return `${year}-${month}-${day}`;
 }
 
+function getDateStringWithOffset(daysOffset: number = 0): string {
+  const now = new Date();
+  const IST_OFFSET = 5.5 * 60 * 60 * 1000;
+  const target = new Date(
+    now.getTime() + IST_OFFSET + daysOffset * 24 * 60 * 60 * 1000,
+  );
+  const year = target.getUTCFullYear();
+  const month = String(target.getUTCMonth() + 1).padStart(2, "0");
+  const day = String(target.getUTCDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
+function getCurrentMonthRange(): { startOfMonth: string; endOfMonth: string } {
+  const now = new Date();
+  const IST_OFFSET = 5.5 * 60 * 60 * 1000;
+  const nowIST = new Date(now.getTime() + IST_OFFSET);
+  const year = nowIST.getUTCFullYear();
+  const month = nowIST.getUTCMonth(); // 0-indexed
+
+  const end = new Date(Date.UTC(year, month + 1, 0)); // last day of month
+
+  const startMonthStr = `${year}-${String(month + 1).padStart(2, "0")}-01`;
+  const endMonthStr = `${year}-${String(month + 1).padStart(2, "0")}-${String(
+    end.getUTCDate(),
+  ).padStart(2, "0")}`;
+
+  return { startOfMonth: startMonthStr, endOfMonth: endMonthStr };
+}
+
 function getCommissionDetails(membership: any) {
   let commTx: any = null;
   if (
@@ -577,14 +606,19 @@ export default {
           where: checkinWhere,
           populate: {
             gym_membership: {
-              select: ["id", "documentId", "membershipId", "duration", "durationMonths"],
+              select: [
+                "id",
+                "documentId",
+                "membershipId",
+                "duration",
+                "durationMonths",
+              ],
             },
           },
           orderBy: { checkinTime: "desc", id: "desc" },
         });
 
       const formattedCheckins = (checkins || []).map((c: any) => {
-
         const isCheckedOut = Boolean(c.checkoutTime);
         const checkinType = c.checkinType || "membership";
 
@@ -593,7 +627,7 @@ export default {
           checkinTime: c.checkinTime || null,
           checkoutTime: c.checkoutTime || null,
           status: isCheckedOut ? "checked-out" : "checked-in",
-          createdAt:c.createdAt
+          createdAt: c.createdAt,
         };
       });
 
@@ -735,8 +769,10 @@ export default {
         return ctx.unauthorized("Authentication required");
       }
 
-      const { clubOwner, error, notFound } =
-        await resolveClubOwnerForTrial(ctx, user);
+      const { clubOwner, error, notFound } = await resolveClubOwnerForTrial(
+        ctx,
+        user,
+      );
 
       if (error) {
         return ctx.badRequest(error);
@@ -748,43 +784,74 @@ export default {
       const todayDateStr =
         ctx.query.date && String(ctx.query.date).trim()
           ? String(ctx.query.date).trim()
-          : getTodayDateString();
+          : getDateStringWithOffset(0);
 
-      // Fetch trials booked for today for this club
-      const trialsWhere: any = {
-        club_owner: clubOwner.id,
-        trialDate: todayDateStr,
-      };
+      const tomorrowDateStr = getDateStringWithOffset(1);
+      const { startOfMonth, endOfMonth } = getCurrentMonthRange();
 
       const rawStatus = ctx.query.status
         ? String(ctx.query.status).toLowerCase().trim()
         : "";
 
+      const todayWhere: any = {
+        club_owner: clubOwner.id,
+        trialDate: todayDateStr,
+      };
+
+      const tomorrowWhere: any = {
+        club_owner: clubOwner.id,
+        trialDate: tomorrowDateStr,
+      };
+
       if (rawStatus && rawStatus !== "all") {
-        trialsWhere.trialstatus = rawStatus;
+        todayWhere.trialstatus = rawStatus;
+        tomorrowWhere.trialstatus = rawStatus;
       } else if (!rawStatus) {
-        // By default, return active/completed trials for today (exclude cancelled)
-        trialsWhere.trialstatus = { $ne: "cancelled" };
+        // By default, return active/completed/no-show trials (exclude cancelled)
+        todayWhere.trialstatus = { $ne: "cancelled" };
+        tomorrowWhere.trialstatus = { $ne: "cancelled" };
       }
 
-      const trials: any[] = await strapi.db
-        .query("api::gym-trial.gym-trial")
-        .findMany({
-          where: trialsWhere,
+      const trialPopulate = {
+        client_detail: {
           populate: {
-            client_detail: {
-              populate: {
-                selfieUpload: true,
-                user: {
-                  select: ["id", "username", "email", "phoneNumber"],
-                },
-              },
+            selfieUpload: true,
+            user: {
+              select: ["id", "username", "email", "phoneNumber"],
             },
           },
-          orderBy: { id: "desc" },
-        });
+        },
+      };
 
-      const formattedTrials = (trials || []).map((t: any) => {
+      const [todayTrials, tomorrowTrials, monthTrials] = await Promise.all([
+        // Today's trials
+        strapi.db.query("api::gym-trial.gym-trial").findMany({
+          where: todayWhere,
+          populate: trialPopulate,
+          orderBy: { id: "desc" },
+        }),
+
+        // Tomorrow's trials
+        strapi.db.query("api::gym-trial.gym-trial").findMany({
+          where: tomorrowWhere,
+          populate: trialPopulate,
+          orderBy: { id: "desc" },
+        }),
+
+        // Total trials booked this month (including all statuses: booked, completed, cancelled, no-show)
+        strapi.db.query("api::gym-trial.gym-trial").findMany({
+          where: {
+            club_owner: clubOwner.id,
+            trialDate: {
+              $gte: startOfMonth,
+              $lte: endOfMonth,
+            },
+          },
+          select: ["id", "trialstatus"],
+        }),
+      ]);
+
+      const formatTrialItem = (t: any) => {
         const c = t.client_detail;
         return {
           trialDate: t.trialDate || null,
@@ -798,12 +865,24 @@ export default {
               }
             : null,
         };
-      });
+      };
+
+      const formattedTodayTrials = (todayTrials || []).map(formatTrialItem);
+      const formattedTomorrowTrials = (tomorrowTrials || []).map(
+        formatTrialItem,
+      );
+
+      // Total trials booked this month (all statuses)
+      const totalTrialsBookedThisMonth = (monthTrials || []).length;
 
       return ctx.send({
-        isTrialEnabled: Boolean(clubOwner.isTrialEnabled),
-        dailyTrialLimit: clubOwner.dailyTrialLimit ?? 3,
-        trials: formattedTrials,
+        trials: {
+          isTrialEnabled: Boolean(clubOwner.isTrialEnabled),
+          dailyTrialLimit: clubOwner.dailyTrialLimit ?? 3,
+          totalTrials: totalTrialsBookedThisMonth,
+          todayTrials: formattedTodayTrials,
+          tomorrowTrials: formattedTomorrowTrials,
+        },
       });
     } catch (error) {
       strapi.log.error("Error fetching trial settings:", error);

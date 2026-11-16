@@ -14,7 +14,7 @@
       "name": "Apache 2.0",
       "url": "https://www.apache.org/licenses/LICENSE-2.0.html"
     },
-    "x-generation-date": "2026-11-16T07:38:59.764Z"
+    "x-generation-date": "2026-11-16T11:39:20.730Z"
   },
   "x-strapi-config": {
     "plugins": [
@@ -24266,7 +24266,8 @@
                                     "enum": [
                                       "booked",
                                       "completed",
-                                      "cancelled"
+                                      "cancelled",
+                                      "no-show"
                                     ]
                                   },
                                   "createdAt": {
@@ -31666,7 +31667,8 @@
                                     "enum": [
                                       "booked",
                                       "completed",
-                                      "cancelled"
+                                      "cancelled",
+                                      "no-show"
                                     ]
                                   },
                                   "createdAt": {
@@ -39576,7 +39578,8 @@
                               "enum": [
                                 "booked",
                                 "completed",
-                                "cancelled"
+                                "cancelled",
+                                "no-show"
                               ]
                             },
                             "createdAt": {
@@ -46954,7 +46957,8 @@
                               "enum": [
                                 "booked",
                                 "completed",
-                                "cancelled"
+                                "cancelled",
+                                "no-show"
                               ]
                             },
                             "createdAt": {
@@ -54334,7 +54338,8 @@
                                     "enum": [
                                       "booked",
                                       "completed",
-                                      "cancelled"
+                                      "cancelled",
+                                      "no-show"
                                     ]
                                   },
                                   "createdAt": {
@@ -60831,7 +60836,8 @@
                                 "enum": [
                                   "booked",
                                   "completed",
-                                  "cancelled"
+                                  "cancelled",
+                                  "no-show"
                                 ]
                               },
                               "createdAt": {
@@ -69884,7 +69890,8 @@
                                     "enum": [
                                       "booked",
                                       "completed",
-                                      "cancelled"
+                                      "cancelled",
+                                      "no-show"
                                     ]
                                   },
                                   "createdAt": {
@@ -76283,7 +76290,8 @@
                               "enum": [
                                 "booked",
                                 "completed",
-                                "cancelled"
+                                "cancelled",
+                                "no-show"
                               ]
                             },
                             "createdAt": {
@@ -83834,7 +83842,8 @@
                               "enum": [
                                 "booked",
                                 "completed",
-                                "cancelled"
+                                "cancelled",
+                                "no-show"
                               ]
                             },
                             "createdAt": {
@@ -91383,7 +91392,8 @@
                               "enum": [
                                 "booked",
                                 "completed",
-                                "cancelled"
+                                "cancelled",
+                                "no-show"
                               ]
                             },
                             "createdAt": {
@@ -98940,7 +98950,8 @@
                                 "enum": [
                                   "booked",
                                   "completed",
-                                  "cancelled"
+                                  "cancelled",
+                                  "no-show"
                                 ]
                               },
                               "createdAt": {
@@ -107927,7 +107938,8 @@
                                   "enum": [
                                     "booked",
                                     "completed",
-                                    "cancelled"
+                                    "cancelled",
+                                    "no-show"
                                   ]
                                 },
                                 "createdAt": {
@@ -115011,7 +115023,8 @@
                                     "enum": [
                                       "booked",
                                       "completed",
-                                      "cancelled"
+                                      "cancelled",
+                                      "no-show"
                                     ]
                                   },
                                   "createdAt": {
@@ -122114,7 +122127,8 @@
                               "enum": [
                                 "booked",
                                 "completed",
-                                "cancelled"
+                                "cancelled",
+                                "no-show"
                               ]
                             },
                             "createdAt": {
@@ -129091,7 +129105,8 @@
                                             "enum": [
                                               "booked",
                                               "completed",
-                                              "cancelled"
+                                              "cancelled",
+                                              "no-show"
                                             ]
                                           },
                                           "createdAt": {
@@ -138855,7 +138870,8 @@
                               "enum": [
                                 "booked",
                                 "completed",
-                                "cancelled"
+                                "cancelled",
+                                "no-show"
                               ]
                             },
                             "createdAt": {
@@ -144366,7 +144382,8 @@
                                   "enum": [
                                     "booked",
                                     "completed",
-                                    "cancelled"
+                                    "cancelled",
+                                    "no-show"
                                   ]
                                 },
                                 "createdAt": {
@@ -147316,7 +147333,8 @@
                 "enum": [
                   "booked",
                   "completed",
-                  "cancelled"
+                  "cancelled",
+                  "no-show"
                 ]
               },
               "locale": {
@@ -153757,7 +153775,8 @@
                               "enum": [
                                 "booked",
                                 "completed",
-                                "cancelled"
+                                "cancelled",
+                                "no-show"
                               ]
                             },
                             "createdAt": {
@@ -154566,7 +154585,8 @@
             "enum": [
               "booked",
               "completed",
-              "cancelled"
+              "cancelled",
+              "no-show"
             ]
           },
           "createdAt": {
@@ -159371,7 +159391,8 @@
                               "enum": [
                                 "booked",
                                 "completed",
-                                "cancelled"
+                                "cancelled",
+                                "no-show"
                               ]
                             },
                             "createdAt": {
@@ -166742,7 +166763,8 @@
                               "enum": [
                                 "booked",
                                 "completed",
-                                "cancelled"
+                                "cancelled",
+                                "no-show"
                               ]
                             },
                             "createdAt": {
@@ -175953,7 +175975,8 @@
                               "enum": [
                                 "booked",
                                 "completed",
-                                "cancelled"
+                                "cancelled",
+                                "no-show"
                               ]
                             },
                             "createdAt": {
@@ -183457,7 +183480,8 @@
                               "enum": [
                                 "booked",
                                 "completed",
-                                "cancelled"
+                                "cancelled",
+                                "no-show"
                               ]
                             },
                             "createdAt": {
@@ -188644,7 +188668,8 @@
                                                   "enum": [
                                                     "booked",
                                                     "completed",
-                                                    "cancelled"
+                                                    "cancelled",
+                                                    "no-show"
                                                   ]
                                                 },
                                                 "createdAt": {
@@ -196029,7 +196054,8 @@
                                               "enum": [
                                                 "booked",
                                                 "completed",
-                                                "cancelled"
+                                                "cancelled",
+                                                "no-show"
                                               ]
                                             },
                                             "createdAt": {
@@ -206463,7 +206489,8 @@
                                     "enum": [
                                       "booked",
                                       "completed",
-                                      "cancelled"
+                                      "cancelled",
+                                      "no-show"
                                     ]
                                   },
                                   "createdAt": {
@@ -214081,7 +214108,8 @@
                               "enum": [
                                 "booked",
                                 "completed",
-                                "cancelled"
+                                "cancelled",
+                                "no-show"
                               ]
                             },
                             "createdAt": {
@@ -221337,7 +221365,8 @@
                                     "enum": [
                                       "booked",
                                       "completed",
-                                      "cancelled"
+                                      "cancelled",
+                                      "no-show"
                                     ]
                                   },
                                   "createdAt": {
@@ -229279,7 +229308,8 @@
                                     "enum": [
                                       "booked",
                                       "completed",
-                                      "cancelled"
+                                      "cancelled",
+                                      "no-show"
                                     ]
                                   },
                                   "createdAt": {

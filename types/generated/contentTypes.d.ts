@@ -1361,7 +1361,7 @@ export interface ApiGymTrialGymTrial extends Struct.CollectionTypeSchema {
     publishedAt: Schema.Attribute.DateTime;
     trialDate: Schema.Attribute.Date;
     trialstatus: Schema.Attribute.Enumeration<
-      ['booked', 'completed', 'cancelled']
+      ['booked', 'completed', 'cancelled', 'no-show']
     >;
     updatedAt: Schema.Attribute.DateTime;
     updatedBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &

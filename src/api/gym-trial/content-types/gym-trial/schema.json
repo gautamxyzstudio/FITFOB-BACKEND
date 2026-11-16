@@ -31,7 +31,8 @@
       "enum": [
         "booked",
         "completed",
-        "cancelled"
+        "cancelled",
+        "no-show"
       ]
     }
   }

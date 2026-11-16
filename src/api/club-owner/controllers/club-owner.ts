@@ -108,6 +108,105 @@ function getTodayDateString(): string {
   return `${year}-${month}-${day}`;
 }
 
+function getDateStringWithOffset(daysOffset: number = 0): string {
+  const now = new Date();
+  const IST_OFFSET = 5.5 * 60 * 60 * 1000;
+  const target = new Date(
+    now.getTime() + IST_OFFSET + daysOffset * 24 * 60 * 60 * 1000,
+  );
+  const year = target.getUTCFullYear();
+  const month = String(target.getUTCMonth() + 1).padStart(2, "0");
+  const day = String(target.getUTCDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
+function getDayNameFromDateStr(dateStr: string): string {
+  if (!dateStr) return "";
+  const clean = String(dateStr).split("T")[0].trim();
+  const [year, month, day] = clean.split("-").map(Number);
+  const d = new Date(Date.UTC(year, month - 1, day));
+  const dayNames = [
+    "sunday",
+    "monday",
+    "tuesday",
+    "wednesday",
+    "thursday",
+    "friday",
+    "saturday",
+  ];
+  return dayNames[d.getUTCDay()] || "";
+}
+
+function isGymClosedOnDate(
+  dateStr: string,
+  weekdayScheduling: any,
+  holidays: any[],
+): boolean {
+  if (!dateStr) return false;
+
+  // 1. Check Full-Day Holiday
+  if (Array.isArray(holidays)) {
+    const isHolidayClosed = holidays.some((h: any) => {
+      const cType = String(h.closureType || h.closure_type || "")
+        .toLowerCase()
+        .trim();
+      const isFullDay =
+        cType === "full_day" ||
+        cType === "fullday" ||
+        cType === "full day" ||
+        cType === "full";
+
+      if (!isFullDay) return false;
+
+      const start = String(h.startDate || h.start_date || "")
+        .split("T")[0]
+        .trim();
+      const end = String(h.endDate || h.end_date || start)
+        .split("T")[0]
+        .trim();
+
+      if (!start) return false;
+      return dateStr >= start && dateStr <= (end || start);
+    });
+
+    if (isHolidayClosed) {
+      return true;
+    }
+  }
+
+  // 2. Check Weekday Scheduling
+  if (weekdayScheduling && typeof weekdayScheduling === "object") {
+    const dayName = getDayNameFromDateStr(dateStr);
+    if (dayName) {
+      const dayData = weekdayScheduling[dayName];
+
+      if (typeof dayData === "string") {
+        if (dayData.toLowerCase().trim() === "closed") {
+          return true;
+        }
+      } else if (typeof dayData === "object" && dayData !== null) {
+        if (
+          dayData.isClosed === true ||
+          dayData.closed === true ||
+          dayData.isOpen === false ||
+          String(dayData.status || "").toLowerCase().trim() === "closed"
+        ) {
+          return true;
+        }
+
+        const open = dayData.openingTime || dayData.open || dayData.from;
+        const close = dayData.closingTime || dayData.close || dayData.to;
+
+        if (!open || !close || open === "closed" || close === "closed") {
+          return true;
+        }
+      }
+    }
+  }
+
+  return false;
+}
+
 /* ---------- ROLE HELPER ---------- */
 async function getUserRole(user: any): Promise<string> {
   if (!user) return "";
@@ -720,12 +819,28 @@ async function resolveClientDetailIdFromCtx(
     if (!clientDetailIdNum && targetUserId) {
       const uStr = String(targetUserId).trim();
       if (!isNaN(Number(uStr)) && /^\d+$/.test(uStr)) {
-        const res = await strapi.db.connection.raw(
-          `SELECT client_detail_id FROM up_users_client_detail_lnk WHERE user_id = ? LIMIT 1`,
-          [Number(uStr)],
-        );
-        if (res?.rows?.[0]?.client_detail_id) {
-          clientDetailIdNum = res.rows[0].client_detail_id;
+        try {
+          const res = await strapi.db.connection.raw(
+            `SELECT client_detail_id FROM up_users_client_detail_lnk WHERE user_id = ? LIMIT 1`,
+            [Number(uStr)],
+          );
+          if (res?.rows?.[0]?.client_detail_id) {
+            clientDetailIdNum = res.rows[0].client_detail_id;
+          }
+        } catch (_) {}
+
+        if (!clientDetailIdNum) {
+          try {
+            const cd: any = await strapi.db
+              .query("api::client-detail.client-detail")
+              .findOne({
+                where: { user: Number(uStr) },
+                select: ["id"],
+              });
+            if (cd?.id) {
+              clientDetailIdNum = cd.id;
+            }
+          } catch (_) {}
         }
       }
     }
@@ -771,16 +886,29 @@ async function checkIsClubFavoritedDirect(
   }
 }
 
-async function checkClientHasActiveMembership(ctx: Context): Promise<boolean> {
+interface ClientMembershipInfo {
+  hasActiveMembership: boolean;
+  clubName: string | null;
+}
+
+async function getClientMembershipInfo(
+  ctx: Context,
+): Promise<ClientMembershipInfo> {
+  const result: ClientMembershipInfo = {
+    hasActiveMembership: false,
+    clubName: null,
+  };
+
   try {
     const clientDetailIdNum = await resolveClientDetailIdFromCtx(ctx);
     if (!clientDetailIdNum) {
-      return false;
+      return result;
     }
 
     const today = getTodayDateString();
 
-    const activeMembership = await strapi.db
+    // 1. Check for active gym membership
+    const activeMembership: any = await strapi.db
       .query("api::gym-membership.gym-membership")
       .findOne({
         where: {
@@ -804,13 +932,299 @@ async function checkClientHasActiveMembership(ctx: Context): Promise<boolean> {
             },
           ],
         },
-        select: ["id", "membershipStatus"],
+        populate: {
+          gym_contract: {
+            populate: {
+              club_owner: {
+                select: ["id", "clubName", "club_name"],
+              },
+            },
+          },
+        },
+        orderBy: { id: "desc" },
       });
 
-    return Boolean(activeMembership);
+    if (activeMembership) {
+      result.hasActiveMembership = true;
+      let clubName =
+        activeMembership.gym_contract?.club_owner?.clubName ||
+        activeMembership.gym_contract?.club_owner?.club_name ||
+        null;
+
+      if (!clubName && activeMembership.gym_contract?.id) {
+        try {
+          const contract: any = await strapi.db
+            .query("api::gym-contract.gym-contract")
+            .findOne({
+              where: { id: activeMembership.gym_contract.id },
+              populate: {
+                club_owner: { select: ["id", "clubName", "club_name"] },
+              },
+            });
+          clubName =
+            contract?.club_owner?.clubName ||
+            contract?.club_owner?.club_name ||
+            null;
+        } catch (_) {}
+      }
+
+      result.clubName = clubName;
+      return result;
+    }
+
+    // 2. Fallback check for active local subscription
+    try {
+      const activeLocalSub: any = await strapi.db
+        .query("api::local-subscription.local-subscription")
+        .findOne({
+          where: {
+            client_detail: clientDetailIdNum,
+            subscriptionStatus: "active",
+            $or: [{ endDate: { $gte: today } }, { endDate: { $null: true } }],
+          },
+          populate: {
+            club_owner: {
+              select: ["id", "clubName", "club_name"],
+            },
+          },
+          orderBy: { id: "desc" },
+        });
+
+      if (activeLocalSub) {
+        result.hasActiveMembership = true;
+        result.clubName =
+          activeLocalSub.club_owner?.clubName ||
+          activeLocalSub.club_owner?.club_name ||
+          null;
+        return result;
+      }
+    } catch (_) {}
+
+    // 3. If no active membership, check latest purchased membership
+    const latestBought: any = await strapi.db
+      .query("api::gym-membership.gym-membership")
+      .findOne({
+        where: {
+          client_detail: clientDetailIdNum,
+          paymentStatus: { $ne: "failed" },
+        },
+        populate: {
+          gym_contract: {
+            populate: {
+              club_owner: {
+                select: ["id", "clubName", "club_name"],
+              },
+            },
+          },
+        },
+        orderBy: { id: "desc" },
+      });
+
+    if (latestBought) {
+      let clubName =
+        latestBought.gym_contract?.club_owner?.clubName ||
+        latestBought.gym_contract?.club_owner?.club_name ||
+        null;
+
+      if (!clubName && latestBought.gym_contract?.id) {
+        try {
+          const contract: any = await strapi.db
+            .query("api::gym-contract.gym-contract")
+            .findOne({
+              where: { id: latestBought.gym_contract.id },
+              populate: {
+                club_owner: { select: ["id", "clubName", "club_name"] },
+              },
+            });
+          clubName =
+            contract?.club_owner?.clubName ||
+            contract?.club_owner?.club_name ||
+            null;
+        } catch (_) {}
+      }
+
+      result.clubName = clubName;
+    }
+
+    return result;
   } catch (err) {
-    strapi.log.warn("[checkClientHasActiveMembership] Error:", err);
-    return false;
+    strapi.log.warn("[getClientMembershipInfo] Error:", err);
+    return result;
+  }
+}
+
+async function checkClientHasActiveMembership(ctx: Context): Promise<boolean> {
+  const info = await getClientMembershipInfo(ctx);
+  return info.hasActiveMembership;
+}
+
+/* =======================================================
+   CLIENT 6-WEEK TRIAL QUOTA & DESCRIPTION HELPER
+   - Client can book max 3 trials per 6 weeks
+   - Counts trials marked as booked, completed, no-show
+   - Does NOT include cancelled trials
+======================================================= */
+interface ClientTrialQuota {
+  trialsLeft: number;
+  trialsUsed: number;
+  maxTrialsPerSixWeeks: number;
+  resetDate: string | null;
+  description: string;
+}
+
+const SIX_WEEKS_MS = 42 * 24 * 60 * 60 * 1000; // 42 days = 6 weeks
+
+function parseDateToTime(dateStr: string): number {
+  if (!dateStr) return 0;
+  const clean = String(dateStr).split("T")[0];
+  const [year, month, day] = clean.split("-").map(Number);
+  return Date.UTC(year, month - 1, day);
+}
+
+function formatDateFromTime(timestamp: number): string {
+  const d = new Date(timestamp);
+  const year = d.getUTCFullYear();
+  const month = String(d.getUTCMonth() + 1).padStart(2, "0");
+  const day = String(d.getUTCDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
+async function getClientTrialQuota(
+  ctx: Context,
+  todayDateStr: string,
+): Promise<ClientTrialQuota> {
+  const defaultQuota: ClientTrialQuota = {
+    trialsLeft: 3,
+    trialsUsed: 0,
+    maxTrialsPerSixWeeks: 3,
+    resetDate: null,
+    description: "You have 3 trials left. Clients can book up to 3 trials per 6 weeks.",
+  };
+
+  try {
+    const clientDetailId = await resolveClientDetailIdFromCtx(ctx);
+    if (!clientDetailId) {
+      return {
+        ...defaultQuota,
+        description: "Clients can book up to 3 trials per 6 weeks.",
+      };
+    }
+
+    const todayTime = parseDateToTime(todayDateStr);
+
+    // Fetch all client trials that are NOT cancelled
+    const clientTrials: any[] = await strapi.db
+      .query("api::gym-trial.gym-trial")
+      .findMany({
+        where: {
+          client_detail: clientDetailId,
+          trialstatus: { $ne: "cancelled" },
+        },
+        orderBy: { trialDate: "asc", id: "asc" },
+        select: ["id", "trialDate", "trialstatus"],
+      });
+
+    // Count trials marked as no-show, completed and booked; don't include cancelled
+    const validTrials = (clientTrials || []).filter((t: any) => {
+      const s = String(t.trialstatus || "booked").toLowerCase().trim();
+      return (
+        s === "booked" ||
+        s === "completed" ||
+        s === "no-show" ||
+        s === "no_show"
+      );
+    });
+
+    if (validTrials.length === 0) {
+      return defaultQuota;
+    }
+
+    // Group trials into consecutive 6-week (42 days) periods
+    interface TrialPeriod {
+      start: number;
+      end: number;
+      trials: any[];
+    }
+
+    const periods: TrialPeriod[] = [];
+    let curPeriod: TrialPeriod | null = null;
+
+    for (const t of validTrials) {
+      const tTime = parseDateToTime(t.trialDate);
+      if (!tTime) continue;
+
+      if (!curPeriod || tTime > curPeriod.end) {
+        curPeriod = {
+          start: tTime,
+          end: tTime + SIX_WEEKS_MS,
+          trials: [t],
+        };
+        periods.push(curPeriod);
+      } else {
+        curPeriod.trials.push(t);
+      }
+    }
+
+    // A. Period check: period covering today or an upcoming period
+    const activePeriod =
+      periods.find((p) => todayTime >= p.start && todayTime <= p.end) ||
+      periods.find((p) => p.start > todayTime);
+
+    // B. Rolling 42-day window check
+    const rollingTrials = validTrials.filter((t: any) => {
+      const tTime = parseDateToTime(t.trialDate);
+      return (
+        tTime >= todayTime - SIX_WEEKS_MS && tTime <= todayTime + SIX_WEEKS_MS
+      );
+    });
+
+    let trialsUsed = 0;
+    let resetDate: string | null = null;
+
+    if (activePeriod) {
+      trialsUsed = activePeriod.trials.length;
+      resetDate = formatDateFromTime(activePeriod.end + 24 * 60 * 60 * 1000);
+    }
+
+    if (rollingTrials.length > trialsUsed) {
+      trialsUsed = rollingTrials.length;
+      const earliest = parseDateToTime(rollingTrials[0].trialDate);
+      if (earliest) {
+        resetDate = formatDateFromTime(
+          earliest + SIX_WEEKS_MS + 24 * 60 * 60 * 1000,
+        );
+      }
+    }
+
+    trialsUsed = Math.min(3, Math.max(0, trialsUsed));
+    const trialsLeft = Math.max(0, 3 - trialsUsed);
+
+    if (trialsLeft > 0 && trialsUsed === 0) {
+      resetDate = null;
+    }
+
+    let description = "";
+    if (trialsLeft === 3) {
+      description =
+        "You have 3 trials left. Clients can book up to 3 trials per 6 weeks.";
+    } else if (trialsLeft > 0) {
+      description = `You have ${trialsLeft} trial${trialsLeft > 1 ? "s" : ""} left. Clients can book up to 3 trials per 6 weeks.`;
+    } else {
+      description = resetDate
+        ? `You have 0 trials left. Clients can book up to 3 trials per 6 weeks. Your trial limit resets on ${resetDate}.`
+        : `You have 0 trials left. Clients can book up to 3 trials per 6 weeks.`;
+    }
+
+    return {
+      trialsLeft,
+      trialsUsed,
+      maxTrialsPerSixWeeks: 3,
+      resetDate,
+      description,
+    };
+  } catch (err) {
+    strapi.log.warn("[getClientTrialQuota] Error:", err);
+    return defaultQuota;
   }
 }
 
@@ -1682,6 +2096,8 @@ export default factories.createCoreController(
             co.locale,
             co.weekday_scheduling,
             co.club_category,
+            co.is_trial_enabled,
+            co.daily_trial_limit,
             f.url AS logo_url,
             f.formats AS logo_formats
           FROM club_owners co
@@ -1701,6 +2117,9 @@ export default factories.createCoreController(
 
         const ownerId = owner.id;
         const today = getTodayDateString();
+        const todayStr = getDateStringWithOffset(0);
+        const tomorrowStr = getDateStringWithOffset(1);
+        const isTrialEnabled = Boolean(owner.is_trial_enabled);
 
         // 2. Fetch club photos, holidays, services, facilities, active membership plans & client favorite status concurrently
         const [
@@ -1710,7 +2129,9 @@ export default factories.createCoreController(
           facilitiesRes,
           plansRes,
           isFav,
-          membership,
+          membershipInfo,
+          trialsRes,
+          clientTrialQuota,
         ] = await Promise.all([
           // Club photos with image urls
           strapi.db.connection.raw(
@@ -1811,8 +2232,23 @@ export default factories.createCoreController(
           ),
           // Favorite check
           checkIsClubFavoritedDirect(ctx, ownerId),
-          // Active gym membership check for logged-in client
-          checkClientHasActiveMembership(ctx),
+          // Active gym membership & club name for logged-in client
+          getClientMembershipInfo(ctx),
+          // Trials booked for today & tomorrow
+          isTrialEnabled
+            ? strapi.db.query("api::gym-trial.gym-trial").findMany({
+                where: {
+                  club_owner: ownerId,
+                  trialDate: { $in: [todayStr, tomorrowStr] },
+                  trialstatus: { $ne: "cancelled" },
+                },
+                select: ["id", "trialDate", "trialstatus"],
+              })
+            : Promise.resolve([]),
+          // Client 6-week trial quota & description
+          isTrialEnabled
+            ? getClientTrialQuota(ctx, todayStr)
+            : Promise.resolve(null),
         ]);
 
         // 3. Format club_photos: return small url (with fallback) and imageInfo
@@ -1916,7 +2352,68 @@ export default factories.createCoreController(
           ? orderWeekdayScheduling(weekdaySchedulingData)
           : null;
 
-        // 10. Exact payload format requested by client
+        // 10. Format trial availability & booked slots
+        let trial: any = null;
+        if (isTrialEnabled) {
+          const dailyLimit =
+            Number(owner.daily_trial_limit) > 0
+              ? Number(owner.daily_trial_limit)
+              : 3;
+
+          let todayBooked = 0;
+          let tomorrowBooked = 0;
+
+          for (const t of (trialsRes as any[]) || []) {
+            const d = String(t.trialDate || "").split("T")[0];
+            if (d === todayStr) {
+              todayBooked++;
+            } else if (d === tomorrowStr) {
+              tomorrowBooked++;
+            }
+          }
+
+          const todayAvailableSlots = Math.max(0, dailyLimit - todayBooked);
+          const tomorrowAvailableSlots = Math.max(
+            0,
+            dailyLimit - tomorrowBooked,
+          );
+
+          const isTodayClosed = isGymClosedOnDate(
+            todayStr,
+            weekdayScheduling,
+            holidays,
+          );
+          const isTomorrowClosed = isGymClosedOnDate(
+            tomorrowStr,
+            weekdayScheduling,
+            holidays,
+          );
+
+          trial = {
+            trialAvailable: true,
+            dailyTrialLimit: dailyLimit,
+            description:
+              clientTrialQuota?.description ||
+              "You have 3 trials left. Clients can book up to 3 trials per 6 weeks.",
+            today: isTodayClosed
+              ? "closed"
+              : {
+                  totalBooked: todayBooked,
+                  availableSlots: todayAvailableSlots,
+                },
+            tomorrow: isTomorrowClosed
+              ? "closed"
+              : {
+                  totalBooked: tomorrowBooked,
+                  availableSlots: tomorrowAvailableSlots,
+                },
+          };
+        }
+
+        const membership = Boolean(membershipInfo?.hasActiveMembership);
+        const membershipClubName = membershipInfo?.clubName ?? null;
+
+        // 11. Exact payload format requested by client
         const responseData = {
           id: owner.id,
           documentId: owner.document_id,
@@ -1942,9 +2439,11 @@ export default factories.createCoreController(
           clubCategory: owner.club_category || null,
           isFav,
           membership,
+          membershipClubName,
           club_photos,
           holidays,
           membershipPlans,
+          trial,
         };
 
         return ctx.send(responseData);
