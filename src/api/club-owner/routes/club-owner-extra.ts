@@ -144,5 +144,14 @@ export default {
         auth: {},
       },
     },
+      {
+      method: "PUT",
+      path: "/trial-settings/:documentId",
+      handler: "custom-club-owner.getAdminTrialSettings",
+      config: {
+        auth: {},
+      },
+    },
+
   ],
 };
