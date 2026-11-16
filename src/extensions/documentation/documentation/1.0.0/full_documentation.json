@@ -14,7 +14,7 @@
       "name": "Apache 2.0",
       "url": "https://www.apache.org/licenses/LICENSE-2.0.html"
     },
-    "x-generation-date": "2026-11-16T05:13:15.952Z"
+    "x-generation-date": "2026-11-16T06:03:54.802Z"
   },
   "x-strapi-config": {
     "plugins": [
@@ -24,7 +24,7 @@
   },
   "servers": [
     {
-      "url": "http://localhost:1337/api",
+      "url": "http://localhost:1371/api",
       "description": "Development server"
     }
   ],
@@ -18473,6 +18473,9 @@
               "username": {
                 "type": "string"
               },
+              "fullName": {
+                "type": "string"
+              },
               "email": {
                 "type": "string",
                 "format": "email"
@@ -25868,6 +25871,9 @@
                 "type": "string"
               },
               "username": {
+                "type": "string"
+              },
+              "fullName": {
                 "type": "string"
               },
               "email": {
@@ -34558,6 +34564,9 @@
                   "username": {
                     "type": "string"
                   },
+                  "fullName": {
+                    "type": "string"
+                  },
                   "email": {
                     "type": "string",
                     "format": "email"
@@ -41931,6 +41940,9 @@
                     "type": "string"
                   },
                   "username": {
+                    "type": "string"
+                  },
+                  "fullName": {
                     "type": "string"
                   },
                   "email": {
@@ -49473,6 +49485,9 @@
                 "type": "string"
               },
               "username": {
+                "type": "string"
+              },
+              "fullName": {
                 "type": "string"
               },
               "email": {
@@ -57437,6 +57452,9 @@
                     "username": {
                       "type": "string"
                     },
+                    "fullName": {
+                      "type": "string"
+                    },
                     "email": {
                       "type": "string",
                       "format": "email"
@@ -65017,6 +65035,9 @@
                 "type": "string"
               },
               "username": {
+                "type": "string"
+              },
+              "fullName": {
                 "type": "string"
               },
               "email": {
@@ -72883,6 +72904,9 @@
                   "username": {
                     "type": "string"
                   },
+                  "fullName": {
+                    "type": "string"
+                  },
                   "email": {
                     "type": "string",
                     "format": "email"
@@ -80431,6 +80455,9 @@
                   "username": {
                     "type": "string"
                   },
+                  "fullName": {
+                    "type": "string"
+                  },
                   "email": {
                     "type": "string",
                     "format": "email"
@@ -87975,6 +88002,9 @@
                     "type": "string"
                   },
                   "username": {
+                    "type": "string"
+                  },
+                  "fullName": {
                     "type": "string"
                   },
                   "email": {
@@ -95529,6 +95559,9 @@
                       "type": "string"
                     },
                     "username": {
+                      "type": "string"
+                    },
+                    "fullName": {
                       "type": "string"
                     },
                     "email": {
@@ -103113,6 +103146,9 @@
                       "username": {
                         "type": "string"
                       },
+                      "fullName": {
+                        "type": "string"
+                      },
                       "email": {
                         "type": "string",
                         "format": "email"
@@ -109180,6 +109216,9 @@
                 "type": "string"
               },
               "username": {
+                "type": "string"
+              },
+              "fullName": {
                 "type": "string"
               },
               "email": {
@@ -118696,6 +118735,9 @@
                   "username": {
                     "type": "string"
                   },
+                  "fullName": {
+                    "type": "string"
+                  },
                   "email": {
                     "type": "string",
                     "format": "email"
@@ -126301,6 +126343,9 @@
                                 "username": {
                                   "type": "string"
                                 },
+                                "fullName": {
+                                  "type": "string"
+                                },
                                 "email": {
                                   "type": "string",
                                   "format": "email"
@@ -133798,6 +133843,9 @@
                   "username": {
                     "type": "string"
                   },
+                  "fullName": {
+                    "type": "string"
+                  },
                   "email": {
                     "type": "string",
                     "format": "email"
@@ -141155,6 +141203,9 @@
                         "type": "string"
                       },
                       "username": {
+                        "type": "string"
+                      },
+                      "fullName": {
                         "type": "string"
                       },
                       "email": {
@@ -148694,6 +148745,9 @@
                   "username": {
                     "type": "string"
                   },
+                  "fullName": {
+                    "type": "string"
+                  },
                   "email": {
                     "type": "string",
                     "format": "email"
@@ -155936,6 +155990,9 @@
                     "type": "string"
                   },
                   "username": {
+                    "type": "string"
+                  },
+                  "fullName": {
                     "type": "string"
                   },
                   "email": {
@@ -163304,6 +163361,9 @@
                     "type": "string"
                   },
                   "username": {
+                    "type": "string"
+                  },
+                  "fullName": {
                     "type": "string"
                   },
                   "email": {
@@ -170881,6 +170941,9 @@
                   "username": {
                     "type": "string"
                   },
+                  "fullName": {
+                    "type": "string"
+                  },
                   "email": {
                     "type": "string",
                     "format": "email"
@@ -178382,6 +178445,9 @@
                   "username": {
                     "type": "string"
                   },
+                  "fullName": {
+                    "type": "string"
+                  },
                   "email": {
                     "type": "string",
                     "format": "email"
@@ -185830,6 +185896,9 @@
                                       "username": {
                                         "type": "string"
                                       },
+                                      "fullName": {
+                                        "type": "string"
+                                      },
                                       "email": {
                                         "type": "string",
                                         "format": "email"
@@ -193210,6 +193279,9 @@
                                     "type": "string"
                                   },
                                   "username": {
+                                    "type": "string"
+                                  },
+                                  "fullName": {
                                     "type": "string"
                                   },
                                   "email": {
@@ -201641,6 +201713,9 @@
                         "username": {
                           "type": "string"
                         },
+                        "fullName": {
+                          "type": "string"
+                        },
                         "email": {
                           "type": "string",
                           "format": "email"
@@ -208992,6 +209067,9 @@
                     "type": "string"
                   },
                   "username": {
+                    "type": "string"
+                  },
+                  "fullName": {
                     "type": "string"
                   },
                   "email": {
@@ -216412,6 +216490,9 @@
               "username": {
                 "type": "string"
               },
+              "fullName": {
+                "type": "string"
+              },
               "email": {
                 "type": "string",
                 "format": "email"
@@ -223403,6 +223484,9 @@
                 "type": "string"
               },
               "username": {
+                "type": "string"
+              },
+              "fullName": {
                 "type": "string"
               },
               "email": {

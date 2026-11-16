@@ -21,6 +21,7 @@ type PendingSignupData = {
   phone?: string | null;
   password: string;
   role?: string | null;
+  fullName?: string | null;
 };
 
 const normalizePhone = (identifier: string) => {
@@ -118,6 +119,7 @@ export default {
       const phone = signupData.phone ?? null;
       const password = signupData.password;
       const role = signupData.role ?? "Client";
+      const fullName = signupData.fullName ?? null;
 
       const username = email ? email.toLowerCase() : phone;
 
@@ -153,6 +155,7 @@ export default {
           username,
           email: email || `${phone}@phone.user`,
           password,
+          fullName,
           confirmed: true,
           provider: "local",
           role: strapiRole.id,
@@ -278,6 +281,7 @@ export default {
           id: fullUser.id,
           username: fullUser.username,
           email: fullUser.email,
+          fullName: fullUser.fullName,
           phoneNumber: fullUser.phoneNumber,
           isVerified: fullUser.isVerified,
           verification_status: fullUser.verification_status,

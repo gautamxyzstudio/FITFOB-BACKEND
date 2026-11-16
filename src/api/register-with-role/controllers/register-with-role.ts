@@ -25,7 +25,7 @@ const normalizePhone = (identifier: string) => {
 export default {
   async register(ctx: any) {
     try {
-      let { identifier, password, confirmPassword, role } = ctx.request.body;
+      let { identifier, password, confirmPassword, role, fullName } = ctx.request.body;
 
       identifier = normalizeIdentifier(identifier);
       identifier = normalizePhone(identifier);
@@ -36,6 +36,7 @@ export default {
       if (password !== confirmPassword) {
         return ctx.badRequest("Passwords do not match");
       }
+
 
       const email = identifier.includes("@") ? identifier : null;
       const phone = email ? null : identifier;
@@ -106,7 +107,7 @@ export default {
         data: {
           identifier,
           signupToken,
-          signupData: { email, phone, password, role: role || "Client" },
+          signupData: { email, phone, password, role: role || "Client", fullName },
           expiresAt: Date.now() + 10 * 60 * 1000,
         },
       });

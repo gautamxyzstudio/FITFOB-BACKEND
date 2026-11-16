@@ -279,8 +279,8 @@ export default {
                   subscriptionStatus: sub.subscriptionStatus,
                   clubName,
                 };
-              }
-            )
+              },
+            ),
           );
 
           const outdoorSubscriptions = getUniqueSubscriptions(
@@ -362,6 +362,9 @@ export default {
           confirmed: user.confirmed,
           blocked: user.blocked,
           role: user.role,
+          ...((roleName === "admin" || roleName === "super-admin") && {
+            fullName: user.fullName,
+          }),
           // Only returned for Client
           ...(roleName === "client" && {
             clientDetail,
