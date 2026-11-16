@@ -4,24 +4,66 @@ export default () => ({
   /* ====================================== */
 
   async getClubOwner(userId: number) {
-    const clubOwner = await strapi.db
+    let clubOwner = await strapi.db
       .query("api::club-owner.club-owner")
       .findOne({ where: { user: userId } });
+
+    if (!clubOwner) {
+      const userWithDetail: any = await strapi.db
+        .query("plugin::users-permissions.user")
+        .findOne({
+          where: { id: userId },
+          populate: {
+            club_owner: true,
+          },
+        });
+      clubOwner = userWithDetail?.club_owner || null;
+    }
+
+    if (!clubOwner) {
+      // Check if userId was directly the clubOwner record ID
+      clubOwner = await strapi.db
+        .query("api::club-owner.club-owner")
+        .findOne({ where: { id: userId } });
+    }
 
     if (!clubOwner) throw new Error("Gym not found");
 
     return clubOwner;
   },
 
-  async getClient(clientId: string) {
-    const client = await strapi.db
+  async getClient(clientId: string | number) {
+    if (!clientId) throw new Error("Client identifier is required");
+    const raw = String(clientId).trim();
+    const isNum = !isNaN(Number(raw)) && /^\d+$/.test(raw);
+
+    // 1. Try finding by custom clientId (e.g. CL-101)
+    let client = await strapi.db
       .query("api::client-detail.client-detail")
       .findOne({
-        where: { clientId },
+        where: { clientId: raw },
         populate: {
           selfieUpload: true,
+          user: {
+            select: ["id", "username", "email", "phoneNumber"],
+          },
         },
       });
+
+    // 2. Try by documentId or numeric id
+    if (!client) {
+      client = await strapi.db
+        .query("api::client-detail.client-detail")
+        .findOne({
+          where: isNum ? { id: Number(raw) } : { documentId: raw },
+          populate: {
+            selfieUpload: true,
+            user: {
+              select: ["id", "username", "email", "phoneNumber"],
+            },
+          },
+        });
+    }
 
     if (!client) throw new Error("Client not found");
 
@@ -46,6 +88,16 @@ export default () => ({
     return new Date(startOfTodayIST.getTime() - IST_OFFSET);
   },
 
+  getTodayDateString(): string {
+    const now = new Date();
+    const IST_OFFSET = 5.5 * 60 * 60 * 1000;
+    const nowIST = new Date(now.getTime() + IST_OFFSET);
+    const year = nowIST.getUTCFullYear();
+    const month = String(nowIST.getUTCMonth() + 1).padStart(2, "0");
+    const day = String(nowIST.getUTCDate()).padStart(2, "0");
+    return `${year}-${month}-${day}`;
+  },
+
   async checkRecentCheckin(clientId: number) {
     const now = new Date();
     const startOfTodayUTC = this.getStartOfTodayUTC();
@@ -53,10 +105,8 @@ export default () => ({
 
     /*
      * Use whichever is later:
-     *
      * 1. Start of today
      * 2. Four hours ago
-     *
      * This ensures previous-day entries are NEVER checked.
      */
     const checkFrom =
@@ -71,21 +121,15 @@ export default () => ({
       .findOne({
         where: {
           client_detail: clientId,
-
           checkinTime: {
             $gte: checkFrom,
             $lte: now,
           },
         },
-
         orderBy: {
           checkinTime: "desc",
         },
       });
-
-    /* ======================================================
-       ALREADY CHECKED IN
-    ====================================================== */
 
     if (recentCheckin) {
       const checkinTime = new Date(
@@ -106,59 +150,92 @@ export default () => ({
   },
 
   /* ====================================== */
-  /* SCAN QR */
+  /* SCAN QR / CHECK-IN */
   /* ====================================== */
 
-  async scan(clientId: string, clubOwnerUserId: number) {
+  async scan(clientId: string | number, clubOwnerUserId: number) {
     const clubOwner = await this.getClubOwner(clubOwnerUserId);
     const client = await this.getClient(clientId);
 
     await this.checkRecentCheckin(client.id);
 
-    const clientName = client.name ?? null;
-    const selfieUrl = client.selfieUpload?.url ?? null;
+    const clientName = client.name || client.user?.username || null;
+    const selfieUrl =
+      client.selfieUpload?.formats?.small?.url ||
+      client.selfieUpload?.formats?.thumbnail?.url ||
+      client.selfieUpload?.url ||
+      null;
+    const gymName = clubOwner.clubName || clubOwner.club_name || "gym";
+    const todayDateStr = this.getTodayDateString();
 
-    /* ---------------- LOCAL SUBSCRIPTION ---------------- */
+    /* ========================================================
+       STEP 1: CHECK ACTIVE GYM MEMBERSHIP FOR THIS GYM
+    ======================================================== */
 
-    let localSub = await strapi.db
-      .query("api::local-subscription.local-subscription")
-      .findOne({
+    // Fetch all gym contracts under this club owner
+    const contracts = await strapi.db
+      .query("api::gym-contract.gym-contract")
+      .findMany({
         where: {
-          client_detail: client.id,
-          club_owner: clubOwner.id,
-          subscriptionStatus: "active",
+          $or: [
+            { club_owner: clubOwner.id },
+            ...(clubOwner.documentId
+              ? [{ club_owner: { documentId: clubOwner.documentId } }]
+              : []),
+          ],
         },
-        orderBy: { endDate: "desc" },
+        select: ["id", "documentId", "contractId"],
       });
 
-    if (!localSub) {
-      localSub = await strapi.db
-        .query("api::local-subscription.local-subscription")
-        .findOne({
+    const contractIds = contracts.map((c: any) => c.id);
+
+    let existingMemberships: any[] = [];
+    if (contractIds.length > 0) {
+      existingMemberships = await strapi.db
+        .query("api::gym-membership.gym-membership")
+        .findMany({
           where: {
             client_detail: client.id,
-            club_owner: clubOwner.id,
+            gym_contract: { id: { $in: contractIds } },
           },
-          orderBy: { endDate: "desc" },
+          populate: {
+            gym_contract: {
+              select: ["id", "contractId"],
+            },
+            membership_plan_price: true,
+          },
+          orderBy: { id: "desc" },
         });
     }
 
-    if (localSub) {
-      if (localSub.subscriptionStatus === "active") {
-        const checkin = await strapi.entityService.create(
-          "api::client-checkin.client-checkin",
-          {
-            data: {
-              client_detail: client.id,
-              club_owner: clubOwner.id,
-              subscriptionType: "local",
-              checkinTime: new Date(),
-              local_subscription: localSub.id,
-            },
-          },
-        );
+    let activeMembership: any = null;
+    for (const m of existingMemberships) {
+      if (m.membershipStatus === "active") {
+        if (m.paymentStatus === "failed") continue;
+        if (m.endDate && m.endDate < todayDateStr) continue;
+        if (m.startDate && m.startDate > todayDateStr) continue;
 
-        const gymName = clubOwner.clubName || clubOwner.club_name || "gym";
+        activeMembership = m;
+        break;
+      }
+    }
+
+    // Found active membership -> proceed with membership checkin
+    if (activeMembership) {
+      const checkin = await strapi.entityService.create(
+        "api::client-checkin.client-checkin",
+        {
+          data: {
+            client_detail: client.id,
+            club_owner: clubOwner.id,
+            checkinType: "membership",
+            gym_membership: activeMembership.id,
+            checkinTime: new Date(),
+          },
+        },
+      );
+
+      try {
         await strapi
           .service("api::activity-log.activity-log")
           .createActivityLog({
@@ -167,301 +244,158 @@ export default () => ({
             actionType: "checkin",
             entityName: "client-checkin",
             entityId: checkin?.documentId || checkin?.id,
-            description: `Checked in to ${gymName}`,
+            description: `Checked in to ${gymName} (Membership)`,
           });
-
-        return {
-          status: "success",
-          type: "local",
-          clientName,
-          selfieUrl,
-        };
-      }
-    }
-
-    /* ---------------- OUTDOOR SUBSCRIPTION ---------------- */
-
-    let outdoorSub = await strapi.db
-      .query("api::outdoor-subscription.outdoor-subscription")
-      .findOne({
-        where: {
-          client_detail: client.id,
-          subscriptionStatus: "active",
-          remainingVisits: { $gt: 0 },
-        },
-        orderBy: { createdAt: "desc" },
-      });
-
-    if (!outdoorSub) {
-      outdoorSub = await strapi.db
-        .query("api::outdoor-subscription.outdoor-subscription")
-        .findOne({
-          where: {
-            client_detail: client.id,
-            subscriptionStatus: "active",
-          },
-          orderBy: { createdAt: "desc" },
-        });
-    }
-
-    if (!outdoorSub) {
-      if (localSub) {
-        if (localSub.subscriptionStatus === "cancelled") {
-          throw new Error("Local membership cancelled");
-        }
-        if (localSub.subscriptionStatus === "expired") {
-          throw new Error("Local membership expired");
-        }
+      } catch (actErr) {
+        strapi.log.warn("[Checkin] Activity logging failed:", actErr);
       }
 
-      throw new Error("No membership found");
-    }
-
-    if (
-      outdoorSub.subscriptionStatus !== "active" ||
-      !outdoorSub.remainingVisits ||
-      outdoorSub.remainingVisits <= 0
-    ) {
-      if (localSub) {
-        if (localSub.subscriptionStatus === "cancelled") {
-          throw new Error("Local membership cancelled");
-        }
-        if (localSub.subscriptionStatus === "expired") {
-          throw new Error("Local membership expired");
-        }
-      }
-
-      throw new Error("Outdoor membership has no remaining visits");
-    }
-
-    if (localSub) {
-      if (localSub.subscriptionStatus === "cancelled") {
-        return {
-          status: "choose",
-          message: "Local membership cancelled. Use outdoor membership?",
-          remainingVisits: outdoorSub.remainingVisits,
-          clientName,
-          selfieUrl,
-        };
-      }
-
-      if (localSub.subscriptionStatus === "expired") {
-        return {
-          status: "choose",
-          message: "Local membership expired. Use outdoor membership?",
-          remainingVisits: outdoorSub.remainingVisits,
-          clientName,
-          selfieUrl,
-        };
-      }
-    }
-
-    return await this.createOutdoorCheckin(client, clubOwner, outdoorSub);
-  },
-
-  /* ====================================== */
-  /* CONFIRM OUTDOOR */
-  /* ====================================== */
-
-  async confirmOutdoor(clientId: string, clubOwnerUserId: number) {
-    const clubOwner = await this.getClubOwner(clubOwnerUserId);
-    const client = await this.getClient(clientId);
-
-    await this.checkRecentCheckin(client.id);
-
-    let outdoorSub = await strapi.db
-      .query("api::outdoor-subscription.outdoor-subscription")
-      .findOne({
-        where: {
-          client_detail: client.id,
-          subscriptionStatus: "active",
-          remainingVisits: { $gt: 0 },
-        },
-        orderBy: { createdAt: "desc" },
-      });
-
-    if (!outdoorSub) {
-      outdoorSub = await strapi.db
-        .query("api::outdoor-subscription.outdoor-subscription")
-        .findOne({
-          where: {
-            client_detail: client.id,
-            subscriptionStatus: "active",
-          },
-          orderBy: { createdAt: "desc" },
-        });
-    }
-
-    if (!outdoorSub) throw new Error("Outdoor membership not found");
-
-    if (
-      outdoorSub.subscriptionStatus !== "active" ||
-      !outdoorSub.remainingVisits ||
-      outdoorSub.remainingVisits <= 0
-    ) {
-      throw new Error("Outdoor membership has no remaining visits");
-    }
-
-    return await this.createOutdoorCheckin(client, clubOwner, outdoorSub);
-  },
-
-  /* ====================================== */
-  /* CREATE OUTDOOR CHECKIN */
-  /* ====================================== */
-
-  async createOutdoorCheckin(
-    client: any,
-    clubOwnerOrId: any,
-    outdoorSub: any,
-  ) {
-    const clubOwnerId =
-      typeof clubOwnerOrId === "object" ? clubOwnerOrId.id : clubOwnerOrId;
-    let gymName =
-      typeof clubOwnerOrId === "object"
-        ? (clubOwnerOrId.clubName || clubOwnerOrId.club_name)
-        : null;
-
-    if (!gymName && clubOwnerId) {
-      const co = await strapi.db
-        .query("api::club-owner.club-owner")
-        .findOne({ where: { id: clubOwnerId }, select: ["clubName"] });
-      gymName = co?.clubName || null;
-    }
-
-    return await strapi.db.connection.transaction(async () => {
-      const newUsedVisits = outdoorSub.usedVisits + 1;
-      const newRemainingVisits = outdoorSub.remainingVisits - 1;
-
-      if (newRemainingVisits < 0) {
-        throw new Error("No visits remaining");
-      }
-
-      const updateData: any = {
-        usedVisits: newUsedVisits,
-        remainingVisits: newRemainingVisits,
+      return {
+        checkinType: "membership",
+        clientName,
+        selfieUrl,
+        membershipId: activeMembership.membershipId || activeMembership.id,
+        membershipStatus: activeMembership.membershipStatus,
+        duration: activeMembership.duration,
+        endDate: activeMembership.endDate,
       };
+    }
 
-      if (newRemainingVisits === 0) {
-        updateData.subscriptionStatus = "expired";
-      }
+    /* ========================================================
+       STEP 2: CHECK BOOKED GYM TRIAL FOR TODAY
+    ======================================================== */
 
-      await strapi.entityService.update(
-        "api::outdoor-subscription.outdoor-subscription",
-        outdoorSub.id,
-        {
-          data: updateData,
+    const bookedTrial = await strapi.db
+      .query("api::gym-trial.gym-trial")
+      .findOne({
+        where: {
+          client_detail: client.id,
+          club_owner: clubOwner.id,
+          trialDate: todayDateStr,
+          trialstatus: "booked",
         },
-      );
+        orderBy: { id: "desc" },
+      });
+
+    // Found booked trial for today -> mark completed and check in
+    if (bookedTrial) {
+      // Update trialstatus to completed
+      await strapi.db.query("api::gym-trial.gym-trial").update({
+        where: { id: bookedTrial.id },
+        data: {
+          trialstatus: "completed",
+        },
+      });
+
+      if (bookedTrial.documentId && (strapi as any).documents) {
+        try {
+          await (strapi as any).documents("api::gym-trial.gym-trial").update({
+            documentId: bookedTrial.documentId,
+            data: {
+              trialstatus: "completed",
+            },
+          });
+        } catch (_) {}
+      }
 
       const checkin = await strapi.entityService.create(
         "api::client-checkin.client-checkin",
         {
           data: {
             client_detail: client.id,
-            club_owner: clubOwnerId,
-            subscriptionType: "outdoor",
+            club_owner: clubOwner.id,
+            checkinType: "trial",
             checkinTime: new Date(),
-            outdoor_subscription: outdoorSub.id,
           },
         },
       );
 
-      await strapi
-        .service("api::activity-log.activity-log")
-        .createActivityLog({
-          actorType: "client",
-          actorId: client.documentId || client.id,
-          actionType: "checkin",
-          entityName: "client-checkin",
-          entityId: checkin?.documentId || checkin?.id,
-          description: `Checked in to ${gymName || "gym"}`,
-        });
+      try {
+        await strapi
+          .service("api::activity-log.activity-log")
+          .createActivityLog({
+            actorType: "client",
+            actorId: client.documentId || client.id,
+            actionType: "checkin",
+            entityName: "client-checkin",
+            entityId: checkin?.documentId || checkin?.id,
+            description: `Checked in to ${gymName} (Free Trial)`,
+          });
+      } catch (actErr) {
+        strapi.log.warn("[Checkin] Activity logging failed:", actErr);
+      }
 
       return {
-        status: "success",
-        type: "outdoor",
-        remainingVisits: newRemainingVisits,
-        clientName: client.name ?? null,
-        selfieUrl: client.selfieUpload?.url ?? null,
+        checkinType: "trial",
+        clientName,
+        selfieUrl,
+        trialDate: bookedTrial.trialDate,
+        trialstatus: "completed",
       };
-    });
-  },
+    }
 
-  /* ====================================== */
-  /* CHECKOUT */
-  /* ====================================== */
+    /* ========================================================
+       STEP 3: NEITHER FOUND -> PROVIDE HELPFUL DIAGNOSTIC ERROR
+    ======================================================== */
 
-  async checkout(clientId: string, clubOwnerUserId: number) {
-    const clubOwner = await this.getClubOwner(clubOwnerUserId);
-    const client = await this.getClient(clientId);
-
-    const startOfTodayUTC = this.getStartOfTodayUTC();
-
-    /* Find all check-ins of this client at this gym from today */
-    const todayCheckins = await strapi.db
-      .query("api::client-checkin.client-checkin")
-      .findMany({
+    // Check if free trial was already completed today
+    const completedTrialToday = await strapi.db
+      .query("api::gym-trial.gym-trial")
+      .findOne({
         where: {
           client_detail: client.id,
           club_owner: clubOwner.id,
-          checkinTime: {
-            $gte: startOfTodayUTC,
-          },
-        },
-        orderBy: {
-          checkinTime: "desc",
+          trialDate: todayDateStr,
+          trialstatus: "completed",
         },
       });
 
-    if (!todayCheckins || todayCheckins.length === 0) {
-      throw new Error("No check-in found for this client today");
+    if (completedTrialToday) {
+      throw new Error("Free trial for today has already been completed");
     }
 
-    /* Find the active check-in with empty checkout time */
-    const activeCheckin = todayCheckins.find(
-      (c: any) => c.checkoutTime === null || c.checkoutTime === undefined,
-    );
-
-    if (!activeCheckin) {
-      throw new Error("Client has already checked out for today");
-    }
-
-    const now = new Date();
-
-    await strapi.entityService.update(
-      "api::client-checkin.client-checkin",
-      activeCheckin.id,
-      {
-        data: {
-          checkoutTime: now,
+    // Check if trial is booked for a different date
+    const otherDateTrial = await strapi.db
+      .query("api::gym-trial.gym-trial")
+      .findOne({
+        where: {
+          client_detail: client.id,
+          club_owner: clubOwner.id,
+          trialstatus: "booked",
         },
-      },
-    );
+        orderBy: { trialDate: "asc" },
+      });
 
-    const checkinTime = new Date(activeCheckin.checkinTime);
-    const durationMinutes = Math.max(
-      0,
-      Math.round((now.getTime() - checkinTime.getTime()) / (1000 * 60)),
-    );
+    if (otherDateTrial) {
+      throw new Error(
+        `Trial is booked for ${otherDateTrial.trialDate}, not today (${todayDateStr})`,
+      );
+    }
 
-    return {
-      status: "success",
-      message: "Checked out successfully",
-      clientId: client.clientId,
-      clientName: client.name,
-      selfieUrl: client.selfieUpload?.url ?? null,
-      checkinTime: activeCheckin.checkinTime,
-      checkoutTime: now,
-      durationMinutes,
-      subscriptionType: activeCheckin.subscriptionType,
-    };
+    // Check if there was an inactive/expired/pending membership
+    if (existingMemberships && existingMemberships.length > 0) {
+      const latest = existingMemberships[0];
+      if (
+        latest.membershipStatus === "expired" ||
+        (latest.endDate && latest.endDate < todayDateStr)
+      ) {
+        throw new Error(
+          "Gym membership has expired and no booked trial found for today",
+        );
+      }
+      if (latest.membershipStatus === "cancelled") {
+        throw new Error(
+          "Gym membership is cancelled and no booked trial found for today",
+        );
+      }
+      if (latest.membershipStatus === "pending") {
+        throw new Error(
+          "Gym membership payment is pending and no booked trial found for today",
+        );
+      }
+    }
+
+    throw new Error("No active membership or booked trial found for today");
   },
 
-  /* ====================================== */
-  /* MANUAL CHECK-IN */
-  /* ====================================== */
-
-  async manualCheckin(clientId: string, clubOwnerUserId: number) {
-    return await this.scan(clientId, clubOwnerUserId);
-  },
 });

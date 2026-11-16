@@ -447,34 +447,20 @@ const POPULATE_CONFIG = {
       },
     },
   },
-  local_subscription: {
+  gym_membership: {
     select: [
       "id",
       "documentId",
-      "membershipType",
+      "membershipId",
+      "duration",
+      "durationMonths",
+      "membershipStatus",
       "startDate",
       "endDate",
-      "subscriptionStatus",
     ],
     populate: {
-      local_membership_plan: {
-        select: ["id", "documentId", "planName", "price", "monthDuration"],
-      },
-    },
-  },
-  outdoor_subscription: {
-    select: [
-      "id",
-      "documentId",
-      "membershipType",
-      "totalVisitsAllowed",
-      "usedVisits",
-      "remainingVisits",
-      "subscriptionStatus",
-    ],
-    populate: {
-      outdoor_membership_plan: {
-        select: ["id", "documentId", "planName", "price", "visitAllowed"],
+      gym_contract: {
+        select: ["id", "documentId", "contractId"],
       },
     },
   },
@@ -496,14 +482,17 @@ function formatCheckin(item: any) {
   }
 
   const isCheckedOut = Boolean(item.checkoutTime);
+  const checkinType = item.checkinType || item.subscriptionType || "membership";
 
   return {
     id: item.id,
     documentId: item.documentId,
-    subscriptionType: item.subscriptionType,
+    checkinType,
+    subscriptionType: checkinType,
     checkinTime: item.checkinTime,
     checkoutTime: item.checkoutTime,
     status: isCheckedOut ? "checked-out" : "checked-in",
+    durationMinutes,
     client: item.client_detail
       ? {
           id: item.client_detail.id,
@@ -533,50 +522,16 @@ function formatCheckin(item: any) {
             null,
         }
       : null,
-    localSubscription: item.local_subscription
+    gymMembership: item.gym_membership
       ? {
-          id: item.local_subscription.id,
-          documentId: item.local_subscription.documentId,
-          membershipType: item.local_subscription.membershipType,
-          startDate: item.local_subscription.startDate,
-          endDate: item.local_subscription.endDate,
-          subscriptionStatus: item.local_subscription.subscriptionStatus,
-          plan: item.local_subscription.local_membership_plan
-            ? {
-                id: item.local_subscription.local_membership_plan.id,
-                documentId:
-                  item.local_subscription.local_membership_plan.documentId,
-                planName:
-                  item.local_subscription.local_membership_plan.planName,
-                price: item.local_subscription.local_membership_plan.price,
-                monthDuration:
-                  item.local_subscription.local_membership_plan.monthDuration,
-              }
-            : null,
-        }
-      : null,
-    outdoorSubscription: item.outdoor_subscription
-      ? {
-          id: item.outdoor_subscription.id,
-          documentId: item.outdoor_subscription.documentId,
-          membershipType: item.outdoor_subscription.membershipType,
-          totalVisitsAllowed: item.outdoor_subscription.totalVisitsAllowed,
-          usedVisits: item.outdoor_subscription.usedVisits,
-          remainingVisits: item.outdoor_subscription.remainingVisits,
-          subscriptionStatus: item.outdoor_subscription.subscriptionStatus,
-          plan: item.outdoor_subscription.outdoor_membership_plan
-            ? {
-                id: item.outdoor_subscription.outdoor_membership_plan.id,
-                documentId:
-                  item.outdoor_subscription.outdoor_membership_plan.documentId,
-                planName:
-                  item.outdoor_subscription.outdoor_membership_plan.planName,
-                price: item.outdoor_subscription.outdoor_membership_plan.price,
-                visitAllowed:
-                  item.outdoor_subscription.outdoor_membership_plan
-                    .visitAllowed,
-              }
-            : null,
+          id: item.gym_membership.id,
+          documentId: item.gym_membership.documentId,
+          membershipId: item.gym_membership.membershipId,
+          duration: item.gym_membership.duration,
+          durationMonths: item.gym_membership.durationMonths,
+          membershipStatus: item.gym_membership.membershipStatus,
+          startDate: item.gym_membership.startDate,
+          endDate: item.gym_membership.endDate,
         }
       : null,
     createdAt: item.createdAt,
@@ -723,8 +678,8 @@ export default factories.createCoreController(
               data: [],
               meta: {
                 total: 0,
-                localCount: 0,
-                outdoorCount: 0,
+                membershipCount: 0,
+                trialCount: 0,
                 activeCount: 0,
               },
             });
@@ -779,8 +734,8 @@ export default factories.createCoreController(
               data: [],
               meta: {
                 total: 0,
-                localCount: 0,
-                outdoorCount: 0,
+                membershipCount: 0,
+                trialCount: 0,
                 activeCount: 0,
               },
             });
@@ -791,18 +746,17 @@ export default factories.createCoreController(
           };
         }
         // ============================================================
-        // SUBSCRIPTION TYPE
+        // CHECKIN TYPE (MEMBERSHIP / TRIAL)
         // ============================================================
 
-        if (
-          subscriptionType &&
-          ["local", "outdoor"].includes(
-            String(subscriptionType).toLowerCase().trim(),
-          )
-        ) {
-          where.subscriptionType = String(subscriptionType)
-            .toLowerCase()
-            .trim();
+        const typeFilter =
+          (ctx.query as any).checkinType ||
+          (ctx.query as any).subscriptionType;
+        if (typeFilter) {
+          const normType = String(typeFilter).toLowerCase().trim();
+          if (["membership", "trial"].includes(normType)) {
+            where.checkinType = normType;
+          }
         }
 
         // ============================================================
@@ -860,7 +814,7 @@ export default factories.createCoreController(
         // FETCH CHECK-INS
         // ============================================================
 
-        const [rawCheckins, total, localCount, outdoorCount, activeCount] =
+        const [rawCheckins, total, membershipCount, trialCount, activeCount] =
           await Promise.all([
             strapi.db.query(CHECKIN_UID).findMany({
               where,
@@ -875,14 +829,14 @@ export default factories.createCoreController(
             strapi.db.query(CHECKIN_UID).count({
               where: {
                 ...where,
-                subscriptionType: "local",
+                checkinType: "membership",
               },
             }),
 
             strapi.db.query(CHECKIN_UID).count({
               where: {
                 ...where,
-                subscriptionType: "outdoor",
+                checkinType: "trial",
               },
             }),
 
@@ -902,6 +856,12 @@ export default factories.createCoreController(
 
         return ctx.send({
           data: formattedList,
+          meta: {
+            total,
+            membershipCount,
+            trialCount,
+            activeCount,
+          },
         });
       } catch (error) {
         strapi.log.error("FIND CLIENT CHECKINS ERROR:", error);
@@ -928,130 +888,93 @@ export default factories.createCoreController(
         const {
           startDate,
           endDate,
+          checkinType,
           subscriptionType,
         } = ctx.query as any;
 
-        let query = `
-          SELECT 
-            cc.id,
-            cc.document_id,
-            cc.subscription_type,
-            cc.checkin_time,
-            cc.checkout_time,
-            co.club_name,
-            logo.url AS club_logo,
-            logo.formats AS club_logo_formats
-          FROM client_checkins cc
-          JOIN client_checkins_client_detail_lnk ccdl ON ccdl.client_checkin_id = cc.id
-          LEFT JOIN client_checkins_club_owner_lnk ccol ON ccol.client_checkin_id = cc.id
-          LEFT JOIN club_owners co ON co.id = ccol.club_owner_id
-          LEFT JOIN LATERAL (
-            SELECT f.url, f.formats
-            FROM files_related_mph frm
-            JOIN files f ON f.id = frm.file_id
-            WHERE frm.related_id = co.id 
-              AND frm.related_type = 'api::club-owner.club-owner' 
-              AND frm.field = 'logo'
-            ORDER BY frm.id ASC
-            LIMIT 1
-          ) logo ON true
-          WHERE ccdl.client_detail_id = ?
-        `;
-        const params: any[] = [client.id];
+        const where: any = {
+          client_detail: client.id,
+        };
 
         // Date Range Filter
-        if (startDate) {
-          const s = new Date(startDate);
-          if (!isNaN(s.getTime())) {
-            if (
-              typeof startDate === "string" &&
-              /^\d{4}-\d{2}-\d{2}$/.test(startDate.trim())
-            ) {
-              s.setHours(0, 0, 0, 0);
+        if (startDate || endDate) {
+          where.checkinTime = {};
+          if (startDate) {
+            const s = new Date(startDate);
+            if (!isNaN(s.getTime())) {
+              if (
+                typeof startDate === "string" &&
+                /^\d{4}-\d{2}-\d{2}$/.test(startDate.trim())
+              ) {
+                s.setHours(0, 0, 0, 0);
+              }
+              where.checkinTime.$gte = s;
             }
-            query += ` AND cc.checkin_time >= ?`;
-            params.push(s.toISOString());
+          }
+          if (endDate) {
+            const e = new Date(endDate);
+            if (!isNaN(e.getTime())) {
+              if (
+                typeof endDate === "string" &&
+                /^\d{4}-\d{2}-\d{2}$/.test(endDate.trim())
+              ) {
+                e.setHours(23, 59, 59, 999);
+              }
+              where.checkinTime.$lte = e;
+            }
           }
         }
 
-        if (endDate) {
-          const e = new Date(endDate);
-          if (!isNaN(e.getTime())) {
-            if (
-              typeof endDate === "string" &&
-              /^\d{4}-\d{2}-\d{2}$/.test(endDate.trim())
-            ) {
-              e.setHours(23, 59, 59, 999);
-            }
-            query += ` AND cc.checkin_time <= ?`;
-            params.push(e.toISOString());
-          }
-        }
-
-        // Subscription Type Filter (local, outdoor, etc.)
-        if (subscriptionType) {
+        // Check-in Type Filter (membership, trial)
+        const rawType = checkinType || subscriptionType;
+        if (rawType) {
           const types = (
-            Array.isArray(subscriptionType)
-              ? subscriptionType
-              : String(subscriptionType).split(",")
+            Array.isArray(rawType)
+              ? rawType
+              : String(rawType).split(",")
           )
             .map((t: any) => String(t).toLowerCase().trim())
             .filter((t: string) => Boolean(t) && t !== "all");
 
           if (types.length === 1) {
-            query += ` AND LOWER(cc.subscription_type) = ?`;
-            params.push(types[0]);
+            where.checkinType = types[0];
           } else if (types.length > 1) {
-            const placeholders = types.map(() => "?").join(", ");
-            query += ` AND LOWER(cc.subscription_type) IN (${placeholders})`;
-            params.push(...types);
+            where.checkinType = { $in: types };
           }
         }
 
-        query += ` ORDER BY cc.checkin_time DESC, cc.id DESC`;
-
-        const knex = strapi.db.connection;
-        const result = await knex.raw(query, params);
-        const rows = result?.rows || [];
+        const checkins = await strapi.db.query(CHECKIN_UID).findMany({
+          where,
+          populate: POPULATE_CONFIG,
+          orderBy: {
+            checkinTime: "desc",
+            id: "desc",
+          },
+        });
 
         const serverUrl = (strapi.config.get("server.url") as string) || "";
 
-        const formattedList = rows.map((row: any) => {
-          let logoFormats = row.club_logo_formats;
-          if (typeof logoFormats === "string") {
-            try {
-              logoFormats = JSON.parse(logoFormats);
-            } catch (_) {}
-          }
+        const formattedList = (Array.isArray(checkins) ? checkins : []).map(
+          (item: any) => {
+            const formatted = formatCheckin(item);
+            const rawLogoUrl =
+              item.club_owner?.logo?.formats?.small?.url ||
+              item.club_owner?.logo?.formats?.thumbnail?.url ||
+              item.club_owner?.logo?.url ||
+              null;
+            const logoUrl = rawLogoUrl
+              ? String(rawLogoUrl).startsWith("http")
+                ? String(rawLogoUrl)
+                : `${serverUrl}${rawLogoUrl}`
+              : null;
 
-          const rawLogoUrl =
-            logoFormats?.small?.url ||
-            logoFormats?.thumbnail?.url ||
-            row.club_logo ||
-            null;
-
-          let logoUrl: string | null = null;
-          if (rawLogoUrl) {
-            logoUrl = String(rawLogoUrl).startsWith("http")
-              ? String(rawLogoUrl)
-              : `${serverUrl}${rawLogoUrl}`;
-          }
-
-          return {
-            id: row.id,
-            documentId: row.document_id,
-            subscriptionType: row.subscription_type,
-            checkinTime: row.checkin_time
-              ? new Date(row.checkin_time).toISOString()
-              : null,
-            checkoutTime: row.checkout_time
-              ? new Date(row.checkout_time).toISOString()
-              : null,
-            status: row.checkout_time ? "checked-out" : "checked-in",
-            club_name: row.club_name || null,
-            club_logo: logoUrl,
-          };
-        });
+            return {
+              ...formatted,
+              club_name: item.club_owner?.clubName || null,
+              club_logo: logoUrl,
+            };
+          },
+        );
 
         return ctx.send({
           data: formattedList,
