@@ -50,7 +50,10 @@ function cleanupCache() {
 // Action type normalizer
 export function normalizeActionType(action: string): ActionType {
   if (!action) return "update";
-  const a = String(action).trim().toLowerCase().replace(/[\s_-]+/g, "");
+  const a = String(action)
+    .trim()
+    .toLowerCase()
+    .replace(/[\s_-]+/g, "");
   if (a === "create") return "create";
   if (a === "update") return "update";
   if (a === "delete") return "delete";
@@ -91,14 +94,14 @@ async function resolveAdminUser(identifier: any) {
 
   const record: any = await strapi.db.query(USER_UID).findOne({
     where: whereClause,
-    select: ["id", "documentId", "username", "email"],
+    select: ["id", "documentId", "fullName", "email"],
   });
 
   if (record) {
     return {
       id: record.id,
       documentId: record.documentId,
-      username: record.username,
+      fullName: record.fullName,
       email: record.email,
     };
   }
@@ -292,11 +295,9 @@ export default factories.createCoreService(
               dataToCreate.client_detail = clientDocId;
             }
 
-            created = await (strapi as any)
-              .documents(ACTIVITY_LOG_UID)
-              .create({
-                data: dataToCreate,
-              });
+            created = await (strapi as any).documents(ACTIVITY_LOG_UID).create({
+              data: dataToCreate,
+            });
           } catch (docErr) {
             strapi.log.warn(
               "[UnifiedActivityLog] documents.create failed, falling back to db.query:",
@@ -360,24 +361,39 @@ export default factories.createCoreService(
       } = queryParams;
 
       const pageNum = Math.max(1, parseInt(String(page), 10) || 1);
-      const limitNum = Math.min(100, Math.max(1, parseInt(String(pageSize), 10) || 20));
+      const limitNum = Math.min(
+        100,
+        Math.max(1, parseInt(String(pageSize), 10) || 20),
+      );
       const offset = (pageNum - 1) * limitNum;
 
       // Also gather gym contract IDs for this club owner
-      const contractRecords: any[] = await strapi.db.connection("gym_contracts as gc")
-        .join("gym_contracts_club_owner_lnk as lnk", "lnk.gym_contract_id", "gc.id")
+      const contractRecords: any[] = await strapi.db
+        .connection("gym_contracts as gc")
+        .join(
+          "gym_contracts_club_owner_lnk as lnk",
+          "lnk.gym_contract_id",
+          "gc.id",
+        )
         .where("lnk.club_owner_id", owner.id)
         .select("gc.document_id", "gc.id");
 
-      const contractDocIds = contractRecords.map((r) => r.document_id).filter(Boolean);
-      const contractNumIds = contractRecords.map((r) => String(r.id)).filter(Boolean);
+      const contractDocIds = contractRecords
+        .map((r) => r.document_id)
+        .filter(Boolean);
+      const contractNumIds = contractRecords
+        .map((r) => String(r.id))
+        .filter(Boolean);
 
       // Gather linked user ID if any
-      const userLinkRecord: any = await strapi.db.connection("up_users_club_owner_lnk")
+      const userLinkRecord: any = await strapi.db
+        .connection("up_users_club_owner_lnk")
         .where("club_owner_id", owner.id)
         .select("user_id")
         .first();
-      const linkedUserId = userLinkRecord?.user_id ? String(userLinkRecord.user_id) : null;
+      const linkedUserId = userLinkRecord?.user_id
+        ? String(userLinkRecord.user_id)
+        : null;
 
       const targetEntityIds = [
         owner.documentId,
@@ -389,7 +405,8 @@ export default factories.createCoreService(
       ].filter(Boolean);
 
       // Knex query builder on activity_logs
-      const baseQuery = strapi.db.connection("activity_logs as al")
+      const baseQuery = strapi.db
+        .connection("activity_logs as al")
         .leftJoin(
           "activity_logs_club_owner_lnk as co_lnk",
           "co_lnk.activity_log_id",
@@ -432,7 +449,11 @@ export default factories.createCoreService(
         });
 
       // Filters
-      if (actionType && String(actionType).trim() && String(actionType).toUpperCase() !== "ALL") {
+      if (
+        actionType &&
+        String(actionType).trim() &&
+        String(actionType).toUpperCase() !== "ALL"
+      ) {
         const normAction = normalizeActionType(String(actionType).trim());
         baseQuery.andWhere("al.action_type", normAction);
       }
@@ -477,7 +498,7 @@ export default factories.createCoreService(
           "co_lnk.club_owner_id",
           "u_lnk.user_id as admin_user_id",
           "cd_lnk.client_detail_id",
-          "u.username as admin_username",
+          "u.full_name as admin_name",
           "co.club_name as owner_club_name",
           "co.owner_name as owner_name",
           "cd.name as client_name",
@@ -489,12 +510,12 @@ export default factories.createCoreService(
       const data = rows.map((row: any) => {
         let actorType: ActorType = "club_owner";
         let actorRole = "Club Owner";
-        let actorName = row.owner_club_name || row.owner_name || "Club Owner";
+        let actorName = row.owner_name || "Club Owner";
 
         if (row.admin_user_id) {
           actorType = "admin";
           actorRole = "Admin";
-          actorName = row.admin_username || "Admin";
+          actorName = row.admin_name || "Admin";
         } else if (row.client_detail_id) {
           actorType = "client";
           actorRole = "Client";
@@ -551,11 +572,15 @@ export default factories.createCoreService(
       } = queryParams;
 
       const pageNum = Math.max(1, parseInt(String(page), 10) || 1);
-      const limitNum = Math.min(100, Math.max(1, parseInt(String(pageSize), 10) || 20));
+      const limitNum = Math.min(
+        100,
+        Math.max(1, parseInt(String(pageSize), 10) || 20),
+      );
       const offset = (pageNum - 1) * limitNum;
 
       // Gather gym membership IDs for this client
-      const membershipRecords: any[] = await strapi.db.connection("gym_memberships as gm")
+      const membershipRecords: any[] = await strapi.db
+        .connection("gym_memberships as gm")
         .join(
           "gym_memberships_client_detail_lnk as lnk",
           "lnk.gym_membership_id",
@@ -564,15 +589,22 @@ export default factories.createCoreService(
         .where("lnk.client_detail_id", client.id)
         .select("gm.document_id", "gm.id");
 
-      const membershipDocIds = membershipRecords.map((r) => r.document_id).filter(Boolean);
-      const membershipNumIds = membershipRecords.map((r) => String(r.id)).filter(Boolean);
+      const membershipDocIds = membershipRecords
+        .map((r) => r.document_id)
+        .filter(Boolean);
+      const membershipNumIds = membershipRecords
+        .map((r) => String(r.id))
+        .filter(Boolean);
 
       // Gather linked user ID if any
-      const userLinkRecord: any = await strapi.db.connection("up_users_client_detail_lnk")
+      const userLinkRecord: any = await strapi.db
+        .connection("up_users_client_detail_lnk")
         .where("client_detail_id", client.id)
         .select("user_id")
         .first();
-      const linkedUserId = userLinkRecord?.user_id ? String(userLinkRecord.user_id) : null;
+      const linkedUserId = userLinkRecord?.user_id
+        ? String(userLinkRecord.user_id)
+        : null;
 
       const targetEntityIds = [
         client.documentId,
@@ -583,7 +615,8 @@ export default factories.createCoreService(
         ...membershipNumIds,
       ].filter(Boolean);
 
-      const baseQuery = strapi.db.connection("activity_logs as al")
+      const baseQuery = strapi.db
+        .connection("activity_logs as al")
         .leftJoin(
           "activity_logs_client_detail_lnk as cd_lnk",
           "cd_lnk.activity_log_id",
@@ -627,7 +660,11 @@ export default factories.createCoreService(
           });
         });
 
-      if (actionType && String(actionType).trim() && String(actionType).toUpperCase() !== "ALL") {
+      if (
+        actionType &&
+        String(actionType).trim() &&
+        String(actionType).toUpperCase() !== "ALL"
+      ) {
         const normAction = normalizeActionType(String(actionType).trim());
         baseQuery.andWhere("al.action_type", normAction);
       }
@@ -670,7 +707,7 @@ export default factories.createCoreService(
           "cd_lnk.client_detail_id",
           "u_lnk.user_id as admin_user_id",
           "co_lnk.club_owner_id",
-          "u.username as admin_username",
+          "u.full_name as admin_name",
           "cd.name as client_name",
           "co.club_name as owner_club_name",
           "co.owner_name as owner_name",
@@ -687,11 +724,11 @@ export default factories.createCoreService(
         if (row.admin_user_id) {
           actorType = "admin";
           actorRole = "Admin";
-          actorName = row.admin_username || "Admin";
+          actorName = row.admin_name || "Admin";
         } else if (row.club_owner_id) {
           actorType = "club_owner";
           actorRole = "Club Owner";
-          actorName = row.owner_club_name || row.owner_name || "Club Owner";
+          actorName = row.owner_name || "Club Owner";
         }
 
         return {
@@ -725,7 +762,12 @@ export default factories.createCoreService(
     /**
      * Get Admin Activity Timeline
      */
-    async getAdminTimeline(queryParams: ActivityLogQueryParams & { adminUserId?: number | string; all?: boolean } = {}) {
+    async getAdminTimeline(
+      queryParams: ActivityLogQueryParams & {
+        adminUserId?: number | string;
+        all?: boolean;
+      } = {},
+    ) {
       const {
         page = 1,
         pageSize = 20,
@@ -738,10 +780,14 @@ export default factories.createCoreService(
       } = queryParams;
 
       const pageNum = Math.max(1, parseInt(String(page), 10) || 1);
-      const limitNum = Math.min(100, Math.max(1, parseInt(String(pageSize), 10) || 20));
+      const limitNum = Math.min(
+        100,
+        Math.max(1, parseInt(String(pageSize), 10) || 20),
+      );
       const offset = (pageNum - 1) * limitNum;
 
-      const baseQuery = strapi.db.connection("activity_logs as al")
+      const baseQuery = strapi.db
+        .connection("activity_logs as al")
         .leftJoin(
           "activity_logs_users_permissions_user_lnk as u_lnk",
           "u_lnk.activity_log_id",
@@ -771,7 +817,11 @@ export default factories.createCoreService(
         baseQuery.whereNotNull("u_lnk.user_id");
       }
 
-      if (actionType && String(actionType).trim() && String(actionType).toUpperCase() !== "ALL") {
+      if (
+        actionType &&
+        String(actionType).trim() &&
+        String(actionType).toUpperCase() !== "ALL"
+      ) {
         const normAction = normalizeActionType(String(actionType).trim());
         baseQuery.andWhere("al.action_type", normAction);
       }
@@ -814,7 +864,7 @@ export default factories.createCoreService(
           "u_lnk.user_id as admin_user_id",
           "co_lnk.club_owner_id",
           "cd_lnk.client_detail_id",
-          "u.username as admin_username",
+          "u.full_name as admin_name",
           "co.club_name as owner_club_name",
           "co.owner_name as owner_name",
           "cd.name as client_name",
@@ -835,7 +885,7 @@ export default factories.createCoreService(
         } else if (row.club_owner_id) {
           actorType = "club_owner";
           actorRole = "Club Owner";
-          actorName = row.owner_club_name || row.owner_name || "Club Owner";
+          actorName = row.owner_name || "Club Owner";
         } else if (row.client_detail_id) {
           actorType = "client";
           actorRole = "Client";
@@ -880,10 +930,14 @@ export default factories.createCoreService(
       const { page = 1, pageSize = 20, actionType } = queryParams;
 
       const pageNum = Math.max(1, parseInt(String(page), 10) || 1);
-      const limitNum = Math.min(100, Math.max(1, parseInt(String(pageSize), 10) || 20));
+      const limitNum = Math.min(
+        100,
+        Math.max(1, parseInt(String(pageSize), 10) || 20),
+      );
       const offset = (pageNum - 1) * limitNum;
 
-      const baseQuery = strapi.db.connection("activity_logs as al")
+      const baseQuery = strapi.db
+        .connection("activity_logs as al")
         .leftJoin(
           "activity_logs_users_permissions_user_lnk as u_lnk",
           "u_lnk.activity_log_id",
@@ -905,7 +959,11 @@ export default factories.createCoreService(
         .whereILike("al.entity_name", entityName.trim())
         .andWhere("al.entity_id", String(entityId).trim());
 
-      if (actionType && String(actionType).trim() && String(actionType).toUpperCase() !== "ALL") {
+      if (
+        actionType &&
+        String(actionType).trim() &&
+        String(actionType).toUpperCase() !== "ALL"
+      ) {
         const normAction = normalizeActionType(String(actionType).trim());
         baseQuery.andWhere("al.action_type", normAction);
       }
@@ -930,7 +988,7 @@ export default factories.createCoreService(
           "u_lnk.user_id as admin_user_id",
           "co_lnk.club_owner_id",
           "cd_lnk.client_detail_id",
-          "u.username as admin_username",
+          "u.full_name as admin_name",
           "co.club_name as owner_club_name",
           "co.owner_name as owner_name",
           "cd.name as client_name",
@@ -951,7 +1009,7 @@ export default factories.createCoreService(
         } else if (row.club_owner_id) {
           actorType = "club_owner";
           actorRole = "Club Owner";
-          actorName = row.owner_club_name || row.owner_name || "Club Owner";
+          actorName = row.owner_name || "Club Owner";
         } else if (row.client_detail_id) {
           actorType = "client";
           actorRole = "Client";
