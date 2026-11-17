@@ -1097,5 +1097,133 @@ export default factories.createCoreController(
         return ctx.internalServerError("Failed to fetch check-in");
       }
     },
+
+  
+    async adminClientCheckin(ctx: Context) {
+      try {
+        let user = ctx.state?.user;
+
+        // Fallback: Check Bearer token from header
+        if (!user && ctx.request?.header?.authorization?.startsWith("Bearer ")) {
+          const token = ctx.request.header.authorization.slice(7).trim();
+          try {
+            const jwtService = strapi.plugin("users-permissions")?.service("jwt");
+            if (jwtService?.verify) {
+              const payload = await jwtService.verify(token);
+              if (payload?.id) {
+                user = await strapi.db
+                  .query("plugin::users-permissions.user")
+                  .findOne({
+                    where: { id: payload.id },
+                    populate: { role: true },
+                  });
+                if (user) {
+                  ctx.state.user = user;
+                }
+              }
+            }
+          } catch (_) {}
+        }
+
+        if (!user) {
+          return ctx.unauthorized("Authentication required");
+        }
+
+        // 1. Role verification: Only Admin and SuperAdmin
+        const roleName = await getUserRole(user);
+        const isAdmin =
+          roleName === "admin" ||
+          roleName === "superadmin" ||
+          roleName.includes("admin");
+
+        if (!isAdmin) {
+          return ctx.forbidden(
+            "Access denied. Only Admin and SuperAdmin can access this endpoint."
+          );
+        }
+
+        // 2. Extract clientdocumentId
+        const params = (ctx.params || {}) as any;
+        const query = (ctx.query || {}) as any;
+
+        const targetId =
+          params.id ||
+          params.clientdocumentId ||
+          params.clientdocumentid ||
+          query.clientdocumentId ||
+          query.clientdocumentid ||
+          query.id;
+
+        if (!targetId || !String(targetId).trim()) {
+          return ctx.badRequest("Please provide clientdocumentId in params");
+        }
+
+        const cleanDocId = String(targetId).trim();
+        const isNum = !isNaN(Number(cleanDocId)) && /^\d+$/.test(cleanDocId);
+
+        // 3. Resolve client profile
+        let clientDetail: any = null;
+
+        if ((strapi as any).documents && !isNum) {
+          try {
+            clientDetail = await (strapi as any)
+              .documents(CLIENT_UID)
+              .findOne({
+                documentId: cleanDocId,
+                select: ["id", "documentId", "clientId", "name"],
+              });
+          } catch (_) {}
+        }
+
+        if (!clientDetail) {
+          clientDetail = await strapi.db.query(CLIENT_UID).findOne({
+            where: isNum
+              ? { $or: [{ id: Number(cleanDocId) }, { documentId: cleanDocId }] }
+              : { $or: [{ documentId: cleanDocId }, { clientId: cleanDocId }] },
+            select: ["id", "documentId", "clientId", "name"],
+          });
+        }
+
+        if (!clientDetail) {
+          return ctx.notFound(`Client with documentId '${cleanDocId}' not found`);
+        }
+
+        // 4. Fetch check-ins for this client
+        const checkins: any[] = await strapi.db.query(CHECKIN_UID).findMany({
+          where: {
+            client_detail: clientDetail.id,
+          },
+          populate: {
+            club_owner: {
+              select: ["id", "clubName", "clubId", "ownerName"],
+            },
+          },
+          orderBy: { checkinTime: "desc", createdAt: "desc", id: "desc" },
+        });
+
+        // 5. Format response with requested fields
+        const responseData = checkins.map((item: any) => {
+          const clubName =
+            item.club_owner?.clubName ||
+            item.club_owner?.name ||
+            item.club_owner?.ownerName ||
+            null;
+
+          return {
+            clubName,
+            checkinType: item.checkinType || null,
+            checkinTime: item.checkinTime || null,
+            createdAt: item.createdAt || null,
+          };
+        });
+
+        return ctx.send(responseData);
+      } catch (error) {
+        strapi.log.error("ADMIN CLIENT CHECKIN ERROR:", error);
+        return ctx.internalServerError("Failed to fetch client check-ins");
+      }
+    },
+
+    
   }),
 );

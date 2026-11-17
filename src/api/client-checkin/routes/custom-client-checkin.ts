@@ -15,6 +15,14 @@ export default {
       config: {
         auth: {}
       }
+    },
+    {
+      method: "GET",
+      path: "/checkin/:id",
+      handler: "client-checkin.adminClientCheckin",
+      config: {
+        auth: {}
+      }
     }
   ]
 }

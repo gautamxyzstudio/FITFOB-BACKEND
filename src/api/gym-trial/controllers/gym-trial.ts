@@ -97,6 +97,48 @@ async function getAuthUser(ctx: Context) {
   return null;
 }
 
+/* ---------- ROLE HELPER ---------- */
+async function getUserRole(user: any): Promise<string> {
+  if (!user) return "";
+  if (user._cachedRole) return user._cachedRole;
+
+  if (user.role && typeof user.role === "object") {
+    const role =
+      user.role.name?.toLowerCase().replace(/[\s_-]+/g, "") ||
+      user.role.type?.toLowerCase().replace(/[\s_-]+/g, "") ||
+      "";
+    if (role) {
+      user._cachedRole = role;
+      return role;
+    }
+  }
+
+  const userId = typeof user === "object" ? user.id : user;
+  if (!userId) return "";
+
+  const fullUser: any = await strapi.db
+    .query("plugin::users-permissions.user")
+    .findOne({
+      where: { id: userId },
+      select: ["id"],
+      populate: {
+        role: {
+          select: ["id", "name", "type"],
+        },
+      },
+    });
+
+  const role =
+    fullUser?.role?.name?.toLowerCase().replace(/[\s_-]+/g, "") ||
+    fullUser?.role?.type?.toLowerCase().replace(/[\s_-]+/g, "") ||
+    "";
+
+  if (user && typeof user === "object") {
+    user._cachedRole = role;
+  }
+  return role;
+}
+
 async function resolveClientDetailForUser(user: any) {
   if (!user?.id) return null;
 
@@ -206,10 +248,6 @@ export default factories.createCoreController(
   "api::gym-trial.gym-trial",
   ({ strapi }) => ({
     /* =======================================================
-       CUSTOM CREATE TRIAL
-       - User ID extracted strictly from JWT token
-       - No user (including Admin, Super Admin, Club Owner)
-         can book on behalf of any other client.
        - A client can book max 3 trials per 6 weeks.
     ======================================================= */
     async create(ctx: Context) {
@@ -544,6 +582,154 @@ export default factories.createCoreController(
       }
     },
 
+    /* =======================================================
+       ADMIN: GET CLIENT TRIALS IN 6-WEEK PERIOD
+    ======================================================= */
+    async adminClientTrials(ctx: Context) {
+      try {
+        const user = await getAuthUser(ctx);
+        if (!user) {
+          return ctx.unauthorized("Authentication required");
+        }
+
+        const roleName = await getUserRole(user);
+        const isAdmin =
+          roleName === "admin" ||
+          roleName === "superadmin" ||
+          roleName.includes("admin");
+
+        if (!isAdmin) {
+          return ctx.forbidden(
+            "Access denied. Only Admin and SuperAdmin can access this endpoint."
+          );
+        }
+
+        const params = (ctx.params || {}) as any;
+        const query = (ctx.query || {}) as any;
+
+        const targetId =
+          params.id ||
+          params.clientdocumentid ||
+          params.clientdocumentId ||
+          params.clientDocumentId ||
+          query.clientdocumentid ||
+          query.clientdocumentId ||
+          query.clientDocumentId ||
+          query.clientId ||
+          query.documentId ||
+          query.id;
+
+        if (!targetId || !String(targetId).trim()) {
+          return ctx.badRequest("Please provide client documentId");
+        }
+
+        const cleanDocId = String(targetId).trim();
+        const isNum = !isNaN(Number(cleanDocId)) && /^\d+$/.test(cleanDocId);
+
+        let clientDetail: any = null;
+
+        if ((strapi as any).documents && !isNum) {
+          try {
+            clientDetail = await (strapi as any)
+              .documents("api::client-detail.client-detail")
+              .findOne({
+                documentId: cleanDocId,
+                select: ["id", "documentId", "clientId", "name"],
+              });
+          } catch (_) {}
+        }
+
+        if (!clientDetail) {
+          clientDetail = await strapi.db
+            .query("api::client-detail.client-detail")
+            .findOne({
+              where: isNum
+                ? { $or: [{ id: Number(cleanDocId) }, { documentId: cleanDocId }] }
+                : { $or: [{ documentId: cleanDocId }, { clientId: cleanDocId }] },
+              select: ["id", "documentId", "clientId", "name"],
+            });
+        }
+
+        if (!clientDetail) {
+          return ctx.notFound(`Client with documentId '${cleanDocId}' not found`);
+        }
+
+        // Fetch all trials for this client
+        const clientTrials: any[] = await strapi.db
+          .query("api::gym-trial.gym-trial")
+          .findMany({
+            where: {
+              client_detail: clientDetail.id,
+            },
+            populate: {
+              club_owner: {
+                select: ["id", "clubName", "clubId", "ownerName"],
+              },
+            },
+            orderBy: { trialDate: "asc", id: "asc" },
+          });
+
+        // Group into consecutive 6-week (42 days) periods starting when the first trial is booked
+        interface Period {
+          start: number;
+          end: number;
+          trials: any[];
+        }
+
+        const periods: Period[] = [];
+        let curPeriod: Period | null = null;
+
+        for (const t of clientTrials) {
+          const tTime = parseDateToTime(t.trialDate);
+          if (!tTime) continue;
+
+          if (!curPeriod || tTime > curPeriod.end) {
+            curPeriod = {
+              start: tTime,
+              end: tTime + SIX_WEEKS_MS,
+              trials: [t],
+            };
+            periods.push(curPeriod);
+          } else {
+            curPeriod.trials.push(t);
+          }
+        }
+
+        // Format all periods with from/to date range and trials inside each period
+        const responseData = periods.map((p) => {
+          const from = formatDateFromTime(p.start);
+          const to = formatDateFromTime(p.end);
+
+          const Trials = p.trials.map((t: any) => {
+            const clubName =
+              t.club_owner?.clubName ||
+              t.club_owner?.name ||
+              t.club_owner?.ownerName ||
+              null;
+
+            return {
+              clubName,
+              trialDate: t.trialDate || null,
+              trialstatus: t.trialstatus || null,
+           
+            };
+          });
+
+          return {
+            from,
+            to,
+            Trials,
+          };
+        });
+
+        return ctx.send(responseData);
+      } catch (error) {
+        strapi.log.error("ADMIN CLIENT TRIALS ERROR:", error);
+        return ctx.internalServerError("Failed to fetch client trials");
+      }
+    },
+
+  
     
   }),
 );
