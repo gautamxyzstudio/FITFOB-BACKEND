@@ -6,6 +6,13 @@ const CLUB_OWNER_UID = "api::club-owner.club-owner" as any;
 const CLIENT_UID = "api::client-detail.client-detail" as any;
 
 /* ---------- ROLE HELPER ---------- */
+function formatMediaUrl(url: string | null | undefined): string | null {
+  if (!url) return null;
+  if (url.startsWith("http://") || url.startsWith("https://")) return url;
+  const baseUrl = strapi.config.get("server.url") || "";
+  return `${baseUrl}${url}`;
+}
+
 async function getUserRole(user: any): Promise<string> {
   if (!user) return "";
   if (user._cachedRole) return user._cachedRole;
@@ -1224,6 +1231,154 @@ export default factories.createCoreController(
       }
     },
 
+    /* =======================================================
+       4. ADMIN / SUPERADMIN: GET CLUB CHECK-INS BY CLUB DOCUMENT ID
+       Route: GET /api/club/checkins/:id
+    ======================================================= */
+    async adminClubCheckins(ctx: Context) {
+      try {
+        let user = ctx.state?.user;
+
+        // Fallback: Check Bearer token from header
+        if (!user && ctx.request?.header?.authorization?.startsWith("Bearer ")) {
+          const token = ctx.request.header.authorization.slice(7).trim();
+          try {
+            const jwtService = strapi.plugin("users-permissions")?.service("jwt");
+            if (jwtService?.verify) {
+              const payload = await jwtService.verify(token);
+              if (payload?.id) {
+                user = await strapi.db
+                  .query("plugin::users-permissions.user")
+                  .findOne({
+                    where: { id: payload.id },
+                    populate: { role: true },
+                  });
+                if (user) {
+                  ctx.state.user = user;
+                }
+              }
+            }
+          } catch (_) {}
+        }
+
+        if (!user) {
+          return ctx.unauthorized("Authentication required");
+        }
+
+        // 1. Role verification: Only Admin and SuperAdmin
+        const roleName = await getUserRole(user);
+        const isAdmin =
+          roleName === "admin" ||
+          roleName === "superadmin" ||
+          roleName.includes("admin");
+
+        if (!isAdmin) {
+          return ctx.forbidden(
+            "Access denied. Only Admin and SuperAdmin can access this endpoint."
+          );
+        }
+
+        // 2. Extract club documentId
+        const params = (ctx.params || {}) as any;
+        const query = (ctx.query || {}) as any;
+
+        const targetId =
+          params.id ||
+          params.clubDocumentId ||
+          params.clubdocumentid ||
+          params.club_document_id ||
+          query.clubDocumentId ||
+          query.clubdocumentid ||
+          query.id;
+
+        if (!targetId || !String(targetId).trim()) {
+          return ctx.badRequest("Please provide club documentId");
+        }
+
+        const cleanDocId = String(targetId).trim();
+        const isNum = !isNaN(Number(cleanDocId)) && /^\d+$/.test(cleanDocId);
+
+        // 3. Resolve club owner
+        let clubOwner: any = null;
+
+        if ((strapi as any).documents && !isNum) {
+          try {
+            clubOwner = await (strapi as any)
+              .documents(CLUB_OWNER_UID)
+              .findOne({
+                documentId: cleanDocId,
+                select: ["id", "documentId", "clubId", "clubName", "ownerName"],
+              });
+          } catch (_) {}
+        }
+
+        if (!clubOwner) {
+          clubOwner = await strapi.db.query(CLUB_OWNER_UID).findOne({
+            where: isNum
+              ? { $or: [{ id: Number(cleanDocId) }, { documentId: cleanDocId }] }
+              : { $or: [{ documentId: cleanDocId }, { clubId: cleanDocId }] },
+            select: ["id", "documentId", "clubId", "clubName", "ownerName"],
+          });
+        }
+
+        if (!clubOwner) {
+          return ctx.notFound(`Club owner with identifier '${cleanDocId}' not found`);
+        }
+
+        // 4. Fetch check-ins for this club owner
+        const checkins: any[] = await strapi.db.query(CHECKIN_UID).findMany({
+          where: {
+            club_owner: clubOwner.id,
+          },
+          populate: {
+            client_detail: {
+              populate: {
+                selfieUpload: true,
+              },
+            },
+          },
+          orderBy: { checkinTime: "desc", createdAt: "desc", id: "desc" },
+        });
+
+        // 5. Format response with requested fields
+        const responseData = checkins.map((item: any) => {
+          const clientName = item.client_detail?.name || null;
+          const selfie = item.client_detail?.selfieUpload;
+          const rawSelfie =
+            selfie?.formats?.small?.url ||
+            selfie?.formats?.thumbnail?.url ||
+            selfie?.url ||
+            (Array.isArray(selfie) && selfie[0]
+              ? selfie[0]?.formats?.small?.url ||
+                selfie[0]?.formats?.thumbnail?.url ||
+                selfie[0]?.url
+              : null) ||
+            null;
+
+          const selfieUrl = formatMediaUrl(rawSelfie);
+
+          return {
+        
+            clientName,
+            selfieUrl,
+            checkintype: item.checkinType || null,
+            checkinTime: item.checkinTime || null,
+            createdAt: item.createdAt || null,
+          };
+        });
+
+        return ctx.send(responseData);
+      } catch (error) {
+        strapi.log.error("ADMIN CLUB CHECKINS ERROR:", error);
+        return ctx.internalServerError("Failed to fetch club check-ins");
+      }
+    },
+
+    async adminclubcheckins(ctx: Context, next?: any) {
+      return (this as any).adminClubCheckins(ctx, next);
+    },
+
+    
     
   }),
 );

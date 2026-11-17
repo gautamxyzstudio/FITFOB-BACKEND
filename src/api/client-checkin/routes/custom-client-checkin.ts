@@ -23,6 +23,14 @@ export default {
       config: {
         auth: {}
       }
+    },
+    {
+      method: "GET",
+      path: "/club/checkins/:id",
+      handler: "client-checkin.adminClubCheckins",
+      config: {
+        auth: {}
+      }
     }
   ]
 }
