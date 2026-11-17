@@ -189,7 +189,9 @@ function isGymClosedOnDate(
           dayData.isClosed === true ||
           dayData.closed === true ||
           dayData.isOpen === false ||
-          String(dayData.status || "").toLowerCase().trim() === "closed"
+          String(dayData.status || "")
+            .toLowerCase()
+            .trim() === "closed"
         ) {
           return true;
         }
@@ -889,6 +891,7 @@ async function checkIsClubFavoritedDirect(
 interface ClientMembershipInfo {
   hasActiveMembership: boolean;
   clubName: string | null;
+  membershipClubDocumentId: string | null;
 }
 
 async function getClientMembershipInfo(
@@ -897,26 +900,32 @@ async function getClientMembershipInfo(
   const result: ClientMembershipInfo = {
     hasActiveMembership: false,
     clubName: null,
+    membershipClubDocumentId: null,
   };
 
   try {
     const clientDetailIdNum = await resolveClientDetailIdFromCtx(ctx);
-    if (!clientDetailIdNum) {
-      return result;
-    }
+
+    if (!clientDetailIdNum) return result;
 
     const today = getTodayDateString();
 
-    // 1. Check for active gym membership
+    const clubSelect = ["id", "documentId", "clubName", "club_name"];
+
+    // Helper to extract club information
+    const setClubInfo = (club: any) => {
+      result.clubName = club?.clubName || club?.club_name || null;
+
+      result.membershipClubDocumentId = club?.documentId || null;
+    };
+
+    // 1. Check active gym membership
     const activeMembership: any = await strapi.db
       .query("api::gym-membership.gym-membership")
       .findOne({
         where: {
           client_detail: clientDetailIdNum,
-          $or: [
-            { membershipStatus: "active" },
-            { membershipStatus: "true" },
-          ],
+          $or: [{ membershipStatus: "active" }, { membershipStatus: "true" }],
           $and: [
             {
               $or: [
@@ -925,10 +934,7 @@ async function getClientMembershipInfo(
               ],
             },
             {
-              $or: [
-                { endDate: { $gte: today } },
-                { endDate: { $null: true } },
-              ],
+              $or: [{ endDate: { $gte: today } }, { endDate: { $null: true } }],
             },
           ],
         },
@@ -936,7 +942,7 @@ async function getClientMembershipInfo(
           gym_contract: {
             populate: {
               club_owner: {
-                select: ["id", "clubName", "club_name"],
+                select: clubSelect,
               },
             },
           },
@@ -946,61 +952,55 @@ async function getClientMembershipInfo(
 
     if (activeMembership) {
       result.hasActiveMembership = true;
-      let clubName =
-        activeMembership.gym_contract?.club_owner?.clubName ||
-        activeMembership.gym_contract?.club_owner?.club_name ||
-        null;
 
-      if (!clubName && activeMembership.gym_contract?.id) {
-        try {
-          const contract: any = await strapi.db
-            .query("api::gym-contract.gym-contract")
-            .findOne({
-              where: { id: activeMembership.gym_contract.id },
-              populate: {
-                club_owner: { select: ["id", "clubName", "club_name"] },
+      let club = activeMembership.gym_contract?.club_owner;
+
+      // Fallback fetch if club information is missing
+      if (!club && activeMembership.gym_contract?.id) {
+        const contract: any = await strapi.db
+          .query("api::gym-contract.gym-contract")
+          .findOne({
+            where: {
+              id: activeMembership.gym_contract.id,
+            },
+            populate: {
+              club_owner: {
+                select: clubSelect,
               },
-            });
-          clubName =
-            contract?.club_owner?.clubName ||
-            contract?.club_owner?.club_name ||
-            null;
-        } catch (_) {}
+            },
+          });
+
+        club = contract?.club_owner;
       }
 
-      result.clubName = clubName;
+      setClubInfo(club);
       return result;
     }
 
-    // 2. Fallback check for active local subscription
-    try {
-      const activeLocalSub: any = await strapi.db
-        .query("api::local-subscription.local-subscription")
-        .findOne({
-          where: {
-            client_detail: clientDetailIdNum,
-            subscriptionStatus: "active",
-            $or: [{ endDate: { $gte: today } }, { endDate: { $null: true } }],
+    // 2. Check active local subscription
+    const activeLocalSub: any = await strapi.db
+      .query("api::local-subscription.local-subscription")
+      .findOne({
+        where: {
+          client_detail: clientDetailIdNum,
+          subscriptionStatus: "active",
+          $or: [{ endDate: { $gte: today } }, { endDate: { $null: true } }],
+        },
+        populate: {
+          club_owner: {
+            select: clubSelect,
           },
-          populate: {
-            club_owner: {
-              select: ["id", "clubName", "club_name"],
-            },
-          },
-          orderBy: { id: "desc" },
-        });
+        },
+        orderBy: { id: "desc" },
+      });
 
-      if (activeLocalSub) {
-        result.hasActiveMembership = true;
-        result.clubName =
-          activeLocalSub.club_owner?.clubName ||
-          activeLocalSub.club_owner?.club_name ||
-          null;
-        return result;
-      }
-    } catch (_) {}
+    if (activeLocalSub) {
+      result.hasActiveMembership = true;
+      setClubInfo(activeLocalSub.club_owner);
+      return result;
+    }
 
-    // 3. If no active membership, check latest purchased membership
+    // 3. Get latest purchased membership
     const latestBought: any = await strapi.db
       .query("api::gym-membership.gym-membership")
       .findOne({
@@ -1012,7 +1012,7 @@ async function getClientMembershipInfo(
           gym_contract: {
             populate: {
               club_owner: {
-                select: ["id", "clubName", "club_name"],
+                select: clubSelect,
               },
             },
           },
@@ -1021,29 +1021,26 @@ async function getClientMembershipInfo(
       });
 
     if (latestBought) {
-      let clubName =
-        latestBought.gym_contract?.club_owner?.clubName ||
-        latestBought.gym_contract?.club_owner?.club_name ||
-        null;
+      let club = latestBought.gym_contract?.club_owner;
 
-      if (!clubName && latestBought.gym_contract?.id) {
-        try {
-          const contract: any = await strapi.db
-            .query("api::gym-contract.gym-contract")
-            .findOne({
-              where: { id: latestBought.gym_contract.id },
-              populate: {
-                club_owner: { select: ["id", "clubName", "club_name"] },
+      if (!club && latestBought.gym_contract?.id) {
+        const contract: any = await strapi.db
+          .query("api::gym-contract.gym-contract")
+          .findOne({
+            where: {
+              id: latestBought.gym_contract.id,
+            },
+            populate: {
+              club_owner: {
+                select: clubSelect,
               },
-            });
-          clubName =
-            contract?.club_owner?.clubName ||
-            contract?.club_owner?.club_name ||
-            null;
-        } catch (_) {}
+            },
+          });
+
+        club = contract?.club_owner;
       }
 
-      result.clubName = clubName;
+      setClubInfo(club);
     }
 
     return result;
@@ -1051,11 +1048,6 @@ async function getClientMembershipInfo(
     strapi.log.warn("[getClientMembershipInfo] Error:", err);
     return result;
   }
-}
-
-async function checkClientHasActiveMembership(ctx: Context): Promise<boolean> {
-  const info = await getClientMembershipInfo(ctx);
-  return info.hasActiveMembership;
 }
 
 /* =======================================================
@@ -1128,7 +1120,9 @@ async function getClientTrialQuota(
 
     // Count trials marked as no-show, completed and booked; don't include cancelled
     const validTrials = (clientTrials || []).filter((t: any) => {
-      const s = String(t.trialstatus || "booked").toLowerCase().trim();
+      const s = String(t.trialstatus || "booked")
+        .toLowerCase()
+        .trim();
       return (
         s === "booked" ||
         s === "completed" ||
@@ -1210,7 +1204,9 @@ async function getClientTrialQuota(
       description =
         "You have 3 trials left. You can book up to 3 trials per 6 weeks, and you can also book all 3 trials at the same gym, but not on the same day.";
     } else if (trialsLeft > 0) {
-      description = `You have ${trialsLeft} trial${trialsLeft > 1 ? "s" : ""} left. You can book up to 3 trials per 6 weeks, and you can also book all 3 trials at the same gym, but not on the same day.`;
+      description = `You have ${trialsLeft} trial${
+        trialsLeft > 1 ? "s" : ""
+      } left. You can book up to 3 trials per 6 weeks, and you can also book all 3 trials at the same gym, but not on the same day.`;
     } else {
       description = resetDate
         ? `You have 0 trials left. You can book up to 3 trials per 6 weeks, and you can also book all 3 trials at the same gym, but not on the same day. Your trial limit resets on ${resetDate}.`
@@ -1338,7 +1334,9 @@ async function syncGymContractForClubCategory(
 
   if (missingDurations.length > 0) {
     strapi.log.warn(
-      `[syncGymContract] Missing global membership prices for ${tierName}: ${missingDurations.join(", ")}`,
+      `[syncGymContract] Missing global membership prices for ${tierName}: ${missingDurations.join(
+        ", ",
+      )}`,
     );
   }
 
@@ -1623,9 +1621,7 @@ async function syncGymContractForClubCategory(
                 insertData.membership_plan_price_ord = 1;
               }
               await strapi.db
-                .connection(
-                  "gym_contract_plan_rates_membership_plan_price_lnk",
-                )
+                .connection("gym_contract_plan_rates_membership_plan_price_lnk")
                 .insert(insertData);
             }
 
@@ -2241,8 +2237,10 @@ export default factories.createCoreController(
             ? strapi.db.query("api::gym-trial.gym-trial").findMany({
                 where: {
                   club_owner: ownerId,
-                  trialDate: { $in: [todayStr, tomorrowStr] },
-                  trialstatus: { $ne: "cancelled" },
+                  trialDate: {
+                    $in: [todayStr, tomorrowStr],
+                  },
+                  trialstatus: "booked",
                 },
                 select: ["id", "trialDate", "trialstatus"],
               })
@@ -2412,8 +2410,33 @@ export default factories.createCoreController(
           };
         }
 
+        const clientDetailIdNum = await resolveClientDetailIdFromCtx(ctx);
+
+        const clientTrialBooking = clientDetailIdNum
+          ? await strapi.db.query("api::gym-trial.gym-trial").findMany({
+              where: {
+                client_detail: clientDetailIdNum,
+                trialDate: {
+                  $in: [todayStr, tomorrowStr],
+                },
+                trialstatus: {
+                  $in: ["booked"],
+                },
+              },
+              populate: {
+                club_owner: {
+                  select: ["documentId", "clubName", "club_name"],
+                },
+              },
+              select: ["documentId", "trialDate", "trialstatus"],
+              orderBy: { trialDate: "asc" },
+            })
+          : [];
+
         const membership = Boolean(membershipInfo?.hasActiveMembership);
         const membershipClubName = membershipInfo?.clubName ?? null;
+        const membershipClubDocumentId =
+          membershipInfo?.membershipClubDocumentId ?? null;
 
         // 11. Exact payload format requested by client
         const responseData = {
@@ -2440,12 +2463,16 @@ export default factories.createCoreController(
           weekdayScheduling,
           clubCategory: owner.club_category || null,
           isFav,
-          membership,
-          membershipClubName,
           club_photos,
           holidays,
           membershipPlans,
-          trial,
+          membership,
+          membershipClubName,
+          membershipClubDocumentId,
+          trial: {
+            ...trial,
+            clientTrialBooking,
+          },
         };
 
         return ctx.send(responseData);
@@ -3299,10 +3326,7 @@ export default factories.createCoreController(
             );
           }
         }
-        if (
-          data.services !== undefined ||
-          data.club_services !== undefined
-        ) {
+        if (data.services !== undefined || data.club_services !== undefined) {
           const newServices = await resolveServiceNames(
             entity?.services !== undefined
               ? entity.services
@@ -3394,8 +3418,7 @@ export default factories.createCoreController(
 
         // 📝 Log Admin Activity (when admin or superadmin updates a club owner)
         if (isAdmin) {
-          const adminTargetOwnerId =
-            existing?.documentId || existing?.id || id;
+          const adminTargetOwnerId = existing?.documentId || existing?.id || id;
 
           try {
             await logAdminActivity({
@@ -3477,7 +3500,10 @@ export default factories.createCoreController(
             }`,
           });
         } catch (logErr) {
-          strapi.log.warn("[club-owner delete] Failed to log activity:", logErr);
+          strapi.log.warn(
+            "[club-owner delete] Failed to log activity:",
+            logErr,
+          );
         }
 
         ctx.body = {
@@ -4187,7 +4213,8 @@ export default factories.createCoreController(
           plansByOwnerId.set(ownerId, [
             {
               documentId: p.gym_contract_plan_rate_document_id,
-              gymContractPlanRateDocumentId: p.gym_contract_plan_rate_document_id,
+              gymContractPlanRateDocumentId:
+                p.gym_contract_plan_rate_document_id,
               plan: p.duration,
               customerPrice: Number(p.customer_price),
             },
