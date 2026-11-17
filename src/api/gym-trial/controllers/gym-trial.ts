@@ -4,6 +4,7 @@
 
 import { factories } from "@strapi/strapi";
 import { Context } from "koa";
+import { sendClubOwnerTrialBookedNotification } from "../../../utils/club-owner-push-notification";
 
 /* =======================================================
    HELPERS
@@ -169,6 +170,7 @@ async function resolveClubOwner(identifier: any) {
         : { $or: [{ documentId: raw }, { clubId: raw }] },
       populate: {
         logo: true,
+        user: true,
       },
     });
 
@@ -516,6 +518,20 @@ export default factories.createCoreController(
           }
         } catch (actErr) {
           strapi.log.warn("[Trial] Activity logging failed:", actErr);
+        }
+
+        // 12. Send push notification to ONLY this gym owner's devices
+        try {
+          await sendClubOwnerTrialBookedNotification(clubOwner, {
+            trial: created,
+            client: clientDetail,
+            trialDate: trialDateStr,
+          });
+        } catch (pushErr) {
+          strapi.log.error(
+            "[GymTrial] Failed to send push notification to club owner:",
+            pushErr,
+          );
         }
 
         return ctx.send({

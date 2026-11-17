@@ -20,9 +20,6 @@
       "configurable": false,
       "required": true
     },
-    "fullName": {
-      "type": "string"
-    },
     "email": {
       "type": "email",
       "minLength": 6,
@@ -68,6 +65,9 @@
       "target": "plugin::users-permissions.role",
       "inversedBy": "users",
       "configurable": false
+    },
+    "fullName": {
+      "type": "string"
     },
     "cognitoSub": {
       "type": "string"
@@ -147,6 +147,12 @@
       "type": "relation",
       "relation": "oneToMany",
       "target": "api::activity-log.activity-log",
+      "mappedBy": "users_permissions_user"
+    },
+    "notifications": {
+      "type": "relation",
+      "relation": "oneToMany",
+      "target": "api::notification.notification",
       "mappedBy": "users_permissions_user"
     }
   }

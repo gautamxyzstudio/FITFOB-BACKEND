@@ -1650,6 +1650,40 @@ export interface ApiMembershipTierMembershipTier
   };
 }
 
+export interface ApiNotificationNotification
+  extends Struct.CollectionTypeSchema {
+  collectionName: 'notifications';
+  info: {
+    displayName: 'Notifications';
+    pluralName: 'notifications';
+    singularName: 'notification';
+  };
+  options: {
+    draftAndPublish: false;
+  };
+  attributes: {
+    createdAt: Schema.Attribute.DateTime;
+    createdBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
+      Schema.Attribute.Private;
+    description: Schema.Attribute.String;
+    locale: Schema.Attribute.String & Schema.Attribute.Private;
+    localizations: Schema.Attribute.Relation<
+      'oneToMany',
+      'api::notification.notification'
+    > &
+      Schema.Attribute.Private;
+    publishedAt: Schema.Attribute.DateTime;
+    title: Schema.Attribute.String;
+    updatedAt: Schema.Attribute.DateTime;
+    updatedBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
+      Schema.Attribute.Private;
+    users_permissions_user: Schema.Attribute.Relation<
+      'manyToOne',
+      'plugin::users-permissions.user'
+    >;
+  };
+}
+
 export interface ApiOtpRequestOtpRequest extends Struct.CollectionTypeSchema {
   collectionName: 'otp_requests';
   info: {
@@ -2480,6 +2514,10 @@ export interface PluginUsersPermissionsUser
     mfa_secret: Schema.Attribute.String;
     mfa_temp_secret: Schema.Attribute.String;
     mfa_temp_token: Schema.Attribute.String;
+    notifications: Schema.Attribute.Relation<
+      'oneToMany',
+      'api::notification.notification'
+    >;
     password: Schema.Attribute.Password &
       Schema.Attribute.Private &
       Schema.Attribute.SetMinMaxLength<{
@@ -2553,6 +2591,7 @@ declare module '@strapi/strapi' {
       'api::membership-payment.membership-payment': ApiMembershipPaymentMembershipPayment;
       'api::membership-plan-price.membership-plan-price': ApiMembershipPlanPriceMembershipPlanPrice;
       'api::membership-tier.membership-tier': ApiMembershipTierMembershipTier;
+      'api::notification.notification': ApiNotificationNotification;
       'api::otp-request.otp-request': ApiOtpRequestOtpRequest;
       'api::outdoor-membership-plan.outdoor-membership-plan': ApiOutdoorMembershipPlanOutdoorMembershipPlan;
       'api::outdoor-subscription.outdoor-subscription': ApiOutdoorSubscriptionOutdoorSubscription;
