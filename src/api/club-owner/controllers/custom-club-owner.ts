@@ -813,13 +813,11 @@ export default {
       const totalTrialsBookedThisMonth = (monthTrials || []).length;
 
       return ctx.send({
-        trials: {
-          isTrialEnabled: Boolean(clubOwner.isTrialEnabled),
-          dailyTrialLimit: clubOwner.dailyTrialLimit ?? 3,
-          totalTrials: totalTrialsBookedThisMonth,
-          todayTrials: formattedTodayTrials,
-          tomorrowTrials: formattedTomorrowTrials,
-        },
+        isTrialEnabled: Boolean(clubOwner.isTrialEnabled),
+        dailyTrialLimit: clubOwner.dailyTrialLimit ?? 3,
+        monthlyLeads: totalTrialsBookedThisMonth,
+        todayTrials: formattedTodayTrials,
+        tomorrowTrials: formattedTomorrowTrials,
       });
     } catch (error) {
       strapi.log.error("Error fetching trial settings:", error);
@@ -971,7 +969,7 @@ export default {
           );
         }
       }
-      
+
       return ctx.send({
         message: "Trial settings updated successfully",
         isTrialEnabled:
