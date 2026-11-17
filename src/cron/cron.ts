@@ -1,231 +1,240 @@
-const LOCAL_PLAN_UID =
-  "api::local-membership-plan.local-membership-plan" as any;
-const OUTDOOR_PLAN_UID =
-  "api::outdoor-membership-plan.outdoor-membership-plan" as any;
-const CHECKIN_UID = "api::client-checkin.client-checkin" as any;
-
 /**
- * Parses validUpto string and returns true if current time has passed expiry.
- * Plans with "unlimited" (or null/empty) will NEVER be considered expired.
- */
-export function isPlanExpired(validUpto: string | null | undefined): boolean {
-  if (!validUpto) return false;
-
-  const trimmed = String(validUpto).trim().toLowerCase();
-  if (trimmed === "unlimited") {
-    return false;
-  }
-
-  let expiryDate: Date;
-  // If date-only format (e.g. YYYY-MM-DD), set to end of that day (23:59:59.999)
-  if (/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) {
-    expiryDate = new Date(`${trimmed}T23:59:59.999`);
-  } else {
-    expiryDate = new Date(validUpto);
-  }
-
-  if (isNaN(expiryDate.getTime())) {
-    return false;
-  }
-
-  return Date.now() > expiryDate.getTime();
-}
-
-/**
- * Deactivates expired local and outdoor membership plans.
- */
-export async function checkAndDeactivateExpiredPlans(strapi: any) {
-  try {
-    let localDeactivated = 0;
-    let outdoorDeactivated = 0;
-
-    /* 1. Check Local Membership Plans */
-    const activeLocalPlans: any[] = await strapi.db
-      .query(LOCAL_PLAN_UID)
-      .findMany({
-        where: {
-          isActive: true,
-        },
-        select: ["id", "documentId", "planName", "validUpto", "isActive"],
-      });
-
-    for (const plan of activeLocalPlans || []) {
-      if (isPlanExpired(plan.validUpto)) {
-        try {
-          if ((strapi as any).documents && plan.documentId) {
-            await (strapi as any).documents(LOCAL_PLAN_UID).update({
-              documentId: plan.documentId,
-              data: { isActive: false },
-            });
-          } else {
-            await strapi.entityService.update(LOCAL_PLAN_UID, plan.id, {
-              data: { isActive: false },
-            });
-          }
-          localDeactivated++;
-        } catch (err) {
-          strapi.log.error(
-            `Failed to deactivate expired local plan ${
-              plan.documentId || plan.id
-            }:`,
-            err,
-          );
-        }
-      }
-    }
-
-    /* 2. Check Outdoor Membership Plans */
-    const activeOutdoorPlans: any[] = await strapi.db
-      .query(OUTDOOR_PLAN_UID)
-      .findMany({
-        where: {
-          isActive: true,
-        },
-        select: ["id", "documentId", "planName", "validUpto", "isActive"],
-      });
-
-    for (const plan of activeOutdoorPlans || []) {
-      if (isPlanExpired(plan.validUpto)) {
-        try {
-          if ((strapi as any).documents && plan.documentId) {
-            await (strapi as any).documents(OUTDOOR_PLAN_UID).update({
-              documentId: plan.documentId,
-              data: { isActive: false },
-            });
-          } else {
-            await strapi.entityService.update(OUTDOOR_PLAN_UID, plan.id, {
-              data: { isActive: false },
-            });
-          }
-          outdoorDeactivated++;
-        } catch (err) {
-          strapi.log.error(
-            `Failed to deactivate expired outdoor plan ${
-              plan.documentId || plan.id
-            }:`,
-            err,
-          );
-        }
-      }
-    }
-
-    if (localDeactivated > 0 || outdoorDeactivated > 0) {
-      strapi.log.info(
-        `[CRON 4:50 AM] Deactivated ${localDeactivated} local plan(s) and ${outdoorDeactivated} outdoor plan(s) due to expiry.`,
-      );
-    } else {
-      strapi.log.info(
-        "[CRON 4:50 AM] Membership plan validity check complete. No plans expired.",
-      );
-    }
-
-    return { localDeactivated, outdoorDeactivated };
-  } catch (error) {
-    strapi.log.error("[CRON 4:50 AM] Error checking expired plans:", error);
-    throw error;
-  }
-}
-
-/**
- * Automatically checks out clients who have not checked out after 2 hours of check-in.
- * For example, if checkin time is 4:00 PM and user has still not checked out,
- * at 6:00 PM the checkoutTime will be set to 6:00 PM (checkinTime + 2 hours).
+ * Cron Jobs Configuration for Strapi
+ * 
+ * Scheduled tasks run automatically according to the configured rule.
+ * Timezone: Asia/Kolkata (IST)
  */
 
-export async function autoCheckoutOverdueCheckins(strapi: any) {
-  try {
-    const now = new Date();
-
-    const twoHoursAgo = new Date(
-      now.getTime() - 2 * 60 * 60 * 1000,
-    );
-
-    strapi.log.info(
-      `[CRON AUTO-CHECKOUT] Checking check-ins before ${twoHoursAgo.toISOString()}`,
-    );
-
-    const overdueCheckins = await strapi.db.connection(
-      "client_checkins",
-    )
-      .select(
-        "id",
-        "document_id",
-        "checkin_time",
-        "checkout_time",
-      )
-      .where("checkin_time", "<=", twoHoursAgo)
-      .whereNull("checkout_time");
-
-    if (!overdueCheckins.length) {
-      return {
-        checkedOutCount: 0,
-      };
-    }
-
-    let checkedOutCount = 0;
-
-    for (const checkin of overdueCheckins) {
-      try {
-        const autoCheckoutTime = new Date(
-          new Date(checkin.checkin_time).getTime() +
-            2 * 60 * 60 * 1000,
-        );
-
-        await strapi.db.connection("client_checkins")
-          .where("id", checkin.id)
-          .update({
-            checkout_time: autoCheckoutTime,
-          });
-
-        checkedOutCount++;
-      } catch (error) {
-        strapi.log.error(
-          `[CRON AUTO-CHECKOUT] Failed`,
-          error,
-        );
-      }
-    }
-
-    strapi.log.info(
-      `[CRON AUTO-CHECKOUT] Automatically checked out ${checkedOutCount} check-in(s).`,
-    );
-
-    return {
-      checkedOutCount,
-    };
-  } catch (error) {
-    strapi.log.error(
-      "[CRON AUTO-CHECKOUT] Error:",
-      error,
-    );
-
-    throw error;
-  }
+function getTodayISTString(): string {
+  const now = new Date();
+  const IST_OFFSET = 5.5 * 60 * 60 * 1000;
+  const target = new Date(now.getTime() + IST_OFFSET);
+  const year = target.getUTCFullYear();
+  const month = String(target.getUTCMonth() + 1).padStart(2, "0");
+  const day = String(target.getUTCDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
 }
 
 export default {
   /**
-   * Cron job runs everyday at 4:50 AM to deactivate expired membership plans.
+   * Auto-expire gym memberships according to end date.
+   * Finds all active gym memberships with endDate <= today's date
+   * and updates their status to 'expired'.
    */
-  deactivateExpiredPlans: {
+  expireGymMemberships: {
     task: async ({ strapi }: { strapi: any }) => {
-      await checkAndDeactivateExpiredPlans(strapi);
+      try {
+        const todayStr = getTodayISTString();
+        strapi.log.info(
+          `[Cron:expireGymMemberships] Running membership expiration check for date <= ${todayStr}...`
+        );
+
+        // 1. Find all active gym memberships where endDate is on or before today
+        const expiringMemberships = await strapi.db
+          .query("api::gym-membership.gym-membership")
+          .findMany({
+            where: {
+              endDate: {
+                $lte: todayStr,
+                $notNull: true,
+              },
+              $or: [
+                { membershipStatus: "active" },
+                { membershipStatus: "true" },
+              ],
+            },
+            select: [
+              "id",
+              "documentId",
+              "membershipId",
+              "endDate",
+              "membershipStatus",
+            ],
+          });
+
+        if (expiringMemberships && expiringMemberships.length > 0) {
+          const ids = expiringMemberships.map((m: any) => m.id);
+
+          // Update status to 'expired'
+          await strapi.db
+            .query("api::gym-membership.gym-membership")
+            .updateMany({
+              where: {
+                id: { $in: ids },
+              },
+              data: {
+                membershipStatus: "expired",
+              },
+            });
+
+          strapi.log.info(
+            `[Cron:expireGymMemberships] Successfully auto-expired ${ids.length} gym membership(s) on ${todayStr} (IDs: ${ids.join(", ")})`
+          );
+        } else {
+          strapi.log.info(
+            `[Cron:expireGymMemberships] No gym memberships to expire for date ${todayStr}.`
+          );
+        }
+      } catch (error) {
+        strapi.log.error(
+          "[Cron:expireGymMemberships] Error during membership auto-expiration:",
+          error
+        );
+      }
     },
     options: {
-      rule: "50 4 * * *",
+      rule: "55 23 * * *", 
+      tz: "Asia/Kolkata",
     },
   },
 
   /**
-   * Cron job runs every 2 minutes to automatically check out clients
-   * who have not checked out after 2 hours of check-in.
+   * Auto-update booked trials to 'no-show' if not completed by the end of the day.
+   * Runs every night at 11:55 PM (23:55) IST.
+   *
+   * Finds all gym trials with trialDate <= today's date and trialstatus === 'booked'
+   * and updates their status to 'no-show'.
    */
-  autoCheckoutOverdueCheckins: {
+  markNoShowTrials: {
     task: async ({ strapi }: { strapi: any }) => {
-      await autoCheckoutOverdueCheckins(strapi);
+      try {
+        const todayStr = getTodayISTString();
+        strapi.log.info(
+          `[Cron:markNoShowTrials] Running no-show check for booked trials on or before ${todayStr}...`
+        );
+
+        // 1. Find all booked trials on or before today
+        const bookedTrials = await strapi.db
+          .query("api::gym-trial.gym-trial")
+          .findMany({
+            where: {
+              trialDate: {
+                $lte: todayStr,
+                $notNull: true,
+              },
+              trialstatus: "booked",
+            },
+            select: ["id", "documentId", "trialDate", "trialstatus"],
+          });
+
+        if (bookedTrials && bookedTrials.length > 0) {
+          const ids = bookedTrials.map((t: any) => t.id);
+
+          // Update status to 'no-show'
+          await strapi.db
+            .query("api::gym-trial.gym-trial")
+            .updateMany({
+              where: {
+                id: { $in: ids },
+              },
+              data: {
+                trialstatus: "no-show",
+              },
+            });
+
+          strapi.log.info(
+            `[Cron:markNoShowTrials] Successfully updated ${ids.length} booked trial(s) to 'no-show' on ${todayStr} (IDs: ${ids.join(", ")})`
+          );
+        } else {
+          strapi.log.info(
+            `[Cron:markNoShowTrials] No booked trials to mark as no-show for date ${todayStr}.`
+          );
+        }
+      } catch (error) {
+        strapi.log.error(
+          "[Cron:markNoShowTrials] Error updating booked trials to no-show:",
+          error
+        );
+      }
     },
     options: {
-      rule: "*/2 * * * *",
+      rule: "45 23 * * *", 
+      tz: "Asia/Kolkata",
+    },
+  },
+
+  /**
+   * Auto-checkout clients after 2 hours of check-in.
+   * Runs every 2 minutes.
+   *
+   * Finds all client-checkin records where checkoutTime is null
+   * and checkinTime (or createdAt) is older than 2 hours (120 minutes),
+   * then updates checkoutTime to (checkinTime + 2 hours).
+   */
+  autoCheckoutClients: {
+    task: async ({ strapi }: { strapi: any }) => {
+      try {
+        const now = new Date();
+        const TWO_HOURS_MS = 2 * 60 * 60 * 1000;
+        const twoHoursAgo = new Date(now.getTime() - TWO_HOURS_MS);
+
+        // Find active checkins where checkinTime is older than 2 hours
+        const expiredCheckins = await strapi.db
+          .query("api::client-checkin.client-checkin")
+          .findMany({
+            where: {
+              checkoutTime: {
+                $null: true,
+              },
+              $or: [
+                {
+                  checkinTime: {
+                    $lte: twoHoursAgo,
+                    $notNull: true,
+                  },
+                },
+                {
+                  checkinTime: {
+                    $null: true,
+                  },
+                  createdAt: {
+                    $lte: twoHoursAgo,
+                    $notNull: true,
+                  },
+                },
+              ],
+            },
+            select: ["id", "documentId", "checkinTime", "createdAt"],
+          });
+
+        if (expiredCheckins && expiredCheckins.length > 0) {
+          strapi.log.info(
+            `[Cron:autoCheckoutClients] Auto-checking out ${expiredCheckins.length} client check-in(s)...`
+          );
+
+          for (const item of expiredCheckins) {
+            const baseTime = item.checkinTime
+              ? new Date(item.checkinTime).getTime()
+              : new Date(item.createdAt).getTime();
+
+            const checkoutDate = isNaN(baseTime)
+              ? now
+              : new Date(Math.min(baseTime + TWO_HOURS_MS, now.getTime()));
+
+            await strapi.db
+              .query("api::client-checkin.client-checkin")
+              .update({
+                where: { id: item.id },
+                data: {
+                  checkoutTime: checkoutDate,
+                },
+              });
+          }
+
+          strapi.log.info(
+            `[Cron:autoCheckoutClients] Successfully auto-checked out ${expiredCheckins.length} client check-in(s) (IDs: ${expiredCheckins.map((c: any) => c.id).join(", ")})`
+          );
+        }
+      } catch (error) {
+        strapi.log.error(
+          "[Cron:autoCheckoutClients] Error during client auto-checkout:",
+          error
+        );
+      }
+    },
+    options: {
+      rule: "*/5 * * * *",
+      tz: "Asia/Kolkata",
     },
   },
 };

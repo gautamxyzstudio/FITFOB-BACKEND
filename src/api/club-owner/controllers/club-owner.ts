@@ -1098,7 +1098,8 @@ async function getClientTrialQuota(
     trialsUsed: 0,
     maxTrialsPerSixWeeks: 3,
     resetDate: null,
-    description: "You have 3 trials left. Clients can book up to 3 trials per 6 weeks.",
+    description:
+      "You have 3 trials left. You can book up to 3 trials per 6 weeks, and you can also book all 3 trials at the same gym, but not on the same day.",
   };
 
   try {
@@ -1106,7 +1107,8 @@ async function getClientTrialQuota(
     if (!clientDetailId) {
       return {
         ...defaultQuota,
-        description: "Clients can book up to 3 trials per 6 weeks.",
+        description:
+          "Clients can book up to 3 trials per 6 weeks, and can also book all 3 trials at the same gym, but not on the same day.",
       };
     }
 
@@ -1206,13 +1208,13 @@ async function getClientTrialQuota(
     let description = "";
     if (trialsLeft === 3) {
       description =
-        "You have 3 trials left. Clients can book up to 3 trials per 6 weeks.";
+        "You have 3 trials left. You can book up to 3 trials per 6 weeks, and you can also book all 3 trials at the same gym, but not on the same day.";
     } else if (trialsLeft > 0) {
-      description = `You have ${trialsLeft} trial${trialsLeft > 1 ? "s" : ""} left. Clients can book up to 3 trials per 6 weeks.`;
+      description = `You have ${trialsLeft} trial${trialsLeft > 1 ? "s" : ""} left. You can book up to 3 trials per 6 weeks, and you can also book all 3 trials at the same gym, but not on the same day.`;
     } else {
       description = resetDate
-        ? `You have 0 trials left. Clients can book up to 3 trials per 6 weeks. Your trial limit resets on ${resetDate}.`
-        : `You have 0 trials left. Clients can book up to 3 trials per 6 weeks.`;
+        ? `You have 0 trials left. You can book up to 3 trials per 6 weeks, and you can also book all 3 trials at the same gym, but not on the same day. Your trial limit resets on ${resetDate}.`
+        : `You have 0 trials left. You can book up to 3 trials per 6 weeks, and you can also book all 3 trials at the same gym, but not on the same day.`;
     }
 
     return {
@@ -2394,7 +2396,7 @@ export default factories.createCoreController(
             dailyTrialLimit: dailyLimit,
             description:
               clientTrialQuota?.description ||
-              "You have 3 trials left. Clients can book up to 3 trials per 6 weeks.",
+              "You have 3 trials left. You can book up to 3 trials per 6 weeks, and you can also book all 3 trials at the same gym, but not on the same day.",
             today: isTodayClosed
               ? "closed"
               : {
