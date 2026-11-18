@@ -7,6 +7,16 @@ import { Context } from "koa";
 
 const GYM_MEMBERSHIP_UID = "api::gym-membership.gym-membership" as any;
 const CLIENT_DETAIL_UID = "api::client-detail.client-detail" as any;
+const CLUB_OWNER_UID = "api::club-owner.club-owner" as any;
+const GYM_CONTRACT_UID = "api::gym-contract.gym-contract" as any;
+
+/* ---------- MEDIA URL HELPER ---------- */
+function formatMediaUrl(url: string | null | undefined): string | null {
+  if (!url) return null;
+  if (url.startsWith("http://") || url.startsWith("https://")) return url;
+  const baseUrl = strapi.config.get("server.url") || "";
+  return `${baseUrl}${url}`;
+}
 
 /* ---------- AUTH USER HELPER ---------- */
 async function getAuthUser(ctx: Context) {
@@ -81,7 +91,7 @@ async function getUserRole(user: any): Promise<string> {
   return role;
 }
 
-/* ---------- MAIN HANDLER FOR CLIENT GYM MEMBERSHIPS ---------- */
+/* ---------- 1. HANDLER FOR CLIENT GYM MEMBERSHIPS (BY CLIENT DOCUMENT ID) ---------- */
 async function handleGetClientGymMemberships(ctx: Context) {
   const user = await getAuthUser(ctx);
   if (!user) {
@@ -207,6 +217,176 @@ async function handleGetClientGymMemberships(ctx: Context) {
   return ctx.send(responseData);
 }
 
+/* ---------- 2. HANDLER FOR CLUB GYM MEMBERSHIPS (BY CLUB OWNER DOCUMENT ID) ---------- */
+async function handleGetClubGymMemberships(ctx: Context) {
+  const user = await getAuthUser(ctx);
+  if (!user) {
+    return ctx.unauthorized("Authentication required");
+  }
+
+  // 1. Role verification: Only Admin and SuperAdmin can access
+  const roleName = await getUserRole(user);
+  const isAdmin =
+    roleName === "admin" ||
+    roleName === "superadmin" ||
+    roleName.includes("admin");
+
+  if (!isAdmin) {
+    return ctx.forbidden(
+      "Access denied. Only Admin and SuperAdmin can access this endpoint."
+    );
+  }
+
+  // 2. Extract club owner documentId from params or query
+  const query = (ctx.query || {}) as any;
+  const params = (ctx.params || {}) as any;
+
+  const targetClubDocId =
+    params.clubDocumentId ||
+    params.clubdocumentid ||
+    params.club_document_id ||
+    params.id ||
+    query.clubDocumentId ||
+    query.clubdocumentid ||
+    query.club_document_id ||
+    query.clubId ||
+    query.id;
+
+  if (!targetClubDocId || !String(targetClubDocId).trim()) {
+    return ctx.badRequest("Please provide club owner documentId in params or query");
+  }
+
+  const cleanDocId = String(targetClubDocId).trim();
+  const isNum = !isNaN(Number(cleanDocId)) && /^\d+$/.test(cleanDocId);
+
+  // 3. Resolve club owner
+  let clubOwner: any = null;
+
+  if ((strapi as any).documents && !isNum) {
+    try {
+      clubOwner = await (strapi as any)
+        .documents(CLUB_OWNER_UID)
+        .findOne({
+          documentId: cleanDocId,
+          select: ["id", "documentId", "clubId", "clubName", "ownerName"],
+        });
+    } catch (_) {}
+  }
+
+  if (!clubOwner) {
+    clubOwner = await strapi.db.query(CLUB_OWNER_UID).findOne({
+      where: isNum
+        ? { $or: [{ id: Number(cleanDocId) }, { documentId: cleanDocId }] }
+        : { $or: [{ documentId: cleanDocId }, { clubId: cleanDocId }] },
+      select: ["id", "documentId", "clubId", "clubName", "ownerName"],
+    });
+  }
+
+  if (!clubOwner) {
+    return ctx.notFound(`Club owner with identifier '${cleanDocId}' not found`);
+  }
+
+  // 4. Find all gym contracts for this club owner
+  const contracts = await strapi.db.query(GYM_CONTRACT_UID).findMany({
+    where: {
+      $or: [
+        { club_owner: clubOwner.id },
+        ...(clubOwner.documentId
+          ? [{ club_owner: { documentId: clubOwner.documentId } }]
+          : []),
+      ],
+    },
+    select: ["id", "documentId", "contractId"],
+  });
+
+  if (!contracts || contracts.length === 0) {
+    return ctx.send([]);
+  }
+
+  const contractIds = contracts.map((c: any) => c.id).filter(Boolean);
+  const contractDocIds = contracts.map((c: any) => c.documentId).filter(Boolean);
+
+  // 5. Fetch all gym memberships under these contracts
+  const memberships: any[] = await strapi.db
+    .query(GYM_MEMBERSHIP_UID)
+    .findMany({
+      where: {
+        $or: [
+          { gym_contract: { id: { $in: contractIds } } },
+          ...(contractDocIds.length > 0
+            ? [{ gym_contract: { documentId: { $in: contractDocIds } } }]
+            : []),
+        ],
+      },
+      populate: {
+        client_detail: {
+          populate: {
+            selfieUpload: true,
+          },
+        },
+        membership_plan_price: true,
+      },
+      orderBy: { createdAt: "desc", id: "desc" },
+    });
+
+  // 6. Format response returning ONLY the requested fields:
+  // client name, selfie url, start date, enddate, amount, membership status, duration, membershipid
+  const responseData = memberships.map((m: any) => {
+    const clientName = m.client_detail?.name || null;
+
+    const selfie = m.client_detail?.selfieUpload;
+    const rawSelfie =
+      selfie?.formats?.small?.url ||
+      selfie?.formats?.thumbnail?.url ||
+      selfie?.url ||
+      (Array.isArray(selfie) && selfie[0]
+        ? selfie[0]?.formats?.small?.url ||
+          selfie[0]?.formats?.thumbnail?.url ||
+          selfie[0]?.url
+        : null) ||
+      null;
+
+    const selfieUrl = formatMediaUrl(rawSelfie);
+
+    const startDate =
+      m.startDate ||
+      (m.paidAt ? String(m.paidAt).slice(0, 10) : null) ||
+      (m.createdAt ? String(m.createdAt).slice(0, 10) : null) ||
+      null;
+
+    const endDate = m.endDate || null;
+
+    const amount =
+      m.customerPriceSnapshot != null
+        ? Number(m.customerPriceSnapshot)
+        : m.membership_plan_price?.customerPrice != null
+        ? Number(m.membership_plan_price.customerPrice)
+        : 0;
+
+    const membershipStatus = m.membershipStatus || null;
+
+    const duration =
+      m.duration ||
+      (m.durationMonths ? `${m.durationMonths} months` : null) ||
+      null;
+
+    const membershipId = m.membershipId || m.documentId || String(m.id);
+
+    return {
+      clientName,
+      selfieUrl,
+      startDate,
+      endDate,
+      amount,
+      membershipStatus,
+      plan:duration||null,
+      membershipId,
+    };
+  });
+
+  return ctx.send(responseData);
+}
+
 export default factories.createCoreController(
   "api::gym-membership.gym-membership",
   ({ strapi }) => ({
@@ -219,6 +399,15 @@ export default factories.createCoreController(
         return ctx.internalServerError("Failed to fetch gym membership");
       }
     },
-    
+
+    async clubMemberships(ctx: Context) {
+      try {
+        return await handleGetClubGymMemberships(ctx);
+      } catch (error) {
+        strapi.log.error("CLUB GYM MEMBERSHIPS ERROR:", error);
+        return ctx.internalServerError("Failed to fetch club gym memberships");
+      }
+    },
+
   })
 );

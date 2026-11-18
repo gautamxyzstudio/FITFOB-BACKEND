@@ -1373,11 +1373,6 @@ export default factories.createCoreController(
         return ctx.internalServerError("Failed to fetch club check-ins");
       }
     },
-
-    async adminclubcheckins(ctx: Context, next?: any) {
-      return (this as any).adminClubCheckins(ctx, next);
-    },
-
     
     
   }),
