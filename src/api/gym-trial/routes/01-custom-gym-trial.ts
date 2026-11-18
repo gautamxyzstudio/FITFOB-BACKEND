@@ -1,5 +1,15 @@
 export default {
   routes: [
+    // Gym Owner own trial history / guest list (via auth token)
+    {
+      method: "GET",
+      path: "/club-owner/trial-guests",
+      handler: "gym-trial.ownerTrialHistory",
+      config: {
+        auth: false,
+      },
+    },
+
     // Client own trial history (via auth token)
     {
       method: "GET",
@@ -10,7 +20,7 @@ export default {
       },
     },
 
-    // Club owner trial client list
+    // Club owner trial client list (Admin or by docId)
     {
       method: "GET",
       path: "/club-owner-trials/:ownerDocId",

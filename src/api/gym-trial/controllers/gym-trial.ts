@@ -132,6 +132,157 @@ function getGymClosingTimeForDate(
   }
 }
 
+function getISTDateString(offsetDays: number = 0): string {
+  const now = new Date();
+  const IST_OFFSET = 5.5 * 60 * 60 * 1000;
+  const target = new Date(
+    now.getTime() + IST_OFFSET + offsetDays * 24 * 60 * 60 * 1000,
+  );
+  const year = target.getUTCFullYear();
+  const month = String(target.getUTCMonth() + 1).padStart(2, "0");
+  const day = String(target.getUTCDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
+function formatTimeIST(dateVal: any): string | null {
+  if (!dateVal) return null;
+  try {
+    const d = new Date(dateVal);
+    if (isNaN(d.getTime())) return null;
+    return d.toLocaleTimeString("en-IN", {
+      timeZone: "Asia/Kolkata",
+      hour: "2-digit",
+      minute: "2-digit",
+      hour12: true,
+    });
+  } catch (_) {
+    return null;
+  }
+}
+
+function formatBookedAtText(createdAt: any, todayStr: string): string | null {
+  if (!createdAt) return null;
+  try {
+    const d = new Date(createdAt);
+    const cleanDate = d.toISOString().split("T")[0];
+
+    if (!d) return null;
+
+    if (cleanDate === todayStr) {
+      return `Booked today · ${createdAt}`;
+    }
+
+    const [tY, tM, tD] = todayStr.split("-").map(Number);
+    const todayMs = Date.UTC(tY, tM - 1, tD);
+    const [cY, cM, cD] = cleanDate.split("-").map(Number);
+    const createdMs = Date.UTC(cY, cM - 1, cD);
+
+    if (todayMs - createdMs === 24 * 60 * 60 * 1000) {
+      return `Booked yesterday · ${createdAt}`;
+    }
+    return `Booked ${createdAt}`;
+  } catch (_) {
+    return null;
+  }
+}
+
+function formatDisplayDate(
+  dateStr: string,
+  todayStr: string,
+  tomorrowStr: string,
+): string {
+  try {
+    const clean = String(dateStr).split("T")[0];
+    const [year, month, day] = clean.split("-").map(Number);
+    const d = new Date(Date.UTC(year, month - 1, day));
+
+    const dayNamesShort = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+    const monthNamesShort = [
+      "Jan",
+      "Feb",
+      "Mar",
+      "Apr",
+      "May",
+      "Jun",
+      "Jul",
+      "Aug",
+      "Sep",
+      "Oct",
+      "Nov",
+      "Dec",
+    ];
+
+    const dayName = dayNamesShort[d.getUTCDay()];
+    const monthName = monthNamesShort[d.getUTCMonth()];
+
+    if (clean === todayStr) {
+      return `Today · ${dayName}, ${day} ${monthName}`;
+    }
+    if (clean === tomorrowStr) {
+      return `Tomorrow · ${dayName}, ${day} ${monthName}`;
+    }
+    return `${dayName}, ${day} ${monthName}`;
+  } catch (_) {
+    return dateStr;
+  }
+}
+
+async function resolveClubOwnerForUser(user: any) {
+  if (!user?.id) return null;
+
+  let clubOwner = await strapi.db.query("api::club-owner.club-owner").findOne({
+    where: { user: user.id },
+    populate: { logo: true },
+  });
+
+  if (!clubOwner) {
+    const fullUser: any = await strapi.db
+      .query("plugin::users-permissions.user")
+      .findOne({
+        where: { id: user.id },
+        populate: {
+          club_owner: {
+            populate: { logo: true },
+          },
+        },
+      });
+    clubOwner = fullUser?.club_owner || null;
+  }
+
+  if (!clubOwner) {
+    try {
+      const lnk: any = await (strapi.db as any)
+        .connection("up_users_club_owner_lnk")
+        .where({ user_id: user.id })
+        .first();
+      if (lnk?.club_owner_id) {
+        clubOwner = await strapi.db
+          .query("api::club-owner.club-owner")
+          .findOne({
+            where: { id: lnk.club_owner_id },
+            populate: { logo: true },
+          });
+      }
+    } catch (_) {}
+  }
+
+  if (!clubOwner && user.email) {
+    clubOwner = await strapi.db.query("api::club-owner.club-owner").findOne({
+      where: { email: user.email },
+      populate: { logo: true },
+    });
+  }
+
+  if (!clubOwner && user.phoneNumber) {
+    clubOwner = await strapi.db.query("api::club-owner.club-owner").findOne({
+      where: { phoneNumber: user.phoneNumber },
+      populate: { logo: true },
+    });
+  }
+
+  return clubOwner;
+}
+
 async function getAuthUser(ctx: Context) {
   let user = ctx.state?.user;
   if (user?.id) return user;
@@ -1231,6 +1382,373 @@ export default factories.createCoreController(
 
     async myTrials(ctx: Context, next?: any) {
       return (this as any).myTrialHistory(ctx, next);
+    },
+
+    /* =======================================================
+       CLUB OWNER: GET OWN TRIAL HISTORY BY AUTH TOKEN
+       Endpoint: GET /api/gym-trials/club-owner/my-trials
+                 GET /api/club-owner/my-trials
+                 GET /api/club-owner/trial-guests
+       Returns: clientName, clientProfile, trialdate, trialStatus,
+                info string according to UI requirements:
+                - booked: "vaild upto gym closing time"
+                - complete: "Checked in · {updateAt}"
+                - canceled: "Cancelled by guest · {updateAt}"
+                - no-show: "Not visited by closing time"
+                Supports filters:
+                - ?filter=all (default)
+                - ?filter=today
+                - ?filter=tomorrow
+                - ?filter=by-date&date=YYYY-MM-DD (or ?date=YYYY-MM-DD)
+                - ?status=booked|completed|cancelled|no-show
+                - ?search=... or ?q=... (by guest name or phone)
+    ======================================================= */
+    async ownerTrialHistory(ctx: Context, next?: any) {
+      try {
+        const user = await getAuthUser(ctx);
+        if (!user?.id) {
+          return ctx.unauthorized("Authentication required");
+        }
+
+        const roleName = await getUserRole(user);
+        const isAdmin =
+          roleName === "admin" ||
+          roleName === "superadmin" ||
+          roleName.includes("admin");
+
+        let clubOwner: any = null;
+
+        // If admin queries with query parameter:
+        const targetParam =
+          ctx.query?.clubOwnerId ||
+          ctx.query?.ownerDocId ||
+          ctx.query?.clubId ||
+          ctx.query?.documentId;
+        if (isAdmin && targetParam) {
+          clubOwner = await resolveClubOwner(targetParam);
+        }
+
+        if (!clubOwner) {
+          clubOwner = await resolveClubOwnerForUser(user);
+        }
+
+        if (!clubOwner) {
+          return ctx.notFound(
+            "Club owner profile not found for this user. Only gym owners can access this endpoint.",
+          );
+        }
+
+        const todayStr = getISTDateString(0);
+        const tomorrowStr = getISTDateString(1);
+
+        // Fetch all trials for this club owner
+        const allTrials: any[] = await strapi.db
+          .query("api::gym-trial.gym-trial")
+          .findMany({
+            where: {
+              club_owner: clubOwner.id,
+            },
+            populate: {
+              client_detail: {
+                populate: {
+                  selfieUpload: true,
+                  user: {
+                    select: [
+                      "id",
+                      "username",
+                      "email",
+                      "phoneNumber",
+                      "fullName",
+                    ],
+                  },
+                },
+              },
+            },
+            orderBy: { trialDate: "desc", createdAt: "desc", id: "desc" },
+          });
+
+        const dailyTrialLimit =
+          Number(clubOwner.dailyTrialLimit) > 0
+            ? Number(clubOwner.dailyTrialLimit)
+            : 5;
+
+        // Compute tab counts (All, Today, Tomorrow)
+        const tabCounts = {
+          all: allTrials.length,
+          today: allTrials.filter((t: any) => {
+            const d = t.trialDate ? String(t.trialDate).split("T")[0] : "";
+            return d === todayStr;
+          }).length,
+          tomorrow: allTrials.filter((t: any) => {
+            const d = t.trialDate ? String(t.trialDate).split("T")[0] : "";
+            return d === tomorrowStr;
+          }).length,
+        };
+
+        // Parse filters from query
+        const queryFilter = String(ctx.query?.filter || "")
+          .toLowerCase()
+          .trim();
+        const dateQuery = ctx.query?.date
+          ? String(ctx.query.date).trim().split("T")[0]
+          : "";
+        const statusQuery = ctx.query?.status
+          ? String(ctx.query.status).toLowerCase().trim()
+          : "";
+        const searchQuery = String(ctx.query?.search || ctx.query?.q || "")
+          .toLowerCase()
+          .trim();
+
+        let filtered = allTrials;
+
+        // Date filter
+        if (dateQuery) {
+          filtered = filtered.filter((t: any) => {
+            const d = t.trialDate ? String(t.trialDate).split("T")[0] : "";
+            return d === dateQuery;
+          });
+        } else if (queryFilter === "today") {
+          filtered = filtered.filter((t: any) => {
+            const d = t.trialDate ? String(t.trialDate).split("T")[0] : "";
+            return d === todayStr;
+          });
+        } else if (queryFilter === "tomorrow") {
+          filtered = filtered.filter((t: any) => {
+            const d = t.trialDate ? String(t.trialDate).split("T")[0] : "";
+            return d === tomorrowStr;
+          });
+        }
+
+        // Status filter
+        if (statusQuery && statusQuery !== "all") {
+          filtered = filtered.filter((t: any) => {
+            const st = String(t.trialstatus || "")
+              .toLowerCase()
+              .trim();
+            return st === statusQuery;
+          });
+        }
+
+        // Search query filter (matches name, phone, email, clientId)
+        if (searchQuery) {
+          filtered = filtered.filter((t: any) => {
+            const c = t.client_detail;
+            const name = String(
+              c?.name || c?.user?.fullName || c?.user?.username || "",
+            ).toLowerCase();
+            const phone = String(
+              c?.phoneNumber || c?.user?.phoneNumber || "",
+            ).toLowerCase();
+            const email = String(
+              c?.email || c?.user?.email || "",
+            ).toLowerCase();
+            const cid = String(c?.clientId || "").toLowerCase();
+            return (
+              name.includes(searchQuery) ||
+              phone.includes(searchQuery) ||
+              email.includes(searchQuery) ||
+              cid.includes(searchQuery)
+            );
+          });
+        }
+
+        // Format trial item
+        const formatItem = (item: any) => {
+          const client = item.client_detail;
+          const clientName =
+            client?.name ||
+            client?.user?.fullName ||
+            client?.user?.username ||
+            "Guest";
+
+          const selfie = client?.selfieUpload;
+          const profileImageUrl = getMediaUrl(selfie);
+
+          let trialDateStr: string | null = null;
+          if (item.trialDate) {
+            if (typeof item.trialDate === "string") {
+              trialDateStr = item.trialDate.split("T")[0];
+            } else if (item.trialDate instanceof Date) {
+              const year = item.trialDate.getFullYear();
+              const month = String(item.trialDate.getMonth() + 1).padStart(
+                2,
+                "0",
+              );
+              const day = String(item.trialDate.getDate()).padStart(2, "0");
+              trialDateStr = `${year}-${month}-${day}`;
+            } else {
+              trialDateStr = String(item.trialDate);
+            }
+          } else if (item.createdAt) {
+            trialDateStr = String(item.createdAt).split("T")[0];
+          }
+
+          const statusRaw = String(item.trialstatus || "booked")
+            .toLowerCase()
+            .trim();
+          const updateAt = item.updatedAt;
+
+          let info = "";
+          if (statusRaw === "booked") {
+            info = "vaild upto gym closing time";
+          } else if (statusRaw === "completed" || statusRaw === "complete") {
+            info = updateAt ? `Checked in · ${updateAt}` : "Checked in";
+          } else if (statusRaw === "cancelled" || statusRaw === "canceled") {
+            info = updateAt
+              ? `Cancelled by guest · ${updateAt}`
+              : "Cancelled by guest";
+          } else if (statusRaw === "no-show" || statusRaw === "no_show") {
+            info = "Not visited by closing time";
+          } else {
+            info = item.trialstatus || "";
+          }
+
+          const bookedAtText = formatBookedAtText(item.createdAt, todayStr);
+          const phone =
+            client?.phoneNumber || client?.user?.phoneNumber || null;
+
+          const closingTime = getGymClosingTimeForDate(
+            clubOwner.weekdayScheduling || clubOwner.weekday_scheduling,
+            trialDateStr,
+          );
+
+          return {
+            clientName,
+            clientProfile: profileImageUrl,
+            clientPhone: phone,
+            trialDate: trialDateStr,
+            trialStatus: item.trialstatus || "booked",
+            info,
+            bookedAtText,
+            closingTime,
+            createdAt: item.createdAt || null,
+            updatedAt: item.updatedAt || null,
+            clientId: client?.clientId || null,
+          };
+        };
+
+        const formattedTrials = filtered.map(formatItem);
+
+        // Compute summary metrics for the filtered set
+        const summary = {
+          total: formattedTrials.length,
+          checkedIn: formattedTrials.filter((t: any) =>
+            String(t.trialStatus).toLowerCase().includes("complete"),
+          ).length,
+          upcoming: formattedTrials.filter(
+            (t: any) => String(t.trialStatus).toLowerCase() === "booked",
+          ).length,
+          missed: formattedTrials.filter((t: any) => {
+            const st = String(t.trialStatus).toLowerCase();
+            return st === "no-show" || st === "no_show";
+          }).length,
+          cancelled: formattedTrials.filter((t: any) =>
+            String(t.trialStatus).toLowerCase().includes("cancel"),
+          ).length,
+        };
+
+        // Group into sections by date for Screen 1 / Screen 4 list views
+        const dateGroupsMap = new Map<string, any[]>();
+        for (const item of formattedTrials) {
+          const d = item.trialDate || "Unknown";
+          if (!dateGroupsMap.has(d)) {
+            dateGroupsMap.set(d, []);
+          }
+          dateGroupsMap.get(d)!.push(item);
+        }
+
+        const groupedByDate = Array.from(dateGroupsMap.entries()).map(
+          ([dateKey, items]) => {
+            const filled = items.filter((x: any) => {
+              const st = String(x.trialStatus).toLowerCase();
+              return st === "booked" || st.includes("complete");
+            }).length;
+
+            const displayDate = formatDisplayDate(
+              dateKey,
+              todayStr,
+              tomorrowStr,
+            );
+            return {
+              date: dateKey,
+              displayDate,
+              headerTitle: displayDate.toUpperCase(),
+              capacity: dailyTrialLimit,
+              filled,
+              capacityText: `${filled} of ${dailyTrialLimit} filled`,
+              trials: items,
+            };
+          },
+        );
+
+        // Subgroups for Today & Tomorrow tab layouts (Screen 2 / Screen 3)
+        const groups = {
+          toArrive: formattedTrials.filter(
+            (t: any) => String(t.trialStatus).toLowerCase() === "booked",
+          ),
+          checkedIn: formattedTrials.filter((t: any) =>
+            String(t.trialStatus).toLowerCase().includes("complete"),
+          ),
+          cancelled: formattedTrials.filter((t: any) =>
+            String(t.trialStatus).toLowerCase().includes("cancel"),
+          ),
+          noShow: formattedTrials.filter((t: any) => {
+            const st = String(t.trialStatus).toLowerCase();
+            return st === "no-show" || st === "no_show";
+          }),
+        };
+
+        const todayFilled = allTrials.filter((t: any) => {
+          const d = t.trialDate ? String(t.trialDate).split("T")[0] : "";
+          const st = String(t.trialstatus || "").toLowerCase();
+          return d === todayStr && (st === "booked" || st.includes("complete"));
+        }).length;
+
+        const tomorrowFilled = allTrials.filter((t: any) => {
+          const d = t.trialDate ? String(t.trialDate).split("T")[0] : "";
+          const st = String(t.trialstatus || "").toLowerCase();
+          return (
+            d === tomorrowStr && (st === "booked" || st.includes("complete"))
+          );
+        }).length;
+
+        const clubClosingTime = getGymClosingTimeForDate(
+          clubOwner.weekdayScheduling || clubOwner.weekday_scheduling,
+          todayStr,
+        );
+
+        if (ctx.query?.raw === "true" || ctx.query?.format === "flat") {
+          return ctx.send(formattedTrials);
+        }
+
+        return ctx.send({
+          club: {
+            todayFilled,
+            todaySlotsLeft: Math.max(0, dailyTrialLimit - todayFilled),
+            tomorrowFilled,
+            tomorrowSlotsOpen: Math.max(0, dailyTrialLimit - tomorrowFilled),
+            todayCapacityText: `${todayFilled} of ${dailyTrialLimit} filled`,
+            tomorrowCapacityText: `${tomorrowFilled} of ${dailyTrialLimit} filled`,
+          },
+          tabCounts,
+          summary,
+          filter: queryFilter || (dateQuery ? "by-date" : "all"),
+          selectedDate: dateQuery || null,
+          data: formattedTrials,
+          trials: formattedTrials,
+          groupedByDate,
+          groups,
+        });
+      } catch (error) {
+        strapi.log.error("CLUB OWNER TRIAL HISTORY ERROR:", error);
+        return ctx.internalServerError(
+          "Failed to fetch club owner trial history",
+        );
+      }
+    },
+
+    async clubOwnerTrialHistory(ctx: Context, next?: any) {
+      return (this as any).ownerTrialHistory(ctx, next);
     },
   }),
 );
