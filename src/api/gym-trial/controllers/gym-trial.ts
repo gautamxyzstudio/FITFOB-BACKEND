@@ -172,22 +172,18 @@ async function resolveClientDetailForUser(user: any) {
 
   // 3. Fallback by email
   if (!client && user.email) {
-    client = await strapi.db
-      .query("api::client-detail.client-detail")
-      .findOne({
-        where: { email: user.email },
-        populate: { selfieUpload: true },
-      });
+    client = await strapi.db.query("api::client-detail.client-detail").findOne({
+      where: { email: user.email },
+      populate: { selfieUpload: true },
+    });
   }
 
   // 4. Fallback by phoneNumber
   if (!client && user.phoneNumber) {
-    client = await strapi.db
-      .query("api::client-detail.client-detail")
-      .findOne({
-        where: { phoneNumber: user.phoneNumber },
-        populate: { selfieUpload: true },
-      });
+    client = await strapi.db.query("api::client-detail.client-detail").findOne({
+      where: { phoneNumber: user.phoneNumber },
+      populate: { selfieUpload: true },
+    });
   }
 
   return client;
@@ -335,7 +331,9 @@ export default factories.createCoreController(
 
         const trialDateStr = String(rawTrialDate).trim().split("T")[0];
         if (!/^\d{4}-\d{2}-\d{2}$/.test(trialDateStr)) {
-          return ctx.badRequest("Invalid trialDate format. Expected YYYY-MM-DD");
+          return ctx.badRequest(
+            "Invalid trialDate format. Expected YYYY-MM-DD",
+          );
         }
 
         const todayDateStr = getTodayDateString();
@@ -477,9 +475,7 @@ export default factories.createCoreController(
         });
 
         if (trialsInLast42Days.length >= 3) {
-          const earliestTime = parseDateToTime(
-            trialsInLast42Days[0].trialDate,
-          );
+          const earliestTime = parseDateToTime(trialsInLast42Days[0].trialDate);
           const resetDateStr = formatDateFromTime(
             earliestTime + SIX_WEEKS_MS + 24 * 60 * 60 * 1000,
           );
@@ -531,11 +527,9 @@ export default factories.createCoreController(
         }
 
         if (!created) {
-          created = await strapi.db
-            .query("api::gym-trial.gym-trial")
-            .create({
-              data: payload,
-            });
+          created = await strapi.db.query("api::gym-trial.gym-trial").create({
+            data: payload,
+          });
         }
 
         // 11. Log client activity
@@ -600,7 +594,7 @@ export default factories.createCoreController(
 
         if (!isAdmin) {
           return ctx.forbidden(
-            "Access denied. Only Admin and SuperAdmin can access this endpoint."
+            "Access denied. Only Admin and SuperAdmin can access this endpoint.",
           );
         }
 
@@ -644,14 +638,23 @@ export default factories.createCoreController(
             .query("api::client-detail.client-detail")
             .findOne({
               where: isNum
-                ? { $or: [{ id: Number(cleanDocId) }, { documentId: cleanDocId }] }
-                : { $or: [{ documentId: cleanDocId }, { clientId: cleanDocId }] },
+                ? {
+                    $or: [
+                      { id: Number(cleanDocId) },
+                      { documentId: cleanDocId },
+                    ],
+                  }
+                : {
+                    $or: [{ documentId: cleanDocId }, { clientId: cleanDocId }],
+                  },
               select: ["id", "documentId", "clientId", "name"],
             });
         }
 
         if (!clientDetail) {
-          return ctx.notFound(`Client with documentId '${cleanDocId}' not found`);
+          return ctx.notFound(
+            `Client with documentId '${cleanDocId}' not found`,
+          );
         }
 
         // Fetch all trials for this client
@@ -711,7 +714,6 @@ export default factories.createCoreController(
               clubName,
               trialDate: t.trialDate || null,
               trialstatus: t.trialstatus || null,
-           
             };
           });
 
@@ -729,7 +731,225 @@ export default factories.createCoreController(
       }
     },
 
-  
-    
+    /* =======================================================
+       ADMIN: GET CLUB OWNER FREE TRIAL CLIENT LIST
+       Endpoint: GET /api/gym-trials/club-owner/:ownerDocId
+       Allows admin to fetch the list of free trial clients for a club owner
+       Returns: client name, profile image, date, status
+    ======================================================= */
+    async adminClubOwnerTrials(ctx: Context) {
+      try {
+        const user = await getAuthUser(ctx);
+        if (!user) {
+          return ctx.unauthorized("Authentication required");
+        }
+
+        const roleName = await getUserRole(user);
+        const isAdmin =
+          roleName === "admin" ||
+          roleName === "superadmin" ||
+          roleName.includes("admin");
+
+        const params = (ctx.params || {}) as any;
+        const query = (ctx.query || {}) as any;
+
+        const targetId =
+          params.ownerDocId ||
+          params.ownerdocId ||
+          params.clubOwnerDocumentId ||
+          params.clubownerdocumentid ||
+          params.ownerDocumentId ||
+          params.documentId ||
+          params.id ||
+          query.ownerDocId ||
+          query.ownerdocId ||
+          query.clubOwnerDocumentId ||
+          query.clubownerdocumentid ||
+          query.ownerDocumentId ||
+          query.documentId ||
+          query.id;
+
+        if (!targetId || !String(targetId).trim()) {
+          return ctx.badRequest(
+            "Please provide club owner documentId (ownerDocId)",
+          );
+        }
+
+        const cleanDocId = String(targetId).trim();
+        const isNum = !isNaN(Number(cleanDocId)) && /^\d+$/.test(cleanDocId);
+
+        let clubOwner = await resolveClubOwner(cleanDocId);
+
+        if (!clubOwner && (strapi as any).documents && !isNum) {
+          try {
+            clubOwner = await (strapi as any)
+              .documents("api::club-owner.club-owner")
+              .findOne({
+                documentId: cleanDocId,
+                populate: { user: true },
+              });
+          } catch (_) {}
+        }
+
+        if (!clubOwner) {
+          clubOwner = await strapi.db
+            .query("api::club-owner.club-owner")
+            .findOne({
+              where: isNum
+                ? {
+                    $or: [
+                      { id: Number(cleanDocId) },
+                      { documentId: cleanDocId },
+                    ],
+                  }
+                : { $or: [{ documentId: cleanDocId }, { clubId: cleanDocId }] },
+              populate: { user: true },
+            });
+        }
+
+        if (!clubOwner) {
+          return ctx.notFound(
+            `Club owner with identifier '${cleanDocId}' not found`,
+          );
+        }
+
+        // Check permission: Admin/SuperAdmin or the club owner themselves
+        const isOwnGym =
+          (clubOwner.user &&
+            (clubOwner.user === user.id || clubOwner.user?.id === user.id)) ||
+          (clubOwner.phoneNumber &&
+            clubOwner.phoneNumber === user.phoneNumber) ||
+          (clubOwner.email && clubOwner.email === user.email);
+
+        if (!isAdmin && !isOwnGym) {
+          return ctx.forbidden(
+            "Access denied. Only Admin and SuperAdmin can access this endpoint.",
+          );
+        }
+
+        // Query gym trials for this club owner
+        const whereClause: any = {
+          club_owner: clubOwner.id,
+        };
+
+        if (query.status || query.trialstatus) {
+          whereClause.trialstatus = query.status || query.trialstatus;
+        }
+        if (query.date || query.trialDate) {
+          whereClause.trialDate = String(query.date || query.trialDate)
+            .trim()
+            .split("T")[0];
+        }
+
+        const trials: any[] = await strapi.db
+          .query("api::gym-trial.gym-trial")
+          .findMany({
+            where: whereClause,
+            populate: {
+              client_detail: {
+                populate: {
+                  selfieUpload: true,
+                  user: {
+                    select: [
+                      "id",
+                      "username",
+                      "email",
+                      "phoneNumber",
+                      "fullName",
+                    ],
+                  },
+                },
+              },
+            },
+            orderBy: { trialDate: "desc", createdAt: "desc", id: "desc" },
+          });
+
+        // Format trial client list
+        const responseData = trials.map((item: any) => {
+          const client = item.client_detail;
+          const clientName =
+            client?.name ||
+            client?.user?.fullName ||
+            client?.user?.username ||
+            "Unknown Client";
+
+          const selfie = client?.selfieUpload;
+          const profileImageUrl = getMediaUrl(selfie);
+
+          let trialDateStr: string | null = null;
+          if (item.trialDate) {
+            if (typeof item.trialDate === "string") {
+              trialDateStr = item.trialDate.split("T")[0];
+            } else if (item.trialDate instanceof Date) {
+              const year = item.trialDate.getFullYear();
+              const month = String(item.trialDate.getMonth() + 1).padStart(
+                2,
+                "0",
+              );
+              const day = String(item.trialDate.getDate()).padStart(2, "0");
+              trialDateStr = `${year}-${month}-${day}`;
+            } else {
+              trialDateStr = String(item.trialDate);
+            }
+          } else if (item.createdAt) {
+            trialDateStr = String(item.createdAt).split("T")[0];
+          }
+
+          const statusStr = item.trialstatus || "booked";
+
+          return {
+            id: item.id,
+            documentId: item.documentId || null,
+            clientName,
+            selfieUrl: profileImageUrl,
+            trialDate: trialDateStr,
+            trialstatus: statusStr,
+            createdAt: item.createdAt || null,
+            clientId: client?.clientId || null,
+            clientDocumentId: client?.documentId || null,
+            gender: client?.gender || null,
+          };
+        });
+
+        // Optional search filter
+        let filteredData = responseData;
+        if (query.search || query.q) {
+          const q = String(query.search || query.q)
+            .toLowerCase()
+            .trim();
+          filteredData = filteredData.filter((item: any) => {
+            return (
+              (item.clientName && item.clientName.toLowerCase().includes(q)) ||
+              (item.clientId && item.clientId.toLowerCase().includes(q)) ||
+              (item.email && item.email.toLowerCase().includes(q)) ||
+              (item.phoneNumber &&
+                item.phoneNumber.toLowerCase().includes(q)) ||
+              (item.status && item.status.toLowerCase().includes(q))
+            );
+          });
+        }
+
+        if (query.wrap === "true") {
+          return ctx.send({
+            clubOwner: {
+              id: clubOwner.id,
+              documentId: clubOwner.documentId,
+              clubId: clubOwner.clubId,
+              clubName: clubOwner.clubName,
+              ownerName: clubOwner.ownerName,
+            },
+            total: filteredData.length,
+            data: filteredData,
+          });
+        }
+
+        return ctx.send(filteredData);
+      } catch (error) {
+        strapi.log.error("ADMIN CLUB OWNER TRIALS ERROR:", error);
+        return ctx.internalServerError(
+          "Failed to fetch club owner trial client list",
+        );
+      }
+    },
   }),
 );

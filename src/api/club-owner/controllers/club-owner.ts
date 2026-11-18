@@ -2240,7 +2240,9 @@ export default factories.createCoreController(
                   trialDate: {
                     $in: [todayStr, tomorrowStr],
                   },
-                  trialstatus: "booked",
+                  trialstatus: {
+                    $in: ["booked", "completed", "no-show"],
+                  },
                 },
                 select: ["id", "trialDate", "trialstatus"],
               })
