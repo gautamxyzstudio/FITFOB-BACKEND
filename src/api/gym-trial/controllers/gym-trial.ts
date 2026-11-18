@@ -67,6 +67,71 @@ function getTodayDateString(): string {
   return `${year}-${month}-${day}`;
 }
 
+function calculateHaversineDistance(
+  lat1: number,
+  lon1: number,
+  lat2: number,
+  lon2: number,
+): number {
+  const R = 6371; // Earth's radius in kilometers
+  const toRad = (deg: number) => (deg * Math.PI) / 180;
+  const dLat = toRad(lat2 - lat1);
+  const dLon = toRad(lon2 - lon1);
+  const a =
+    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+    Math.cos(toRad(lat1)) *
+      Math.cos(toRad(lat2)) *
+      Math.sin(dLon / 2) *
+      Math.sin(dLon / 2);
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  return R * c;
+}
+
+function getGymClosingTimeForDate(
+  scheduling: any,
+  dateStr: string | null | undefined,
+): string | null {
+  if (!scheduling || !dateStr) return null;
+  try {
+    let sched = scheduling;
+    if (typeof sched === "string") {
+      try {
+        sched = JSON.parse(sched);
+      } catch (_) {}
+    }
+    const cleanDate = String(dateStr).split("T")[0];
+    const d = new Date(`${cleanDate}T00:00:00Z`);
+    const dayNames = [
+      "sunday",
+      "monday",
+      "tuesday",
+      "wednesday",
+      "thursday",
+      "friday",
+      "saturday",
+    ];
+    const dayName = dayNames[d.getUTCDay()];
+    const daySchedule = sched[dayName];
+    if (!daySchedule || daySchedule === "closed" || daySchedule.isClosed) {
+      return null;
+    }
+    const rawClosing = daySchedule.closingTime || daySchedule.closing_time;
+    if (!rawClosing) return null;
+
+    if (typeof rawClosing === "string" && rawClosing.includes(":")) {
+      const [hStr, mStr] = rawClosing.split(":");
+      let h = parseInt(hStr, 10);
+      const m = mStr || "00";
+      const ampm = h >= 12 ? "PM" : "AM";
+      h = h % 12 || 12;
+      return `${String(h).padStart(2, "0")}:${m} ${ampm}`;
+    }
+    return String(rawClosing);
+  } catch (_) {
+    return null;
+  }
+}
+
 async function getAuthUser(ctx: Context) {
   let user = ctx.state?.user;
   if (user?.id) return user;
@@ -950,6 +1015,222 @@ export default factories.createCoreController(
           "Failed to fetch club owner trial client list",
         );
       }
+    },
+
+    /* =======================================================
+       OVERRIDE CORE FIND
+       If requested by a client with Bearer token, return their own trial history.
+       Otherwise delegate to core find.
+    ======================================================= */
+    async find(ctx: Context, next?: any) {
+      try {
+        const user = await getAuthUser(ctx);
+        if (user?.id) {
+          const role = await getUserRole(user);
+          if (role === "client" || role === "authenticated") {
+            return (this as any).myTrialHistory(ctx, next);
+          }
+        }
+      } catch (_) {}
+      return super.find(ctx);
+    },
+
+    /* =======================================================
+       CLIENT: GET OWN TRIAL HISTORY BY AUTH TOKEN
+       Endpoint: GET /api/gym-trials/my-trials
+                 GET /api/client/my-trials
+       Returns: clubname, address, latitude, langtude, trialdate,
+                trialStatus, distance when status is booked,
+                and info string:
+                - booked: "vaild upto gym closing time"
+                - complete: "Checked in at {updateAttime}"
+                - canceled: "Cancelled by you"
+                - no-show: "Not visited by closing time"
+    ======================================================= */
+    async myTrialHistory(ctx: Context, next?: any) {
+      try {
+        const user = await getAuthUser(ctx);
+        if (!user?.id) {
+          return ctx.unauthorized("Authentication required");
+        }
+
+        const clientDetail = await resolveClientDetailForUser(user);
+        if (!clientDetail?.id) {
+          return ctx.notFound(
+            "Client profile not found. This endpoint is for registered clients.",
+          );
+        }
+
+        const rawUserLat =
+          ctx.query?.latitude ??
+          ctx.query?.lat ??
+          clientDetail?.latitude ??
+          (ctx.request?.headers?.["x-latitude"] as string | undefined);
+
+        const rawUserLon =
+          ctx.query?.longitude ??
+          ctx.query?.lon ??
+          ctx.query?.lng ??
+          clientDetail?.longitude ??
+          (ctx.request?.headers?.["x-longitude"] as string | undefined);
+
+        const userLat =
+          rawUserLat !== undefined &&
+          rawUserLat !== null &&
+          !isNaN(Number(rawUserLat))
+            ? Number(rawUserLat)
+            : null;
+
+        const userLon =
+          rawUserLon !== undefined &&
+          rawUserLon !== null &&
+          !isNaN(Number(rawUserLon))
+            ? Number(rawUserLon)
+            : null;
+
+        const trials: any[] = await strapi.db
+          .query("api::gym-trial.gym-trial")
+          .findMany({
+            where: {
+              client_detail: clientDetail.id,
+            },
+            populate: {
+              club_owner: {
+                populate: {
+                  logo: true,
+                },
+              },
+            },
+            orderBy: { trialDate: "desc", createdAt: "desc", id: "desc" },
+          });
+
+        const responseData = trials.map((item: any) => {
+          const club = item.club_owner || {};
+          const statusRaw = String(item.trialstatus || "booked")
+            .toLowerCase()
+            .trim();
+
+          // 1. Format date (YYYY-MM-DD)
+          let trialDateStr: string | null = null;
+          if (item.trialDate) {
+            if (typeof item.trialDate === "string") {
+              trialDateStr = item.trialDate.split("T")[0];
+            } else if (item.trialDate instanceof Date) {
+              const year = item.trialDate.getFullYear();
+              const month = String(item.trialDate.getMonth() + 1).padStart(
+                2,
+                "0",
+              );
+              const day = String(item.trialDate.getDate()).padStart(2, "0");
+              trialDateStr = `${year}-${month}-${day}`;
+            } else {
+              trialDateStr = String(item.trialDate);
+            }
+          } else if (item.createdAt) {
+            trialDateStr = String(item.createdAt).split("T")[0];
+          }
+
+          // 2. Format distance only when status is booked
+          let distance: number | null = null;
+          if (statusRaw === "booked") {
+            const clubLat =
+              club.latitude !== undefined &&
+              club.latitude !== null &&
+              !isNaN(Number(club.latitude))
+                ? Number(club.latitude)
+                : null;
+            const clubLon =
+              club.longitude !== undefined &&
+              club.longitude !== null &&
+              !isNaN(Number(club.longitude))
+                ? Number(club.longitude)
+                : null;
+
+            if (
+              userLat !== null &&
+              userLon !== null &&
+              clubLat !== null &&
+              clubLon !== null
+            ) {
+              const dist = calculateHaversineDistance(
+                userLat,
+                userLon,
+                clubLat,
+                clubLon,
+              );
+              distance = Number(dist.toFixed(2));
+            }
+          }
+
+          // 3. Format info text based on status:
+          // - booked: "vaild upto gym closing time"
+          // - complete: "Checked in at {updateAttime}"
+          // - canceled: "Cancelled by you"
+          // - no-show: "Not visited by closing time"
+          let info = "";
+          let updateAttime: string | null = null;
+
+          if (statusRaw === "booked") {
+            info = "vaild upto gym closing time";
+          } else if (statusRaw === "completed" || statusRaw === "complete") {
+            if (item.updatedAt) {
+              updateAttime = item.updatedAt;
+            }
+            info = updateAttime
+              ? `Checked in at ${updateAttime}`
+              : "Checked in";
+          } else if (statusRaw === "cancelled" || statusRaw === "canceled") {
+            info = "Cancelled by you";
+          } else if (statusRaw === "no-show" || statusRaw === "no_show") {
+            info = "Not visited by closing time";
+          } else {
+            info = item.trialstatus || "";
+          }
+
+          const clubName = club.clubName || club.name || club.ownerName || null;
+          const address = club.clubAddress || club.address || null;
+          const lat =
+            club.latitude !== undefined && club.latitude !== null
+              ? String(club.latitude)
+              : null;
+          const lon =
+            club.longitude !== undefined && club.longitude !== null
+              ? String(club.longitude)
+              : null;
+
+          const closingTime = getGymClosingTimeForDate(
+            club.weekdayScheduling || club.weekday_scheduling,
+            trialDateStr,
+          );
+
+          return {
+            id: item.id,
+            documentId: item.documentId || null,
+            clubName: clubName,
+            clubAddress: address,
+            latitude: lat,
+            longitude: lon,
+            trialDate: trialDateStr,
+            trialStatus: item.trialstatus || "booked",
+            distance: distance,
+            distanceUnit: distance !== null ? "km" : null,
+            info: info,
+            checkintime: updateAttime,
+            closingTime: closingTime,
+            createdAt: item.createdAt || null,
+            updatedAt: item.updatedAt || null,
+          };
+        });
+
+        return ctx.send(responseData);
+      } catch (error) {
+        strapi.log.error("CLIENT TRIAL HISTORY ERROR:", error);
+        return ctx.internalServerError("Failed to fetch trial history");
+      }
+    },
+
+    async myTrials(ctx: Context, next?: any) {
+      return (this as any).myTrialHistory(ctx, next);
     },
   }),
 );
