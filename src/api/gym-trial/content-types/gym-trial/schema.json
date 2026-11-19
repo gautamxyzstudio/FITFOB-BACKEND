@@ -32,7 +32,8 @@
         "booked",
         "completed",
         "cancelled",
-        "no-show"
+        "no-show",
+        "rescheduled"
       ]
     }
   }

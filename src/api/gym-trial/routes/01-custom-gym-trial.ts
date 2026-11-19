@@ -1,5 +1,25 @@
 export default {
   routes: [
+    // Client cancel gym trial
+    {
+      method: "POST",
+      path: "/client/my-trials/:id/cancel",
+      handler: "gym-trial.cancelTrial",
+      config: {
+        auth: false,
+      },
+    },
+
+    // Client reschedule gym trial (today to tomorrow)
+    {
+      method: "POST",
+      path: "/client/my-trials/:id/reschedule",
+      handler: "gym-trial.rescheduleTrial",
+      config: {
+        auth: false,
+      },
+    },
+
     // Gym Owner own trial history / guest list (via auth token)
     {
       method: "GET",

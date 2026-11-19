@@ -492,3 +492,116 @@ export async function sendClubOwnerTrialBookedNotification(
     };
   }
 }
+
+export interface ClubOwnerTrialCancelInfo {
+  trial: any;
+  client: any;
+  trialDate: string;
+  reason?: string;
+}
+
+export interface ClubOwnerTrialRescheduleInfo {
+  trial: any;
+  client: any;
+  oldDate: string;
+  newDate: string;
+}
+
+/**
+ * Specifically dispatches a push notification to the gym owner when a trial is cancelled.
+ */
+export async function sendClubOwnerTrialCancelledNotification(
+  clubOwner: any,
+  info: ClubOwnerTrialCancelInfo
+) {
+  try {
+    const { trial, client, trialDate, reason } = info;
+    const rawClientName =
+      client?.name ||
+      client?.fullName ||
+      client?.user?.username ||
+      client?.email ||
+      "A guest";
+
+    const clientName = toTitleCase(rawClientName);
+    const formattedDate = formatHumanDate(trialDate);
+
+    const title = "Gym Trial Cancelled";
+    const body = `${clientName} has cancelled their trial for ${formattedDate}${
+      reason ? ` (${reason})` : ""
+    }. Slot reopened.`;
+
+    const data = {
+      screen: "TrialManagerScreen",
+      type: "GYM_TRIAL_CANCELLED",
+      trialDate: String(trialDate || ""),
+      clientName: String(clientName),
+      reason: String(reason || ""),
+    };
+
+    return await sendClubOwnerPushNotification(clubOwner, {
+      title,
+      body,
+      data,
+    });
+  } catch (err) {
+    strapi.log.error(
+      "[ClubOwnerPush] sendClubOwnerTrialCancelledNotification error:",
+      err
+    );
+    return {
+      success: false,
+      sent: 0,
+      message: "Failed to dispatch trial cancelled push notification",
+    };
+  }
+}
+
+/**
+ * Specifically dispatches a push notification to the gym owner when a trial is rescheduled.
+ */
+export async function sendClubOwnerTrialRescheduledNotification(
+  clubOwner: any,
+  info: ClubOwnerTrialRescheduleInfo
+) {
+  try {
+    const { trial, client, oldDate, newDate } = info;
+    const rawClientName =
+      client?.name ||
+      client?.fullName ||
+      client?.user?.username ||
+      client?.email ||
+      "A guest";
+
+    const clientName = toTitleCase(rawClientName);
+    const oldFormatted = formatHumanDate(oldDate);
+    const newFormatted = formatHumanDate(newDate);
+
+    const title = "Gym Trial Rescheduled 📅";
+    const body = `${clientName} rescheduled their trial from ${oldFormatted} to ${newFormatted}`;
+
+    const data = {
+      screen: "TrialManagerScreen",
+      type: "GYM_TRIAL_RESCHEDULED",
+      oldDate: String(oldDate || ""),
+      newDate: String(newDate || ""),
+      clientName: String(clientName),
+    };
+
+    return await sendClubOwnerPushNotification(clubOwner, {
+      title,
+      body,
+      data,
+    });
+  } catch (err) {
+    strapi.log.error(
+      "[ClubOwnerPush] sendClubOwnerTrialRescheduledNotification error:",
+      err
+    );
+    return {
+      success: false,
+      sent: 0,
+      message: "Failed to dispatch trial rescheduled push notification",
+    };
+  }
+}

@@ -4,7 +4,11 @@
 
 import { factories } from "@strapi/strapi";
 import { Context } from "koa";
-import { sendClubOwnerTrialBookedNotification } from "../../../utils/club-owner-push-notification";
+import {
+  sendClubOwnerTrialBookedNotification,
+  sendClubOwnerTrialCancelledNotification,
+  sendClubOwnerTrialRescheduledNotification,
+} from "../../../utils/club-owner-push-notification";
 
 /* =======================================================
    HELPERS
@@ -142,22 +146,6 @@ function getISTDateString(offsetDays: number = 0): string {
   const month = String(target.getUTCMonth() + 1).padStart(2, "0");
   const day = String(target.getUTCDate()).padStart(2, "0");
   return `${year}-${month}-${day}`;
-}
-
-function formatTimeIST(dateVal: any): string | null {
-  if (!dateVal) return null;
-  try {
-    const d = new Date(dateVal);
-    if (isNaN(d.getTime())) return null;
-    return d.toLocaleTimeString("en-IN", {
-      timeZone: "Asia/Kolkata",
-      hour: "2-digit",
-      minute: "2-digit",
-      hour12: true,
-    });
-  } catch (_) {
-    return null;
-  }
 }
 
 function formatBookedAtText(createdAt: any, todayStr: string): string | null {
@@ -456,6 +444,68 @@ function formatTrial(item: any, fallbackDate?: string) {
   };
 }
 
+async function resolveGymTrial(identifier: any) {
+  if (!identifier) return null;
+  const raw = String(
+    typeof identifier === "object"
+      ? identifier.id || identifier.documentId
+      : identifier,
+  ).trim();
+  if (!raw) return null;
+
+  const isNum = !isNaN(Number(raw)) && /^\d+$/.test(raw);
+
+  let trial: any = null;
+
+  if ((strapi as any).documents && !isNum) {
+    try {
+      trial = await (strapi as any)
+        .documents("api::gym-trial.gym-trial")
+        .findOne({
+          documentId: raw,
+          populate: {
+            client_detail: {
+              populate: {
+                user: true,
+                selfieUpload: true,
+              },
+            },
+            club_owner: {
+              populate: {
+                logo: true,
+                user: true,
+              },
+            },
+          },
+        });
+    } catch (_) {}
+  }
+
+  if (!trial) {
+    trial = await strapi.db.query("api::gym-trial.gym-trial").findOne({
+      where: isNum
+        ? { $or: [{ id: Number(raw) }, { documentId: raw }] }
+        : { documentId: raw },
+      populate: {
+        client_detail: {
+          populate: {
+            user: true,
+            selfieUpload: true,
+          },
+        },
+        club_owner: {
+          populate: {
+            logo: true,
+            user: true,
+          },
+        },
+      },
+    });
+  }
+
+  return trial;
+}
+
 export default factories.createCoreController(
   "api::gym-trial.gym-trial",
   ({ strapi }) => ({
@@ -616,7 +666,7 @@ export default factories.createCoreController(
             where: {
               client_detail: clientDetail.id,
               club_owner: clubOwner.id,
-              trialstatus: "booked",
+              trialstatus: { $in: ["booked", "rescheduled"] },
               trialDate: { $gte: todayDateStr },
             },
           });
@@ -1169,6 +1219,489 @@ export default factories.createCoreController(
     },
 
     /* =======================================================
+       CLIENT: CANCEL GYM TRIAL
+       Endpoint: POST /api/client/gym-trials/:id/cancel
+                 PUT  /api/client/gym-trials/:id/cancel
+                 POST /api/gym-trials/:id/cancel
+                 POST /api/gym-trials/cancel
+    ======================================================= */
+    async cancelTrial(ctx: Context) {
+      try {
+        const user = await getAuthUser(ctx);
+        if (!user?.id) {
+          return ctx.unauthorized("Authentication required");
+        }
+
+        const clientDetail = await resolveClientDetailForUser(user);
+        if (!clientDetail?.id) {
+          return ctx.forbidden(
+            "Client profile not found. Only registered clients can cancel their gym trial.",
+          );
+        }
+
+        const params = (ctx.params || {}) as any;
+        const body =
+          ((ctx.request.body as any)?.data || ctx.request.body || {}) as any;
+        const targetId =
+          params.id ||
+          params.trialId ||
+          params.documentId ||
+          body.id ||
+          body.trialId ||
+          body.documentId;
+
+        if (!targetId || !String(targetId).trim()) {
+          return ctx.badRequest("Please provide trial ID or documentId");
+        }
+
+        const trial = await resolveGymTrial(targetId);
+        if (!trial) {
+          return ctx.notFound("Gym trial not found");
+        }
+
+        // Ownership verification
+        const trialClient = trial.client_detail;
+        const isOwner =
+          trialClient &&
+          (trialClient.id === clientDetail.id ||
+            trialClient.documentId === clientDetail.documentId ||
+            (clientDetail.clientId &&
+              trialClient.clientId === clientDetail.clientId) ||
+            (trialClient.user && trialClient.user.id === user.id));
+
+        if (!isOwner) {
+          return ctx.forbidden(
+            "You are not authorized to cancel this trial. You can only cancel your own trials.",
+          );
+        }
+
+        const currentStatus = String(trial.trialstatus || "")
+          .toLowerCase()
+          .trim();
+
+        if (currentStatus === "cancelled" || currentStatus === "canceled") {
+          return ctx.badRequest("This gym trial is already cancelled");
+        }
+
+        if (currentStatus === "completed" || currentStatus === "complete") {
+          return ctx.badRequest("Completed gym trials cannot be cancelled");
+        }
+
+        if (currentStatus === "no-show" || currentStatus === "no_show") {
+          return ctx.badRequest(
+            "Expired / no-show gym trials cannot be cancelled",
+          );
+        }
+
+        const cancellationReason =
+          body.reason || body.cancellationReason || "Cancelled by client";
+
+        // Update trial in DB
+        let updated: any = null;
+        if ((strapi as any).documents && trial.documentId) {
+          try {
+            updated = await (strapi as any)
+              .documents("api::gym-trial.gym-trial")
+              .update({
+                documentId: trial.documentId,
+                data: {
+                  trialstatus: "cancelled",
+                },
+                populate: POPULATE_CONFIG,
+              });
+          } catch (docErr) {
+            strapi.log.warn(
+              "[GymTrial] documents.update error in cancelTrial:",
+              docErr,
+            );
+          }
+        }
+
+        if (!updated) {
+          try {
+            updated = await strapi.entityService.update(
+              "api::gym-trial.gym-trial",
+              trial.id,
+              {
+                data: {
+                  trialstatus: "cancelled",
+                },
+                populate: POPULATE_CONFIG as any,
+              },
+            );
+          } catch (entErr) {
+            strapi.log.warn(
+              "[GymTrial] entityService.update error in cancelTrial:",
+              entErr,
+            );
+          }
+        }
+
+        if (!updated) {
+          await strapi.db.query("api::gym-trial.gym-trial").update({
+            where: { id: trial.id },
+            data: { trialstatus: "cancelled" },
+          });
+          updated = { ...trial, trialstatus: "cancelled" };
+        }
+
+        // Activity log
+        try {
+          const activityLogService: any = strapi.service(
+            "api::activity-log.activity-log",
+          );
+          if (activityLogService?.createActivityLog) {
+            const club = trial.club_owner || {};
+            const gymName = club.clubName || "gym";
+            await activityLogService.createActivityLog({
+              actorType: "client",
+              actorId: clientDetail.documentId || clientDetail.id,
+              actionType: "update",
+              entityName: "gym-trial",
+              entityId: trial.documentId || trial.id,
+              description: `Cancelled free gym trial at ${gymName} scheduled for ${trial.trialDate}`,
+            });
+          }
+        } catch (actErr) {
+          strapi.log.warn("[GymTrial] Cancel activity logging failed:", actErr);
+        }
+
+        // Push notification to club owner
+        try {
+          if (trial.club_owner) {
+            await sendClubOwnerTrialCancelledNotification(trial.club_owner, {
+              trial: updated,
+              client: clientDetail,
+              trialDate: String(trial.trialDate || "").split("T")[0],
+              reason: cancellationReason,
+            });
+          }
+        } catch (pushErr) {
+          strapi.log.error(
+            "[GymTrial] Failed to send cancel push notification:",
+            pushErr,
+          );
+        }
+
+        return ctx.send({
+          message:
+            "Gym trial cancelled successfully. The slot has been reopened.",
+          data: {
+            id: trial.id,
+            documentId: trial.documentId || null,
+            trialDate: String(trial.trialDate || "").split("T")[0],
+            trialStatus: "cancelled",
+            trialstatus: "cancelled",
+            info: "Cancelled by you",
+            cancellationReason,
+          },
+        });
+      } catch (error) {
+        strapi.log.error("CANCEL GYM TRIAL ERROR:", error);
+        return ctx.internalServerError("Failed to cancel gym trial");
+      }
+    },
+
+    /* =======================================================
+       CLIENT: RESCHEDULE GYM TRIAL (TODAY TO TOMORROW OR SPECIFIED DATE)
+       Endpoint: POST /api/client/gym-trials/:id/reschedule
+                 PUT  /api/client/gym-trials/:id/reschedule
+                 POST /api/gym-trials/:id/reschedule
+                 POST /api/gym-trials/reschedule
+    ======================================================= */
+    async rescheduleTrial(ctx: Context) {
+      try {
+        const user = await getAuthUser(ctx);
+        if (!user?.id) {
+          return ctx.unauthorized("Authentication required");
+        }
+
+        const clientDetail = await resolveClientDetailForUser(user);
+        if (!clientDetail?.id) {
+          return ctx.forbidden(
+            "Client profile not found. Only registered clients can reschedule their gym trial.",
+          );
+        }
+
+        const params = (ctx.params || {}) as any;
+        const body =
+          ((ctx.request.body as any)?.data || ctx.request.body || {}) as any;
+        const targetId =
+          params.id ||
+          params.trialId ||
+          params.documentId ||
+          body.id ||
+          body.trialId ||
+          body.documentId;
+
+        if (!targetId || !String(targetId).trim()) {
+          return ctx.badRequest("Please provide trial ID or documentId");
+        }
+
+        const trial = await resolveGymTrial(targetId);
+        if (!trial) {
+          return ctx.notFound("Gym trial not found");
+        }
+
+        // Ownership verification
+        const trialClient = trial.client_detail;
+        const isOwner =
+          trialClient &&
+          (trialClient.id === clientDetail.id ||
+            trialClient.documentId === clientDetail.documentId ||
+            (clientDetail.clientId &&
+              trialClient.clientId === clientDetail.clientId) ||
+            (trialClient.user && trialClient.user.id === user.id));
+
+        if (!isOwner) {
+          return ctx.forbidden(
+            "You are not authorized to reschedule this trial. You can only reschedule your own trials.",
+          );
+        }
+
+        const currentStatus = String(trial.trialstatus || "")
+          .toLowerCase()
+          .trim();
+
+        if (currentStatus === "completed" || currentStatus === "complete") {
+          return ctx.badRequest("Completed gym trials cannot be rescheduled");
+        }
+
+        if (currentStatus === "cancelled" || currentStatus === "canceled") {
+          return ctx.badRequest(
+            "Cancelled gym trials cannot be rescheduled. Please book a new trial instead.",
+          );
+        }
+
+        if (currentStatus === "no-show" || currentStatus === "no_show") {
+          return ctx.badRequest(
+            "Expired / no-show gym trials cannot be rescheduled. Please book a new trial instead.",
+          );
+        }
+
+        const todayStr = getISTDateString(0);
+        const tomorrowStr = getISTDateString(1);
+        const oldTrialDateStr = trial.trialDate
+          ? String(trial.trialDate).split("T")[0]
+          : todayStr;
+
+        // Determine target date: defaults to tomorrow (IST)
+        const rawTargetDate =
+          body.newTrialDate ||
+          body.newDate ||
+          body.trialDate ||
+          body.targetDate ||
+          body.date ||
+          tomorrowStr;
+
+        const targetDateStr = String(rawTargetDate).trim().split("T")[0];
+
+        if (!/^\d{4}-\d{2}-\d{2}$/.test(targetDateStr)) {
+          return ctx.badRequest(
+            "Invalid target date format. Expected YYYY-MM-DD",
+          );
+        }
+
+        if (targetDateStr < todayStr) {
+          return ctx.badRequest("Cannot reschedule to a past date");
+        }
+
+        if (targetDateStr === oldTrialDateStr) {
+          return ctx.badRequest(
+            `Trial is already scheduled for ${oldTrialDateStr}. Please choose a different date (e.g. tomorrow ${tomorrowStr}).`,
+          );
+        }
+
+        // Validate club owner
+        const clubOwner = trial.club_owner;
+        if (!clubOwner) {
+          return ctx.badRequest(
+            "Gym details associated with this trial could not be found",
+          );
+        }
+
+        if (clubOwner.isTrialEnabled === false) {
+          return ctx.badRequest(
+            "Free trial is currently disabled for this gym",
+          );
+        }
+
+        // Check if gym is open on targetDate
+        const closingTime = getGymClosingTimeForDate(
+          clubOwner.weekdayScheduling || clubOwner.weekday_scheduling,
+          targetDateStr,
+        );
+        if (closingTime === null) {
+          return ctx.badRequest(
+            `The gym is closed on ${targetDateStr}. Please choose an open day.`,
+          );
+        }
+
+        // Check gym daily trial slot limit for targetDate
+        const dailyLimit =
+          Number(clubOwner.dailyTrialLimit) > 0
+            ? Number(clubOwner.dailyTrialLimit)
+            : 5;
+
+        const bookedCountForDate = await strapi.db
+          .query("api::gym-trial.gym-trial")
+          .count({
+            where: {
+              club_owner: clubOwner.id,
+              trialDate: targetDateStr,
+              trialstatus: { $in: ["booked", "completed", "rescheduled"] },
+              id: { $ne: trial.id },
+            },
+          });
+
+        if (bookedCountForDate >= dailyLimit) {
+          return ctx.badRequest(
+            `All trial slots for ${targetDateStr} are fully booked (Daily limit: ${dailyLimit}). Please select another date.`,
+          );
+        }
+
+        // Check if client already has another active trial at this gym on targetDate
+        const existingForDate = await strapi.db
+          .query("api::gym-trial.gym-trial")
+          .findOne({
+            where: {
+              client_detail: clientDetail.id,
+              club_owner: clubOwner.id,
+              trialDate: targetDateStr,
+              trialstatus: { $in: ["booked", "completed", "rescheduled"] },
+              id: { $ne: trial.id },
+            },
+          });
+
+        if (existingForDate) {
+          return ctx.badRequest(
+            `You already have an active trial at this gym on ${targetDateStr}`,
+          );
+        }
+
+        // Update trial record
+        let updated: any = null;
+        if ((strapi as any).documents && trial.documentId) {
+          try {
+            updated = await (strapi as any)
+              .documents("api::gym-trial.gym-trial")
+              .update({
+                documentId: trial.documentId,
+                data: {
+                  trialDate: targetDateStr,
+                  trialstatus: "rescheduled",
+                },
+                populate: POPULATE_CONFIG,
+              });
+          } catch (docErr) {
+            strapi.log.warn(
+              "[GymTrial] documents.update error in rescheduleTrial:",
+              docErr,
+            );
+          }
+        }
+
+        if (!updated) {
+          try {
+            updated = await strapi.entityService.update(
+              "api::gym-trial.gym-trial",
+              trial.id,
+              {
+                data: {
+                  trialDate: targetDateStr,
+                  trialstatus: "rescheduled",
+                },
+                populate: POPULATE_CONFIG as any,
+              },
+            );
+          } catch (entErr) {
+            strapi.log.warn(
+              "[GymTrial] entityService.update error in rescheduleTrial:",
+              entErr,
+            );
+          }
+        }
+
+        if (!updated) {
+          await strapi.db.query("api::gym-trial.gym-trial").update({
+            where: { id: trial.id },
+            data: {
+              trialDate: targetDateStr,
+              trialstatus: "rescheduled",
+            },
+          });
+          updated = {
+            ...trial,
+            trialDate: targetDateStr,
+            trialstatus: "rescheduled",
+          };
+        }
+
+        // Activity log
+        try {
+          const activityLogService: any = strapi.service(
+            "api::activity-log.activity-log",
+          );
+          if (activityLogService?.createActivityLog) {
+            const gymName = clubOwner.clubName || "gym";
+            await activityLogService.createActivityLog({
+              actorType: "client",
+              actorId: clientDetail.documentId || clientDetail.id,
+              actionType: "update",
+              entityName: "gym-trial",
+              entityId: trial.documentId || trial.id,
+              description: `Rescheduled gym trial at ${gymName} from ${oldTrialDateStr} to ${targetDateStr}`,
+            });
+          }
+        } catch (actErr) {
+          strapi.log.warn(
+            "[GymTrial] Reschedule activity logging failed:",
+            actErr,
+          );
+        }
+
+        // Push notification to club owner
+        try {
+          await sendClubOwnerTrialRescheduledNotification(clubOwner, {
+            trial: updated,
+            client: clientDetail,
+            oldDate: oldTrialDateStr,
+            newDate: targetDateStr,
+          });
+        } catch (pushErr) {
+          strapi.log.error(
+            "[GymTrial] Failed to send reschedule push notification:",
+            pushErr,
+          );
+        }
+
+        const isTomorrow = targetDateStr === tomorrowStr;
+        const msg = isTomorrow
+          ? `Gym trial rescheduled successfully to tomorrow (${targetDateStr})`
+          : `Gym trial rescheduled successfully to ${targetDateStr}`;
+
+        return ctx.send({
+          message: msg,
+          data: {
+            id: trial.id,
+            documentId: trial.documentId || null,
+            previousDate: oldTrialDateStr,
+            trialDate: targetDateStr,
+            trialStatus: "rescheduled",
+            trialstatus: "rescheduled",
+            info: "vaild upto gym closing time",
+            closingTime: closingTime,
+            clubName: clubOwner.clubName || null,
+            clubAddress: clubOwner.clubAddress || null,
+          },
+        });
+      } catch (error) {
+        strapi.log.error("RESCHEDULE GYM TRIAL ERROR:", error);
+        return ctx.internalServerError("Failed to reschedule gym trial");
+      }
+    },
+
+    /* =======================================================
        OVERRIDE CORE FIND
        If requested by a client with Bearer token, return their own trial history.
        Otherwise delegate to core find.
@@ -1281,9 +1814,9 @@ export default factories.createCoreController(
             trialDateStr = String(item.createdAt).split("T")[0];
           }
 
-          // 2. Format distance only when status is booked
+          // 2. Format distance only when status is booked or rescheduled
           let distance: number | null = null;
-          if (statusRaw === "booked") {
+          if (statusRaw === "booked" || statusRaw === "rescheduled") {
             const clubLat =
               club.latitude !== undefined &&
               club.latitude !== null &&
@@ -1314,15 +1847,15 @@ export default factories.createCoreController(
           }
 
           // 3. Format info text based on status:
-          // - booked: "vaild upto gym closing time"
+          // - booked / rescheduled: "vaild upto gym closing time"
           // - complete: "Checked in at {updateAttime}"
           // - canceled: "Cancelled by you"
           // - no-show: "Not visited by closing time"
           let info = "";
           let updateAttime: string | null = null;
 
-          if (statusRaw === "booked") {
-            info = "vaild upto gym closing time";
+          if (statusRaw === "booked" || statusRaw === "rescheduled") {
+            info = "Vaild upto gym closing time";
           } else if (statusRaw === "completed" || statusRaw === "complete") {
             if (item.updatedAt) {
               updateAttime = item.updatedAt;
@@ -1590,7 +2123,7 @@ export default factories.createCoreController(
 
           let info = "";
           if (statusRaw === "booked") {
-            info = "vaild upto gym closing time";
+            info = "Vaild upto gym closing time";
           } else if (statusRaw === "completed" || statusRaw === "complete") {
             info = updateAt ? `Checked in · ${updateAt}` : "Checked in";
           } else if (statusRaw === "cancelled" || statusRaw === "canceled") {
@@ -1599,8 +2132,19 @@ export default factories.createCoreController(
               : "Cancelled by guest";
           } else if (statusRaw === "no-show" || statusRaw === "no_show") {
             info = "Not visited by closing time";
+          } else if (statusRaw === "rescheduled") {
+            info = "Vaild upto gym closing time";
           } else {
             info = item.trialstatus || "";
+          }
+
+          let rescheduledFromText: string | null = null;
+          if (statusRaw === "rescheduled") {
+            if (trialDateStr === tomorrowStr) {
+              rescheduledFromText = "Moved from today";
+            } else {
+              rescheduledFromText = "Rescheduled";
+            }
           }
 
           const bookedAtText = formatBookedAtText(item.createdAt, todayStr);
@@ -1619,7 +2163,9 @@ export default factories.createCoreController(
             trialDate: trialDateStr,
             trialStatus: item.trialstatus || "booked",
             info,
-            bookedAtText,
+            rescheduledFromText,
+            updateAt,
+            bookedAtText ,
             closingTime,
             createdAt: item.createdAt || null,
             updatedAt: item.updatedAt || null,
@@ -1635,15 +2181,19 @@ export default factories.createCoreController(
           checkedIn: formattedTrials.filter((t: any) =>
             String(t.trialStatus).toLowerCase().includes("complete"),
           ).length,
-          upcoming: formattedTrials.filter(
-            (t: any) => String(t.trialStatus).toLowerCase() === "booked",
-          ).length,
+          upcoming: formattedTrials.filter((t: any) => {
+            const st = String(t.trialStatus).toLowerCase();
+            return st === "booked" || st === "rescheduled";
+          }).length,
           missed: formattedTrials.filter((t: any) => {
             const st = String(t.trialStatus).toLowerCase();
             return st === "no-show" || st === "no_show";
           }).length,
           cancelled: formattedTrials.filter((t: any) =>
             String(t.trialStatus).toLowerCase().includes("cancel"),
+          ).length,
+          rescheduled: formattedTrials.filter((t: any) =>
+            String(t.trialStatus).toLowerCase() === "rescheduled",
           ).length,
         };
 
@@ -1661,7 +2211,11 @@ export default factories.createCoreController(
           ([dateKey, items]) => {
             const filled = items.filter((x: any) => {
               const st = String(x.trialStatus).toLowerCase();
-              return st === "booked" || st.includes("complete");
+              return (
+                st === "booked" ||
+                st === "rescheduled" ||
+                st.includes("complete")
+              );
             }).length;
 
             const displayDate = formatDisplayDate(
@@ -1683,9 +2237,10 @@ export default factories.createCoreController(
 
         // Subgroups for Today & Tomorrow tab layouts (Screen 2 / Screen 3)
         const groups = {
-          toArrive: formattedTrials.filter(
-            (t: any) => String(t.trialStatus).toLowerCase() === "booked",
-          ),
+          toArrive: formattedTrials.filter((t: any) => {
+            const st = String(t.trialStatus).toLowerCase();
+            return st === "booked" || st === "rescheduled";
+          }),
           checkedIn: formattedTrials.filter((t: any) =>
             String(t.trialStatus).toLowerCase().includes("complete"),
           ),
@@ -1701,14 +2256,18 @@ export default factories.createCoreController(
         const todayFilled = allTrials.filter((t: any) => {
           const d = t.trialDate ? String(t.trialDate).split("T")[0] : "";
           const st = String(t.trialstatus || "").toLowerCase();
-          return d === todayStr && (st === "booked" || st.includes("complete"));
+          return (
+            d === todayStr &&
+            (st === "booked" || st === "rescheduled" || st.includes("complete"))
+          );
         }).length;
 
         const tomorrowFilled = allTrials.filter((t: any) => {
           const d = t.trialDate ? String(t.trialDate).split("T")[0] : "";
           const st = String(t.trialstatus || "").toLowerCase();
           return (
-            d === tomorrowStr && (st === "booked" || st.includes("complete"))
+            d === tomorrowStr &&
+            (st === "booked" || st === "rescheduled" || st.includes("complete"))
           );
         }).length;
 

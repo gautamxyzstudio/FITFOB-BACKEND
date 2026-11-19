@@ -14,7 +14,7 @@
       "name": "Apache 2.0",
       "url": "https://www.apache.org/licenses/LICENSE-2.0.html"
     },
-    "x-generation-date": "2026-11-18T13:19:54.906Z"
+    "x-generation-date": "2026-11-19T07:46:29.401Z"
   },
   "x-strapi-config": {
     "plugins": [
@@ -24783,7 +24783,8 @@
                                       "booked",
                                       "completed",
                                       "cancelled",
-                                      "no-show"
+                                      "no-show",
+                                      "rescheduled"
                                     ]
                                   },
                                   "createdAt": {
@@ -32301,7 +32302,8 @@
                                       "booked",
                                       "completed",
                                       "cancelled",
-                                      "no-show"
+                                      "no-show",
+                                      "rescheduled"
                                     ]
                                   },
                                   "createdAt": {
@@ -40329,7 +40331,8 @@
                                 "booked",
                                 "completed",
                                 "cancelled",
-                                "no-show"
+                                "no-show",
+                                "rescheduled"
                               ]
                             },
                             "createdAt": {
@@ -47825,7 +47828,8 @@
                                 "booked",
                                 "completed",
                                 "cancelled",
-                                "no-show"
+                                "no-show",
+                                "rescheduled"
                               ]
                             },
                             "createdAt": {
@@ -55323,7 +55327,8 @@
                                       "booked",
                                       "completed",
                                       "cancelled",
-                                      "no-show"
+                                      "no-show",
+                                      "rescheduled"
                                     ]
                                   },
                                   "createdAt": {
@@ -61938,7 +61943,8 @@
                                   "booked",
                                   "completed",
                                   "cancelled",
-                                  "no-show"
+                                  "no-show",
+                                  "rescheduled"
                                 ]
                               },
                               "createdAt": {
@@ -71109,7 +71115,8 @@
                                       "booked",
                                       "completed",
                                       "cancelled",
-                                      "no-show"
+                                      "no-show",
+                                      "rescheduled"
                                     ]
                                   },
                                   "createdAt": {
@@ -77626,7 +77633,8 @@
                                 "booked",
                                 "completed",
                                 "cancelled",
-                                "no-show"
+                                "no-show",
+                                "rescheduled"
                               ]
                             },
                             "createdAt": {
@@ -85295,7 +85303,8 @@
                                 "booked",
                                 "completed",
                                 "cancelled",
-                                "no-show"
+                                "no-show",
+                                "rescheduled"
                               ]
                             },
                             "createdAt": {
@@ -92962,7 +92971,8 @@
                                 "booked",
                                 "completed",
                                 "cancelled",
-                                "no-show"
+                                "no-show",
+                                "rescheduled"
                               ]
                             },
                             "createdAt": {
@@ -100637,7 +100647,8 @@
                                   "booked",
                                   "completed",
                                   "cancelled",
-                                  "no-show"
+                                  "no-show",
+                                  "rescheduled"
                                 ]
                               },
                               "createdAt": {
@@ -109742,7 +109753,8 @@
                                     "booked",
                                     "completed",
                                     "cancelled",
-                                    "no-show"
+                                    "no-show",
+                                    "rescheduled"
                                   ]
                                 },
                                 "createdAt": {
@@ -116944,7 +116956,8 @@
                                       "booked",
                                       "completed",
                                       "cancelled",
-                                      "no-show"
+                                      "no-show",
+                                      "rescheduled"
                                     ]
                                   },
                                   "createdAt": {
@@ -124165,7 +124178,8 @@
                                 "booked",
                                 "completed",
                                 "cancelled",
-                                "no-show"
+                                "no-show",
+                                "rescheduled"
                               ]
                             },
                             "createdAt": {
@@ -131260,7 +131274,8 @@
                                               "booked",
                                               "completed",
                                               "cancelled",
-                                              "no-show"
+                                              "no-show",
+                                              "rescheduled"
                                             ]
                                           },
                                           "createdAt": {
@@ -141142,7 +141157,8 @@
                                 "booked",
                                 "completed",
                                 "cancelled",
-                                "no-show"
+                                "no-show",
+                                "rescheduled"
                               ]
                             },
                             "createdAt": {
@@ -146771,7 +146787,8 @@
                                     "booked",
                                     "completed",
                                     "cancelled",
-                                    "no-show"
+                                    "no-show",
+                                    "rescheduled"
                                   ]
                                 },
                                 "createdAt": {
@@ -149839,7 +149856,8 @@
                   "booked",
                   "completed",
                   "cancelled",
-                  "no-show"
+                  "no-show",
+                  "rescheduled"
                 ]
               },
               "locale": {
@@ -156281,7 +156299,8 @@
                                 "booked",
                                 "completed",
                                 "cancelled",
-                                "no-show"
+                                "no-show",
+                                "rescheduled"
                               ]
                             },
                             "createdAt": {
@@ -157208,7 +157227,8 @@
               "booked",
               "completed",
               "cancelled",
-              "no-show"
+              "no-show",
+              "rescheduled"
             ]
           },
           "createdAt": {
@@ -162014,7 +162034,8 @@
                                 "booked",
                                 "completed",
                                 "cancelled",
-                                "no-show"
+                                "no-show",
+                                "rescheduled"
                               ]
                             },
                             "createdAt": {
@@ -169503,7 +169524,8 @@
                                 "booked",
                                 "completed",
                                 "cancelled",
-                                "no-show"
+                                "no-show",
+                                "rescheduled"
                               ]
                             },
                             "createdAt": {
@@ -178832,7 +178854,8 @@
                                 "booked",
                                 "completed",
                                 "cancelled",
-                                "no-show"
+                                "no-show",
+                                "rescheduled"
                               ]
                             },
                             "createdAt": {
@@ -186454,7 +186477,8 @@
                                 "booked",
                                 "completed",
                                 "cancelled",
-                                "no-show"
+                                "no-show",
+                                "rescheduled"
                               ]
                             },
                             "createdAt": {
@@ -191759,7 +191783,8 @@
                                                     "booked",
                                                     "completed",
                                                     "cancelled",
-                                                    "no-show"
+                                                    "no-show",
+                                                    "rescheduled"
                                                   ]
                                                 },
                                                 "createdAt": {
@@ -199262,7 +199287,8 @@
                                                 "booked",
                                                 "completed",
                                                 "cancelled",
-                                                "no-show"
+                                                "no-show",
+                                                "rescheduled"
                                               ]
                                             },
                                             "createdAt": {
@@ -208494,7 +208520,8 @@
                                       "booked",
                                       "completed",
                                       "cancelled",
-                                      "no-show"
+                                      "no-show",
+                                      "rescheduled"
                                     ]
                                   },
                                   "createdAt": {
@@ -217269,7 +217296,8 @@
                                       "booked",
                                       "completed",
                                       "cancelled",
-                                      "no-show"
+                                      "no-show",
+                                      "rescheduled"
                                     ]
                                   },
                                   "createdAt": {
@@ -225005,7 +225033,8 @@
                                 "booked",
                                 "completed",
                                 "cancelled",
-                                "no-show"
+                                "no-show",
+                                "rescheduled"
                               ]
                             },
                             "createdAt": {
@@ -232379,7 +232408,8 @@
                                       "booked",
                                       "completed",
                                       "cancelled",
-                                      "no-show"
+                                      "no-show",
+                                      "rescheduled"
                                     ]
                                   },
                                   "createdAt": {
@@ -240439,7 +240469,8 @@
                                       "booked",
                                       "completed",
                                       "cancelled",
-                                      "no-show"
+                                      "no-show",
+                                      "rescheduled"
                                     ]
                                   },
                                   "createdAt": {
