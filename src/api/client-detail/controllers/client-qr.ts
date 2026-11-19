@@ -3,10 +3,102 @@ import sharp from "sharp";
 import { Context } from "koa";
 import { generateClientAssets } from "../../../utils/generateClientId";
 
+/* =======================================================
+   HELPERS FOR DATE & CLOSING TIME
+======================================================= */
+
+async function getAuthUser(ctx: Context) {
+  let user = ctx.state?.user;
+  if (user?.id) return user;
+
+  const authHeader = ctx.request?.header?.authorization;
+  if (authHeader && authHeader.startsWith("Bearer ")) {
+    const token = authHeader.slice(7).trim();
+    try {
+      const jwtService = strapi.plugin("users-permissions")?.service("jwt");
+      if (jwtService?.verify) {
+        const payload = await jwtService.verify(token);
+        if (payload?.id) {
+          user = await strapi.db
+            .query("plugin::users-permissions.user")
+            .findOne({
+              where: { id: payload.id },
+              populate: { role: true },
+            });
+          if (user) {
+            ctx.state.user = user;
+            return user;
+          }
+        }
+      }
+    } catch (_) {}
+  }
+
+  return null;
+}
+
+function getISTDateString(offsetDays: number = 0): string {
+  const now = new Date();
+  const IST_OFFSET = 5.5 * 60 * 60 * 1000;
+  const target = new Date(
+    now.getTime() + IST_OFFSET + offsetDays * 24 * 60 * 60 * 1000
+  );
+  const year = target.getUTCFullYear();
+  const month = String(target.getUTCMonth() + 1).padStart(2, "0");
+  const day = String(target.getUTCDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
+function getGymClosingTimeForDate(
+  scheduling: any,
+  dateStr: string | null | undefined
+): string | null {
+  if (!scheduling || !dateStr) return null;
+  try {
+    let sched = scheduling;
+    if (typeof sched === "string") {
+      try {
+        sched = JSON.parse(sched);
+      } catch (_) {}
+    }
+    const cleanDate = String(dateStr).split("T")[0];
+    const [year, month, day] = cleanDate.split("-").map(Number);
+    const d = new Date(Date.UTC(year, month - 1, day));
+    const dayNames = [
+      "sunday",
+      "monday",
+      "tuesday",
+      "wednesday",
+      "thursday",
+      "friday",
+      "saturday",
+    ];
+    const dayName = dayNames[d.getUTCDay()];
+    const daySchedule = sched[dayName];
+    if (!daySchedule || daySchedule === "closed" || daySchedule.isClosed) {
+      return null;
+    }
+    const rawClosing = daySchedule.closingTime || daySchedule.closing_time;
+    if (!rawClosing) return null;
+
+    if (typeof rawClosing === "string" && rawClosing.includes(":")) {
+      const [hStr, mStr] = rawClosing.split(":");
+      let h = parseInt(hStr, 10);
+      const m = mStr || "00";
+      const ampm = h >= 12 ? "PM" : "AM";
+      h = h % 12 || 12;
+      return `${String(h).padStart(2, "0")}:${m} ${ampm}`;
+    }
+    return String(rawClosing);
+  } catch (_) {
+    return null;
+  }
+}
+
 export default {
   async getQR(ctx: Context) {
     try {
-      const user = ctx.state.user;
+      const user = await getAuthUser(ctx);
 
       if (!user) {
         return ctx.unauthorized("Login required");
@@ -241,10 +333,93 @@ export default {
           }
         : null;
 
+      /* ============================================
+         FETCH GYM TRIALS (TODAY & TOMORROW)
+         trialstatus: 'booked' or 'rescheduled'
+      ============================================ */
+
+      const todayStr = getISTDateString(0);
+      const tomorrowStr = getISTDateString(1);
+
+      let gymTrials: any[] = await strapi.db
+        .query("api::gym-trial.gym-trial")
+        .findMany({
+          where: {
+            client_detail: client.id,
+            trialDate: { $in: [todayStr, tomorrowStr] },
+            trialstatus: { $in: ["booked", "rescheduled"] },
+          },
+          populate: {
+            club_owner: {
+              populate: { logo: true },
+            },
+          },
+          orderBy: { trialDate: "asc", id: "desc" },
+        });
+
+      if (
+        (!gymTrials || gymTrials.length === 0) &&
+        client.documentId &&
+        (strapi as any).documents
+      ) {
+        try {
+          const docs = await (strapi as any)
+            .documents("api::gym-trial.gym-trial")
+            .findMany({
+              filters: {
+                client_detail: {
+                  documentId: client.documentId,
+                },
+                trialDate: { $in: [todayStr, tomorrowStr] },
+                trialstatus: { $in: ["booked", "rescheduled"] },
+              },
+              populate: {
+                club_owner: {
+                  populate: { logo: true },
+                },
+              },
+              sort: "trialDate:asc",
+            });
+          gymTrials = docs || [];
+        } catch (_) {}
+      }
+
+      const formatTrialItem = (item: any) => {
+        if (!item) return null;
+        const club = item.club_owner || {};
+        const gymName = club.clubName || club.name || club.ownerName || null;
+        const trialDateStr = item.trialDate
+          ? String(item.trialDate).split("T")[0]
+          : null;
+        const closingTime = getGymClosingTimeForDate(
+          club.weekdayScheduling || club.weekday_scheduling,
+          trialDateStr
+        );
+        const status = item.trialstatus || "booked";
+        const isToday = trialDateStr === todayStr;
+        const isTomorrow = trialDateStr === tomorrowStr;
+
+        return {
+          id: item.id,
+          documentId: item.documentId || null,
+          gymname: gymName,
+          trialDate: trialDateStr,
+          trialStatus: status,
+          closingTime,
+          isToday,
+          isTomorrow,
+          clubAddress: club.clubAddress || club.address || null,
+          latitude: club.latitude || null,
+          longitude: club.longitude || null,
+        };
+      };
+      const formattedGymTrials = (gymTrials || []).map(formatTrialItem);
+
       ctx.send({
         clientId: client.clientId,
         qrCode,
         gymMembership: formattedGymMembership,
+        gymTrials: formattedGymTrials,
       });
     } catch (error) {
       console.error("QR generation error:", error);

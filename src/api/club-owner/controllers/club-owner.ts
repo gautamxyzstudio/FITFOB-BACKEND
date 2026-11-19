@@ -1127,7 +1127,8 @@ async function getClientTrialQuota(
         s === "booked" ||
         s === "completed" ||
         s === "no-show" ||
-        s === "no_show"
+        s === "no_show" ||
+        s === "rescheduled"
       );
     });
 
