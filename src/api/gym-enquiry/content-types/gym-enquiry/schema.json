@@ -1,0 +1,96 @@
+{
+  "kind": "collectionType",
+  "collectionName": "gym_enquiries",
+  "info": {
+    "singularName": "gym-enquiry",
+    "pluralName": "gym-enquiries",
+    "displayName": "Gym Enquiry",
+    "description": "Enquiries submitted from the fitfob.com website \"Enquire now\" form"
+  },
+  "options": {
+    "draftAndPublish": false
+  },
+  "pluginOptions": {},
+  "attributes": {
+    "fullName": {
+      "type": "string",
+      "required": true,
+      "maxLength": 120
+    },
+    "email": {
+      "type": "email",
+      "required": true
+    },
+    "phone": {
+      "type": "string",
+      "required": true,
+      "maxLength": 20
+    },
+    "gymSource": {
+      "type": "enumeration",
+      "enum": [
+        "partner",
+        "listing"
+      ],
+      "default": "partner",
+      "required": true
+    },
+    "club_owner": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::club-owner.club-owner"
+    },
+    "clubName": {
+      "type": "string"
+    },
+    "gymAddress": {
+      "type": "string"
+    },
+    "listingId": {
+      "type": "string"
+    },
+    "city": {
+      "type": "string"
+    },
+    "locationMethod": {
+      "type": "enumeration",
+      "enum": [
+        "gps",
+        "manual"
+      ],
+      "default": "manual"
+    },
+    "latitude": {
+      "type": "decimal",
+      "private": true
+    },
+    "longitude": {
+      "type": "decimal",
+      "private": true
+    },
+    "searchRadiusKm": {
+      "type": "integer"
+    },
+    "distanceKm": {
+      "type": "decimal"
+    },
+    "enquiryStatus": {
+      "type": "enumeration",
+      "enum": [
+        "new",
+        "contacted",
+        "converted",
+        "closed"
+      ],
+      "default": "new",
+      "required": true
+    },
+    "source": {
+      "type": "string",
+      "default": "website"
+    },
+    "notes": {
+      "type": "text"
+    }
+  }
+}
