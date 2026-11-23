@@ -220,18 +220,56 @@ export default () => ({
       }
     }
 
+    // Check active local subscription if no contract membership found
+    if (!activeMembership) {
+      try {
+        const activeLocalSubs = await strapi.db
+          .query("api::local-subscription.local-subscription")
+          .findMany({
+            where: {
+              client_detail: client.id,
+              club_owner: clubOwner.id,
+              subscriptionStatus: "active",
+              claimStatus: { $ne: "unclaimed" },
+            },
+            populate: { local_membership_plan: true },
+            orderBy: { id: "desc" },
+          });
+
+        for (const sub of activeLocalSubs) {
+          const startStr = sub.startDate ? String(sub.startDate).split("T")[0] : null;
+          if (sub.endDate && sub.endDate < todayDateStr) continue;
+          if (startStr && startStr > todayDateStr) continue;
+
+          activeMembership = {
+            id: sub.id,
+            membershipId: sub.documentId || String(sub.id),
+            membershipStatus: sub.subscriptionStatus,
+            duration: sub.local_membership_plan?.planName || "Local Plan",
+            endDate: sub.endDate,
+            isLocalSub: true,
+          };
+          break;
+        }
+      } catch (_) {}
+    }
+
     // Found active membership -> proceed with membership checkin
     if (activeMembership) {
+      const checkinPayload: any = {
+        client_detail: client.id,
+        club_owner: clubOwner.id,
+        checkinType: "membership",
+        checkinTime: new Date(),
+      };
+      if (!activeMembership.isLocalSub) {
+        checkinPayload.gym_membership = activeMembership.id;
+      }
+
       const checkin = await strapi.entityService.create(
         "api::client-checkin.client-checkin",
         {
-          data: {
-            client_detail: client.id,
-            club_owner: clubOwner.id,
-            checkinType: "membership",
-            gym_membership: activeMembership.id,
-            checkinTime: new Date(),
-          },
+          data: checkinPayload,
         },
       );
 
@@ -272,7 +310,7 @@ export default () => ({
           client_detail: client.id,
           club_owner: clubOwner.id,
           trialDate: todayDateStr,
-          trialstatus: "booked",
+          trialstatus: { $in: ["booked", "rescheduled"] },
         },
         orderBy: { id: "desc" },
       });

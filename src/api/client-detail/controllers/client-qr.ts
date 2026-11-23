@@ -319,7 +319,7 @@ export default {
         latestGymMembership = docs?.[0] || null;
       }
 
-      const formattedGymMembership = latestGymMembership
+      let formattedGymMembership = latestGymMembership
         ? {
             plan: latestGymMembership.duration ?? null,
             duration: latestGymMembership.durationMonths ?? null,
@@ -332,6 +332,72 @@ export default {
             endDate: latestGymMembership.endDate ?? null,
           }
         : null;
+
+      if (!formattedGymMembership) {
+        try {
+          const latestLocalSub: any = await strapi.db
+            .query("api::local-subscription.local-subscription")
+            .findOne({
+              where: {
+                client_detail: client.id,
+                subscriptionStatus: "active",
+                claimStatus: { $ne: "unclaimed" },
+              },
+              populate: {
+                local_membership_plan: true,
+                membership_plan_price: {
+                  populate: { membership_tier: true },
+                },
+              },
+              orderBy: { id: "desc" },
+            });
+
+          if (latestLocalSub) {
+            const planPrice = latestLocalSub.membership_plan_price;
+            const localPlan = latestLocalSub.local_membership_plan;
+            const tierName = planPrice?.membership_tier?.name
+              ? `${planPrice.membership_tier.name.charAt(0).toUpperCase() + planPrice.membership_tier.name.slice(1)} `
+              : "";
+            const months =
+              planPrice?.durationMonths ||
+              (planPrice?.duration === "monthly"
+                ? 1
+                : planPrice?.duration === "six_months"
+                ? 6
+                : planPrice?.duration === "twelve_months"
+                ? 12
+                : null) ||
+              localPlan?.monthDuration ||
+              1;
+            const planName = planPrice
+              ? (months === 1
+                  ? `${tierName}1 Month`
+                  : months === 6
+                  ? `${tierName}6 Months`
+                  : months === 12
+                  ? `${tierName}1 Year`
+                  : `${tierName}${months} Months`)
+              : localPlan?.planName || "Local Membership";
+            const price =
+              planPrice?.customerPrice != null
+                ? Number(planPrice.customerPrice)
+                : localPlan?.price != null
+                ? Number(localPlan.price)
+                : null;
+
+            formattedGymMembership = {
+              plan: planName,
+              duration: months,
+              customerPrice: price,
+              membershipStatus: latestLocalSub.subscriptionStatus || "active",
+              startDate: latestLocalSub.startDate
+                ? String(latestLocalSub.startDate).split("T")[0]
+                : null,
+              endDate: latestLocalSub.endDate || null,
+            };
+          }
+        } catch (_) {}
+      }
 
       /* ============================================
          FETCH GYM TRIALS (TODAY & TOMORROW)
