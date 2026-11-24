@@ -54,27 +54,35 @@ export const createCognitoUser = async (
     ];
   }
 
-  await client.send(
-    new AdminCreateUserCommand({
-      UserPoolId: process.env.COGNITO_USER_POOL_ID!,
-      Username: identifier,
-      MessageAction: "SUPPRESS",
-      UserAttributes: attributes,
-    }),
-  );
+  try {
+    await client.send(
+      new AdminCreateUserCommand({
+        UserPoolId: process.env.COGNITO_USER_POOL_ID!,
+        Username: identifier,
+        MessageAction: "SUPPRESS",
+        UserAttributes: attributes,
+      }),
+    );
 
-  log("Cognito user created");
+    log("Cognito user created");
 
-  await client.send(
-    new AdminSetUserPasswordCommand({
-      UserPoolId: process.env.COGNITO_USER_POOL_ID!,
-      Username: identifier,
-      Password: password,
-      Permanent: true,
-    }),
-  );
+    await client.send(
+      new AdminSetUserPasswordCommand({
+        UserPoolId: process.env.COGNITO_USER_POOL_ID!,
+        Username: identifier,
+        Password: password,
+        Permanent: true,
+      }),
+    );
 
-  log("Password synced with Cognito");
+    log("Password synced with Cognito");
+  } catch (createErr: any) {
+    if (createErr?.name === "UsernameExistsException") {
+      log("Cognito user already exists, retrieving existing user details");
+    } else {
+      throw createErr;
+    }
+  }
 
   const userData = await client.send(
     new AdminGetUserCommand({

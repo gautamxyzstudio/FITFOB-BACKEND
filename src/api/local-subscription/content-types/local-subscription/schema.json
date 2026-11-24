@@ -84,6 +84,7 @@
       "enum": [
         "pending_approval",
         "paid",
+        "pay_at_gym",
         "failed",
         "rejected",
         "cancelled"

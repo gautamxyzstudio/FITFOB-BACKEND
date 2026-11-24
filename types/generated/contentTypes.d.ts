@@ -1274,7 +1274,7 @@ export interface ApiGymMembershipGymMembership
     paymentIdempotencyKey: Schema.Attribute.String & Schema.Attribute.Unique;
     paymentProvider: Schema.Attribute.String;
     paymentStatus: Schema.Attribute.Enumeration<
-      ['pending', 'paid', 'failed', 'refunded']
+      ['pending', 'paid', 'pay_at_gym', 'failed', 'refunded']
     >;
     providerOrderId: Schema.Attribute.String & Schema.Attribute.Unique;
     providerPaymentId: Schema.Attribute.String;
@@ -1504,7 +1504,14 @@ export interface ApiLocalSubscriptionLocalSubscription
     membershipType: Schema.Attribute.Enumeration<['local', 'app']> &
       Schema.Attribute.DefaultTo<'app'>;
     paymentStatus: Schema.Attribute.Enumeration<
-      ['pending_approval', 'paid', 'failed', 'rejected', 'cancelled']
+      [
+        'pending_approval',
+        'paid',
+        'pay_at_gym',
+        'failed',
+        'rejected',
+        'cancelled',
+      ]
     > &
       Schema.Attribute.DefaultTo<'paid'>;
     paymentType: Schema.Attribute.Enumeration<
@@ -1740,6 +1747,7 @@ export interface ApiOtpRequestOtpRequest extends Struct.CollectionTypeSchema {
     purpose: Schema.Attribute.Enumeration<
       [
         'register',
+        'login',
         'reset_password',
         'club_owner_verification',
         'client_verification',

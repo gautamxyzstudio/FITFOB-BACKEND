@@ -64,6 +64,7 @@
       "enum": [
         "pending",
         "paid",
+        "pay_at_gym",
         "failed",
         "refunded"
       ]

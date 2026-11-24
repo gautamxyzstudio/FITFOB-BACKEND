@@ -14,7 +14,7 @@
       "name": "Apache 2.0",
       "url": "https://www.apache.org/licenses/LICENSE-2.0.html"
     },
-    "x-generation-date": "2026-11-23T11:25:47.785Z"
+    "x-generation-date": "2026-11-24T11:44:53.627Z"
   },
   "x-strapi-config": {
     "plugins": [
@@ -23983,6 +23983,7 @@
                                         "enum": [
                                           "pending",
                                           "paid",
+                                          "pay_at_gym",
                                           "failed",
                                           "refunded"
                                         ]
@@ -25039,6 +25040,7 @@
                           "enum": [
                             "pending_approval",
                             "paid",
+                            "pay_at_gym",
                             "failed",
                             "rejected",
                             "cancelled"
@@ -31591,6 +31593,7 @@
                                         "enum": [
                                           "pending",
                                           "paid",
+                                          "pay_at_gym",
                                           "failed",
                                           "refunded"
                                         ]
@@ -32647,6 +32650,7 @@
                           "enum": [
                             "pending_approval",
                             "paid",
+                            "pay_at_gym",
                             "failed",
                             "rejected",
                             "cancelled"
@@ -38451,6 +38455,7 @@
                                                                   "enum": [
                                                                     "pending",
                                                                     "paid",
+                                                                    "pay_at_gym",
                                                                     "failed",
                                                                     "refunded"
                                                                   ]
@@ -39333,6 +39338,7 @@
                                     "enum": [
                                       "pending_approval",
                                       "paid",
+                                      "pay_at_gym",
                                       "failed",
                                       "rejected",
                                       "cancelled"
@@ -46037,6 +46043,7 @@
                                                                   "enum": [
                                                                     "pending",
                                                                     "paid",
+                                                                    "pay_at_gym",
                                                                     "failed",
                                                                     "refunded"
                                                                   ]
@@ -46919,6 +46926,7 @@
                                     "enum": [
                                       "pending_approval",
                                       "paid",
+                                      "pay_at_gym",
                                       "failed",
                                       "rejected",
                                       "cancelled"
@@ -54883,6 +54891,7 @@
                                         "enum": [
                                           "pending",
                                           "paid",
+                                          "pay_at_gym",
                                           "failed",
                                           "refunded"
                                         ]
@@ -55939,6 +55948,7 @@
                           "enum": [
                             "pending_approval",
                             "paid",
+                            "pay_at_gym",
                             "failed",
                             "rejected",
                             "cancelled"
@@ -60580,6 +60590,7 @@
                                                               "enum": [
                                                                 "pending",
                                                                 "paid",
+                                                                "pay_at_gym",
                                                                 "failed",
                                                                 "refunded"
                                                               ]
@@ -61462,6 +61473,7 @@
                                 "enum": [
                                   "pending_approval",
                                   "paid",
+                                  "pay_at_gym",
                                   "failed",
                                   "rejected",
                                   "cancelled"
@@ -70849,6 +70861,7 @@
                                         "enum": [
                                           "pending",
                                           "paid",
+                                          "pay_at_gym",
                                           "failed",
                                           "refunded"
                                         ]
@@ -71905,6 +71918,7 @@
                           "enum": [
                             "pending_approval",
                             "paid",
+                            "pay_at_gym",
                             "failed",
                             "rejected",
                             "cancelled"
@@ -76448,6 +76462,7 @@
                                                             "enum": [
                                                               "pending",
                                                               "paid",
+                                                              "pay_at_gym",
                                                               "failed",
                                                               "refunded"
                                                             ]
@@ -77330,6 +77345,7 @@
                               "enum": [
                                 "pending_approval",
                                 "paid",
+                                "pay_at_gym",
                                 "failed",
                                 "rejected",
                                 "cancelled"
@@ -84207,6 +84223,7 @@
                                                             "enum": [
                                                               "pending",
                                                               "paid",
+                                                              "pay_at_gym",
                                                               "failed",
                                                               "refunded"
                                                             ]
@@ -85089,6 +85106,7 @@
                               "enum": [
                                 "pending_approval",
                                 "paid",
+                                "pay_at_gym",
                                 "failed",
                                 "rejected",
                                 "cancelled"
@@ -91964,6 +91982,7 @@
                                                             "enum": [
                                                               "pending",
                                                               "paid",
+                                                              "pay_at_gym",
                                                               "failed",
                                                               "refunded"
                                                             ]
@@ -92846,6 +92865,7 @@
                               "enum": [
                                 "pending_approval",
                                 "paid",
+                                "pay_at_gym",
                                 "failed",
                                 "rejected",
                                 "cancelled"
@@ -99729,6 +99749,7 @@
                                                               "enum": [
                                                                 "pending",
                                                                 "paid",
+                                                                "pay_at_gym",
                                                                 "failed",
                                                                 "refunded"
                                                               ]
@@ -100611,6 +100632,7 @@
                                 "enum": [
                                   "pending_approval",
                                   "paid",
+                                  "pay_at_gym",
                                   "failed",
                                   "rejected",
                                   "cancelled"
@@ -109415,6 +109437,7 @@
                                         "enum": [
                                           "pending_approval",
                                           "paid",
+                                          "pay_at_gym",
                                           "failed",
                                           "rejected",
                                           "cancelled"
@@ -111793,6 +111816,7 @@
                 "enum": [
                   "pending",
                   "paid",
+                  "pay_at_gym",
                   "failed",
                   "refunded"
                 ]
@@ -117224,6 +117248,7 @@
                                         "enum": [
                                           "pending",
                                           "paid",
+                                          "pay_at_gym",
                                           "failed",
                                           "refunded"
                                         ]
@@ -118280,6 +118305,7 @@
                           "enum": [
                             "pending_approval",
                             "paid",
+                            "pay_at_gym",
                             "failed",
                             "rejected",
                             "cancelled"
@@ -123527,6 +123553,7 @@
                                                             "enum": [
                                                               "pending",
                                                               "paid",
+                                                              "pay_at_gym",
                                                               "failed",
                                                               "refunded"
                                                             ]
@@ -124409,6 +124436,7 @@
                               "enum": [
                                 "pending_approval",
                                 "paid",
+                                "pay_at_gym",
                                 "failed",
                                 "rejected",
                                 "cancelled"
@@ -130901,6 +130929,7 @@
                                             "enum": [
                                               "pending_approval",
                                               "paid",
+                                              "pay_at_gym",
                                               "failed",
                                               "rejected",
                                               "cancelled"
@@ -131642,6 +131671,7 @@
                                                 "enum": [
                                                   "pending",
                                                   "paid",
+                                                  "pay_at_gym",
                                                   "failed",
                                                   "refunded"
                                                 ]
@@ -135998,6 +136028,7 @@
                 "enum": [
                   "pending",
                   "paid",
+                  "pay_at_gym",
                   "failed",
                   "refunded"
                 ]
@@ -140434,6 +140465,7 @@
                                                                   "enum": [
                                                                     "pending",
                                                                     "paid",
+                                                                    "pay_at_gym",
                                                                     "failed",
                                                                     "refunded"
                                                                   ]
@@ -141316,6 +141348,7 @@
                                     "enum": [
                                       "pending_approval",
                                       "paid",
+                                      "pay_at_gym",
                                       "failed",
                                       "rejected",
                                       "cancelled"
@@ -143553,6 +143586,7 @@
             "enum": [
               "pending",
               "paid",
+              "pay_at_gym",
               "failed",
               "refunded"
             ]
@@ -146558,6 +146592,7 @@
                                             "enum": [
                                               "pending",
                                               "paid",
+                                              "pay_at_gym",
                                               "failed",
                                               "refunded"
                                             ]
@@ -147285,6 +147320,7 @@
                                   "enum": [
                                     "pending_approval",
                                     "paid",
+                                    "pay_at_gym",
                                     "failed",
                                     "rejected",
                                     "cancelled"
@@ -155754,6 +155790,7 @@
                                                                   "enum": [
                                                                     "pending",
                                                                     "paid",
+                                                                    "pay_at_gym",
                                                                     "failed",
                                                                     "refunded"
                                                                   ]
@@ -156636,6 +156673,7 @@
                                     "enum": [
                                       "pending_approval",
                                       "paid",
+                                      "pay_at_gym",
                                       "failed",
                                       "rejected",
                                       "cancelled"
@@ -161828,6 +161866,7 @@
                                                             "enum": [
                                                               "pending",
                                                               "paid",
+                                                              "pay_at_gym",
                                                               "failed",
                                                               "refunded"
                                                             ]
@@ -162710,6 +162749,7 @@
                               "enum": [
                                 "pending_approval",
                                 "paid",
+                                "pay_at_gym",
                                 "failed",
                                 "rejected",
                                 "cancelled"
@@ -169407,6 +169447,7 @@
                                                             "enum": [
                                                               "pending",
                                                               "paid",
+                                                              "pay_at_gym",
                                                               "failed",
                                                               "refunded"
                                                             ]
@@ -170289,6 +170330,7 @@
                               "enum": [
                                 "pending_approval",
                                 "paid",
+                                "pay_at_gym",
                                 "failed",
                                 "rejected",
                                 "cancelled"
@@ -174222,6 +174264,7 @@
                 "enum": [
                   "pending_approval",
                   "paid",
+                  "pay_at_gym",
                   "failed",
                   "rejected",
                   "cancelled"
@@ -178637,6 +178680,7 @@
                                                                   "enum": [
                                                                     "pending",
                                                                     "paid",
+                                                                    "pay_at_gym",
                                                                     "failed",
                                                                     "refunded"
                                                                   ]
@@ -179519,6 +179563,7 @@
                                     "enum": [
                                       "pending_approval",
                                       "paid",
+                                      "pay_at_gym",
                                       "failed",
                                       "rejected",
                                       "cancelled"
@@ -181788,6 +181833,7 @@
             "enum": [
               "pending_approval",
               "paid",
+              "pay_at_gym",
               "failed",
               "rejected",
               "cancelled"
@@ -186417,6 +186463,7 @@
                                                                   "enum": [
                                                                     "pending",
                                                                     "paid",
+                                                                    "pay_at_gym",
                                                                     "failed",
                                                                     "refunded"
                                                                   ]
@@ -187299,6 +187346,7 @@
                                     "enum": [
                                       "pending_approval",
                                       "paid",
+                                      "pay_at_gym",
                                       "failed",
                                       "rejected",
                                       "cancelled"
@@ -192265,6 +192313,7 @@
                                                   "enum": [
                                                     "pending_approval",
                                                     "paid",
+                                                    "pay_at_gym",
                                                     "failed",
                                                     "rejected",
                                                     "cancelled"
@@ -193006,6 +193055,7 @@
                                                       "enum": [
                                                         "pending",
                                                         "paid",
+                                                        "pay_at_gym",
                                                         "failed",
                                                         "refunded"
                                                       ]
@@ -199879,6 +199929,7 @@
                                               "enum": [
                                                 "pending_approval",
                                                 "paid",
+                                                "pay_at_gym",
                                                 "failed",
                                                 "rejected",
                                                 "cancelled"
@@ -200620,6 +200671,7 @@
                                                   "enum": [
                                                     "pending",
                                                     "paid",
+                                                    "pay_at_gym",
                                                     "failed",
                                                     "refunded"
                                                   ]
@@ -210020,6 +210072,7 @@
                                         "enum": [
                                           "pending",
                                           "paid",
+                                          "pay_at_gym",
                                           "failed",
                                           "refunded"
                                         ]
@@ -211076,6 +211129,7 @@
                           "enum": [
                             "pending_approval",
                             "paid",
+                            "pay_at_gym",
                             "failed",
                             "rejected",
                             "cancelled"
@@ -212477,6 +212531,7 @@
                 "type": "string",
                 "enum": [
                   "register",
+                  "login",
                   "reset_password",
                   "club_owner_verification",
                   "client_verification"
@@ -212581,6 +212636,7 @@
             "type": "string",
             "enum": [
               "register",
+              "login",
               "reset_password",
               "club_owner_verification",
               "client_verification"
@@ -213333,6 +213389,7 @@
                   "type": "string",
                   "enum": [
                     "register",
+                    "login",
                     "reset_password",
                     "club_owner_verification",
                     "client_verification"
@@ -217889,6 +217946,7 @@
                                                                         "enum": [
                                                                           "pending",
                                                                           "paid",
+                                                                          "pay_at_gym",
                                                                           "failed",
                                                                           "refunded"
                                                                         ]
@@ -218771,6 +218829,7 @@
                                           "enum": [
                                             "pending_approval",
                                             "paid",
+                                            "pay_at_gym",
                                             "failed",
                                             "rejected",
                                             "cancelled"
@@ -225453,6 +225512,7 @@
                                                                   "enum": [
                                                                     "pending",
                                                                     "paid",
+                                                                    "pay_at_gym",
                                                                     "failed",
                                                                     "refunded"
                                                                   ]
@@ -226335,6 +226395,7 @@
                                     "enum": [
                                       "pending_approval",
                                       "paid",
+                                      "pay_at_gym",
                                       "failed",
                                       "rejected",
                                       "cancelled"
@@ -234175,6 +234236,7 @@
                                         "enum": [
                                           "pending",
                                           "paid",
+                                          "pay_at_gym",
                                           "failed",
                                           "refunded"
                                         ]
@@ -235231,6 +235293,7 @@
                           "enum": [
                             "pending_approval",
                             "paid",
+                            "pay_at_gym",
                             "failed",
                             "rejected",
                             "cancelled"
@@ -242325,6 +242388,7 @@
                                         "enum": [
                                           "pending",
                                           "paid",
+                                          "pay_at_gym",
                                           "failed",
                                           "refunded"
                                         ]
@@ -243381,6 +243445,7 @@
                           "enum": [
                             "pending_approval",
                             "paid",
+                            "pay_at_gym",
                             "failed",
                             "rejected",
                             "cancelled"

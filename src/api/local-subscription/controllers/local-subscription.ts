@@ -1,6 +1,7 @@
 import { factories } from "@strapi/strapi";
 import { Context } from "koa";
 import { sendTwilioOfflineMemberInvite } from "../../../services/twilio-sms";
+import { generateClientId } from "../../../utils/generateClientId";
 import {
   sendClubOwnerPayAtGymNotification,
   sendClientMembershipDecisionPush,
@@ -13,6 +14,8 @@ const CLIENT_UID = "api::client-detail.client-detail" as any;
 const CLUB_OWNER_UID = "api::club-owner.club-owner" as any;
 const MEMBERSHIP_PLAN_PRICE_UID =
   "api::membership-plan-price.membership-plan-price" as any;
+const GYM_MEMBERSHIP_UID = "api::gym-membership.gym-membership" as any;
+const GYM_CONTRACT_UID = "api::gym-contract.gym-contract" as any;
 import { createMembershipOrder } from "../../../utils/razorpay";
 
 /* ---------- AUTH USER HELPER ---------- */
@@ -50,7 +53,7 @@ function getISTDateString(offsetDays: number = 0): string {
   const now = new Date();
   const IST_OFFSET = 5.5 * 60 * 60 * 1000;
   const target = new Date(
-    now.getTime() + IST_OFFSET + offsetDays * 24 * 60 * 60 * 1000
+    now.getTime() + IST_OFFSET + offsetDays * 24 * 60 * 60 * 1000,
   );
   const year = target.getUTCFullYear();
   const month = String(target.getUTCMonth() + 1).padStart(2, "0");
@@ -381,7 +384,10 @@ function getPlanTitle(plan: any): string {
       ? 12
       : null);
   const tierName = plan.membership_tier?.name
-    ? `${plan.membership_tier.name.charAt(0).toUpperCase() + plan.membership_tier.name.slice(1)} `
+    ? `${
+        plan.membership_tier.name.charAt(0).toUpperCase() +
+        plan.membership_tier.name.slice(1)
+      } `
     : "";
   if (months === 1) return `${tierName}1 Month`;
   if (months === 6) return `${tierName}6 Months`;
@@ -412,42 +418,287 @@ function getPlanPriceAmount(plan: any): number | null {
   return null;
 }
 
+function normalizeDurationString(
+  str: string,
+): "monthly" | "six_months" | "twelve_months" | null {
+  if (!str) return null;
+  const clean = str.toLowerCase().replace(/[^a-z0-9]/g, "");
+  if (
+    clean === "monthly" ||
+    clean === "1month" ||
+    clean === "1months" ||
+    clean === "1m" ||
+    clean === "month" ||
+    clean === "1"
+  ) {
+    return "monthly";
+  }
+  if (
+    clean === "sixmonths" ||
+    clean === "6months" ||
+    clean === "6month" ||
+    clean === "6m" ||
+    clean === "halfyear" ||
+    clean === "6"
+  ) {
+    return "six_months";
+  }
+  if (
+    clean === "twelvemonths" ||
+    clean === "12months" ||
+    clean === "12month" ||
+    clean === "1year" ||
+    clean === "yearly" ||
+    clean === "annual" ||
+    clean === "1y" ||
+    clean === "12"
+  ) {
+    return "twelve_months";
+  }
+  return null;
+}
+
 /* ---------- HELPER: RESOLVE MEMBERSHIP PLAN (PRICE FIRST) ---------- */
-async function resolveMembershipPlanPrice(identifier: string | number) {
+async function resolveMembershipPlanPrice(identifier: any, clubOwner?: any) {
   if (!identifier) return null;
-  const rawStr = String(identifier).trim();
+
+  // Extract primitive value if identifier is an object
+  let targetVal: any = identifier;
+  if (typeof identifier === "object" && identifier !== null) {
+    targetVal =
+      identifier.documentId ||
+      identifier.id ||
+      identifier.planId ||
+      identifier.plan_id ||
+      identifier.membership_plan_price ||
+      identifier.membershipPlanPrice ||
+      identifier.rateDocumentId ||
+      identifier.duration ||
+      identifier.value;
+  }
+
+  if (!targetVal) return null;
+
+  const rawStr = String(targetVal).trim();
   const isNumeric = !isNaN(Number(rawStr)) && /^\d+$/.test(rawStr);
 
-  // 1. Try Documents API for membership-plan-price
+  // 1. If clubOwner has an active contract with plan rates, check there first!
+  if (clubOwner?.id) {
+    try {
+      const contract: any = await strapi.db
+        .query("api::gym-contract.gym-contract")
+        .findOne({
+          where: {
+            club_owner: clubOwner.id,
+            contractStatus: "active",
+          },
+          populate: {
+            gym_contract_plan_rates: {
+              populate: {
+                membership_plan_price: {
+                  populate: { membership_tier: true },
+                },
+              },
+            },
+          },
+        });
+
+      if (contract?.gym_contract_plan_rates?.length) {
+        // A) Match by rate ID or rate documentId
+        const matchByRate = contract.gym_contract_plan_rates.find(
+          (r: any) =>
+            (isNumeric && r.id === Number(rawStr)) || r.documentId === rawStr,
+        );
+        if (matchByRate?.membership_plan_price) {
+          return {
+            ...matchByRate.membership_plan_price,
+            gym_contract_plan_rate: matchByRate,
+            isPlanPrice: true,
+          };
+        }
+
+        // B) Match by membership_plan_price inside the rates
+        const matchByPrice = contract.gym_contract_plan_rates.find(
+          (r: any) =>
+            (isNumeric && r.membership_plan_price?.id === Number(rawStr)) ||
+            r.membership_plan_price?.documentId === rawStr,
+        );
+        if (matchByPrice?.membership_plan_price) {
+          return {
+            ...matchByPrice.membership_plan_price,
+            gym_contract_plan_rate: matchByPrice,
+            isPlanPrice: true,
+          };
+        }
+      }
+    } catch (contractErr) {
+      strapi.log.warn(
+        "[resolveMembershipPlanPrice] Contract lookup error:",
+        contractErr,
+      );
+    }
+  }
+
+  // 2. Query membership-plan-price directly
+  // A) By numeric ID
+  if (isNumeric) {
+    try {
+      const byId: any = await strapi.db
+        .query(MEMBERSHIP_PLAN_PRICE_UID)
+        .findOne({
+          where: { id: Number(rawStr) },
+          populate: { membership_tier: true },
+        });
+      if (byId) return { ...byId, isPlanPrice: true };
+    } catch (_) {}
+  }
+
+  // B) By documentId via Documents API
   if ((strapi as any).documents && !isNumeric) {
     try {
       const doc = await (strapi as any)
         .documents(MEMBERSHIP_PLAN_PRICE_UID)
         .findOne({
           documentId: rawStr,
-          populate: {
-            membership_tier: true,
-          },
+          populate: { membership_tier: true },
         });
       if (doc) return { ...doc, isPlanPrice: true };
     } catch (_) {}
   }
 
-  // 2. Query DB for membership-plan-price
+  // C) By documentId via db.query
   try {
-    const plan = await strapi.db.query(MEMBERSHIP_PLAN_PRICE_UID).findOne({
-      where: isNumeric
-        ? { $or: [{ id: Number(rawStr) }, { documentId: rawStr }] }
-        : { documentId: rawStr },
-      populate: {
-        membership_tier: true,
-      },
-    });
-    if (plan) return { ...plan, isPlanPrice: true };
+    const byDocId: any = await strapi.db
+      .query(MEMBERSHIP_PLAN_PRICE_UID)
+      .findOne({
+        where: { documentId: rawStr },
+        populate: { membership_tier: true },
+      });
+    if (byDocId) return { ...byDocId, isPlanPrice: true };
   } catch (_) {}
 
-  // 3. Fallback to local_membership_plan if legacy ID was supplied
-  const localPlan = await resolveLocalPlan(identifier);
+  // 3. Check gym-contract-plan-rate directly
+  if (isNumeric) {
+    try {
+      const rateById: any = await strapi.db
+        .query("api::gym-contract-plan-rate.gym-contract-plan-rate")
+        .findOne({
+          where: { id: Number(rawStr) },
+          populate: {
+            membership_plan_price: {
+              populate: { membership_tier: true },
+            },
+          },
+        });
+      if (rateById?.membership_plan_price) {
+        return {
+          ...rateById.membership_plan_price,
+          gym_contract_plan_rate: rateById,
+          isPlanPrice: true,
+        };
+      }
+    } catch (_) {}
+  }
+
+  if (!isNumeric) {
+    if ((strapi as any).documents) {
+      try {
+        const rateDoc: any = await (strapi as any)
+          .documents("api::gym-contract-plan-rate.gym-contract-plan-rate")
+          .findOne({
+            documentId: rawStr,
+            populate: {
+              membership_plan_price: {
+                populate: { membership_tier: true },
+              },
+            },
+          });
+        if (rateDoc?.membership_plan_price) {
+          return {
+            ...rateDoc.membership_plan_price,
+            gym_contract_plan_rate: rateDoc,
+            isPlanPrice: true,
+          };
+        }
+      } catch (_) {}
+    }
+
+    try {
+      const rateByDocId: any = await strapi.db
+        .query("api::gym-contract-plan-rate.gym-contract-plan-rate")
+        .findOne({
+          where: { documentId: rawStr },
+          populate: {
+            membership_plan_price: {
+              populate: { membership_tier: true },
+            },
+          },
+        });
+      if (rateByDocId?.membership_plan_price) {
+        return {
+          ...rateByDocId.membership_plan_price,
+          gym_contract_plan_rate: rateByDocId,
+          isPlanPrice: true,
+        };
+      }
+    } catch (_) {}
+  }
+
+  // 4. Check if rawStr is a duration enum or duration label (e.g. "monthly", "1 Month", "six_months", "6 Months", "twelve_months", "1 Year")
+  const normalizedDuration = normalizeDurationString(rawStr);
+  if (normalizedDuration) {
+    // A) If clubOwner has contract rates, match by duration
+    if (clubOwner?.id) {
+      try {
+        const contract: any = await strapi.db
+          .query("api::gym-contract.gym-contract")
+          .findOne({
+            where: {
+              club_owner: clubOwner.id,
+              contractStatus: "active",
+            },
+            populate: {
+              gym_contract_plan_rates: {
+                populate: {
+                  membership_plan_price: {
+                    populate: { membership_tier: true },
+                  },
+                },
+              },
+            },
+          });
+        if (contract?.gym_contract_plan_rates?.length) {
+          const matchingRate = contract.gym_contract_plan_rates.find(
+            (r: any) =>
+              r.membership_plan_price?.duration === normalizedDuration &&
+              r.isActive !== false,
+          );
+          if (matchingRate?.membership_plan_price) {
+            return {
+              ...matchingRate.membership_plan_price,
+              gym_contract_plan_rate: matchingRate,
+              isPlanPrice: true,
+            };
+          }
+        }
+      } catch (_) {}
+    }
+
+    // B) Match global membership-plan-price by duration
+    try {
+      const priceByDur: any = await strapi.db
+        .query(MEMBERSHIP_PLAN_PRICE_UID)
+        .findOne({
+          where: { duration: normalizedDuration, isActive: true },
+          populate: { membership_tier: true },
+          orderBy: { id: "asc" },
+        });
+      if (priceByDur) return { ...priceByDur, isPlanPrice: true };
+    } catch (_) {}
+  }
+
+  // 5. Fallback to local_membership_plan if legacy ID or name was supplied
+  const localPlan = await resolveLocalPlan(rawStr);
   if (localPlan) return { ...localPlan, isPlanPrice: false };
 
   return null;
@@ -1336,7 +1587,7 @@ export default factories.createCoreController(
 
         if (roleName !== "clubowner" && !isAdmin) {
           return ctx.forbidden(
-            "Access denied. Only ClubOwner, Admin, or SuperAdmin can add offline members."
+            "Access denied. Only ClubOwner, Admin, or SuperAdmin can add offline members.",
           );
         }
 
@@ -1361,10 +1612,18 @@ export default factories.createCoreController(
         }
 
         const planInput =
-          membership_plan_price ||
-          planId ||
-          body.membershipPlanPriceId ||
-          local_membership_plan;
+          membership_plan_price ??
+          body.membershipPlanPrice ??
+          body.membership_plan_price_id ??
+          planId ??
+          body.plan_id ??
+          body.plan ??
+          body.membership_plan ??
+          body.membershipPlan ??
+          body.membershipPlanPriceId ??
+          local_membership_plan ??
+          body.localMembershipPlan ??
+          body.duration;
 
         if (!planInput) {
           return ctx.badRequest("Membership plan is required");
@@ -1383,7 +1642,11 @@ export default factories.createCoreController(
         if (roleName === "clubowner") {
           clubOwner = await getClubOwnerForUser(user);
         } else {
-          const ownerId = body.club_owner || body.ownerId;
+          const ownerId =
+            body.club_owner ||
+            body.ownerId ||
+            body.clubOwnerId ||
+            body.ownerDocId;
           if (ownerId) {
             clubOwner = await resolveClubOwner(ownerId);
           }
@@ -1393,14 +1656,26 @@ export default factories.createCoreController(
           return ctx.badRequest("Club owner profile not found");
         }
 
-        // Resolve plan from membership-plan-price
-        const plan = await resolveMembershipPlanPrice(planInput);
+        // Resolve plan from membership-plan-price (or rates / duration / local plan)
+        const plan = await resolveMembershipPlanPrice(planInput, clubOwner);
         if (!plan) {
-          return ctx.notFound("Membership plan not found");
+          strapi.log.warn("[addOfflineMember] Plan could not be resolved:", {
+            planInput,
+            body,
+            clubOwnerId: clubOwner.id,
+          });
+          return ctx.notFound(
+            `Membership plan not found for '${
+              typeof planInput === "object"
+                ? JSON.stringify(planInput)
+                : planInput
+            }'. Please provide a valid plan ID, rate ID, or duration (monthly, six_months, twelve_months).`,
+          );
         }
 
         // Verify plan belongs to this club owner if it's a legacy local plan with club_owner
-        const planOwnerDocId = plan.club_owner?.documentId || plan.club_owner?.id;
+        const planOwnerDocId =
+          plan.club_owner?.documentId || plan.club_owner?.id;
         const currentOwnerDocId = clubOwner.documentId || clubOwner.id;
         if (
           planOwnerDocId &&
@@ -1408,7 +1683,7 @@ export default factories.createCoreController(
           String(planOwnerDocId) !== String(currentOwnerDocId)
         ) {
           return ctx.forbidden(
-            "Access denied. You can only assign membership plans belonging to your own club."
+            "Access denied. You can only assign membership plans belonging to your own club.",
           );
         }
 
@@ -1417,11 +1692,13 @@ export default factories.createCoreController(
 
         // Calculate dates
         const todayStr = getISTDateString(0);
-        const startDateStr = startDate ? String(startDate).split("T")[0] : todayStr;
+        const startDateStr = startDate
+          ? String(startDate).split("T")[0]
+          : todayStr;
         const monthDuration = getPlanDurationMonths(plan);
         const calculatedEndDateStr = calculateEndDate(
           new Date(`${startDateStr}T00:00:00Z`),
-          monthDuration
+          monthDuration,
         );
         const finalEndDateStr = endDate
           ? String(endDate).split("T")[0]
@@ -1430,12 +1707,23 @@ export default factories.createCoreController(
         // Resolve or create client detail placeholder
         let client = await resolveClientDetail(cleanPhone);
         if (!client) {
+          const newClientId = await generateClientId();
           client = await strapi.db.query(CLIENT_UID).create({
             data: {
               name: memberName,
               phoneNumber: cleanPhone,
+              clientId: newClientId,
             },
           });
+        } else if (!client.clientId) {
+          const newClientId = await generateClientId();
+          await strapi.db.query(CLIENT_UID).update({
+            where: { id: client.id },
+            data: {
+              clientId: newClientId,
+            },
+          });
+          client.clientId = newClientId;
         }
 
         // Check if client already has an active subscription for this plan at this gym
@@ -1457,7 +1745,7 @@ export default factories.createCoreController(
 
         if (existingActive) {
           return ctx.badRequest(
-            `Member ${memberName} already has an active subscription for ${planTitle} expiring on ${existingActive.endDate}.`
+            `Member ${memberName} already has an active subscription for ${planTitle} expiring on ${existingActive.endDate}.`,
           );
         }
 
@@ -1525,11 +1813,9 @@ export default factories.createCoreController(
           });
         }
 
-        // Build invite link
-        const baseUrl = strapi.config.get("server.url") || "https://fitfob.com";
-        const inviteLink = `${baseUrl}/invite?phone=${encodeURIComponent(
-          cleanPhone
-        )}&subId=${createdSub.documentId || createdSub.id}`;
+        // Build app invite link
+        const appPackage = "com.xyzstudio.fitfob.cleint";
+        const inviteLink = `https://play.google.com/store/apps/details?id=${appPackage}`;
 
         // Send Twilio Invite (SMS / WhatsApp)
         const inviteResult = await sendTwilioOfflineMemberInvite({
@@ -1545,7 +1831,7 @@ export default factories.createCoreController(
         // Log Activity
         try {
           const activityLogService: any = strapi.service(
-            "api::activity-log.activity-log"
+            "api::activity-log.activity-log",
           );
           if (activityLogService?.createActivityLog) {
             await activityLogService.createActivityLog({
@@ -1602,7 +1888,7 @@ export default factories.createCoreController(
           clubOwner = await getClubOwnerForUser(user);
         } else if (isAdmin && (ctx.query.clubOwnerId || ctx.query.ownerDocId)) {
           clubOwner = await resolveClubOwner(
-            (ctx.query.clubOwnerId || ctx.query.ownerDocId) as string | number
+            (ctx.query.clubOwnerId || ctx.query.ownerDocId) as string | number,
           );
         }
 
@@ -1644,9 +1930,13 @@ export default factories.createCoreController(
         const formatted = subscriptions
           .map((sub: any) => {
             const client = sub.client_detail || {};
-            const plan = sub.membership_plan_price || sub.local_membership_plan || {};
+            const plan =
+              sub.membership_plan_price || sub.local_membership_plan || {};
             const memberName =
-              sub.invitedName || client.name || client.fullName || "Guest Member";
+              sub.invitedName ||
+              client.name ||
+              client.fullName ||
+              "Guest Member";
             const phone = sub.invitedPhone || client.phoneNumber || "";
             const planName = getPlanTitle(plan);
             const endDateStr = sub.endDate
@@ -1658,9 +1948,7 @@ export default factories.createCoreController(
 
             const isExpired = endDateStr ? endDateStr < todayStr : false;
             const isExpiringSoon =
-              endDateStr && !isExpired
-                ? endDateStr <= inSevenDaysStr
-                : false;
+              endDateStr && !isExpired ? endDateStr <= inSevenDaysStr : false;
             const isUnclaimed = sub.claimStatus === "unclaimed";
 
             // Status color: Green means active, Red means expiring soon or expired, Yellow means unclaimed
@@ -1700,13 +1988,18 @@ export default factories.createCoreController(
             // Apply search
             if (searchQuery) {
               const matchesName = item.name.toLowerCase().includes(searchQuery);
-              const matchesPhone = item.phoneNumber.toLowerCase().includes(searchQuery);
-              const matchesPlan = item.planName.toLowerCase().includes(searchQuery);
+              const matchesPhone = item.phoneNumber
+                .toLowerCase()
+                .includes(searchQuery);
+              const matchesPlan = item.planName
+                .toLowerCase()
+                .includes(searchQuery);
               if (!matchesName && !matchesPhone && !matchesPlan) return false;
             }
 
             // Apply filter
-            if (filterStatus === "active") return !item.isExpired && item.claimStatus !== "unclaimed";
+            if (filterStatus === "active")
+              return !item.isExpired && item.claimStatus !== "unclaimed";
             if (filterStatus === "unclaimed") return item.isUnclaimed;
             if (filterStatus === "expiring") return item.isExpiringSoon;
             if (filterStatus === "expired") return item.isExpired;
@@ -1714,10 +2007,7 @@ export default factories.createCoreController(
             return true;
           });
 
-        return ctx.send({
-          count: formatted.length,
-          data: formatted,
-        });
+        return ctx.send(formatted);
       } catch (error) {
         strapi.log.error("LIST OFFLINE MEMBERS ERROR:", error);
         return ctx.internalServerError("Failed to fetch offline members");
@@ -1750,11 +2040,17 @@ export default factories.createCoreController(
         }
 
         const targetId = ctx.params.id;
-        const isNum = !isNaN(Number(targetId)) && /^\d+$/.test(String(targetId));
+        const isNum =
+          !isNaN(Number(targetId)) && /^\d+$/.test(String(targetId));
 
         const existing: any = await strapi.db.query(LOCAL_SUB_UID).findOne({
           where: isNum
-            ? { $or: [{ id: Number(targetId) }, { documentId: String(targetId) }] }
+            ? {
+                $or: [
+                  { id: Number(targetId) },
+                  { documentId: String(targetId) },
+                ],
+              }
             : { documentId: String(targetId) },
           populate: {
             club_owner: true,
@@ -1777,14 +2073,14 @@ export default factories.createCoreController(
             existing.club_owner?.documentId || existing.club_owner?.id;
           if (String(ownerDocId) !== String(subOwnerDocId)) {
             return ctx.forbidden(
-              "Access denied. You can only update members of your own gym."
+              "Access denied. You can only update members of your own gym.",
             );
           }
         }
 
         if (existing.claimStatus === "claimed") {
           return ctx.badRequest(
-            "This membership has already been claimed by the member. Details cannot be modified."
+            "This membership has already been claimed by the member. Details cannot be modified.",
           );
         }
 
@@ -1824,17 +2120,17 @@ export default factories.createCoreController(
         // Resend invite if requested
         let inviteResult = null;
         if (body.resendInvite || body.phoneNumber) {
-          const baseUrl = strapi.config.get("server.url") || "https://fitfob.com";
-          const inviteLink = `${baseUrl}/invite?phone=${encodeURIComponent(
-            newPhone
-          )}&subId=${existing.documentId || existing.id}`;
+          // Build app invite link
+          const appPackage = "com.xyzstudio.fitfob.cleint";
+          const inviteLink = `https://play.google.com/store/apps/details?id=${appPackage}`;
 
           inviteResult = await sendTwilioOfflineMemberInvite({
             phone: newPhone,
-            memberName: updateData.invitedName || existing.invitedName || "Member",
+            memberName:
+              updateData.invitedName || existing.invitedName || "Member",
             gymName: existing.club_owner?.clubName || "your gym",
             planName: getPlanTitle(
-              existing.membership_plan_price || existing.local_membership_plan
+              existing.membership_plan_price || existing.local_membership_plan,
             ),
             expiryDate: updateData.endDate || existing.endDate,
             inviteLink,
@@ -1870,11 +2166,17 @@ export default factories.createCoreController(
 
         const roleName = await getUserRole(user);
         const targetId = ctx.params.id;
-        const isNum = !isNaN(Number(targetId)) && /^\d+$/.test(String(targetId));
+        const isNum =
+          !isNaN(Number(targetId)) && /^\d+$/.test(String(targetId));
 
         const existing: any = await strapi.db.query(LOCAL_SUB_UID).findOne({
           where: isNum
-            ? { $or: [{ id: Number(targetId) }, { documentId: String(targetId) }] }
+            ? {
+                $or: [
+                  { id: Number(targetId) },
+                  { documentId: String(targetId) },
+                ],
+              }
             : { documentId: String(targetId) },
           populate: { club_owner: true },
         });
@@ -1895,7 +2197,7 @@ export default factories.createCoreController(
 
         if (existing.claimStatus === "claimed") {
           return ctx.badRequest(
-            "This membership has already been claimed and cannot be deleted here."
+            "This membership has already been claimed and cannot be deleted here.",
           );
         }
 
@@ -1976,7 +2278,8 @@ export default factories.createCoreController(
 
         const formatted = pendingSubs.map((sub: any) => {
           const club = sub.club_owner || {};
-          const plan = sub.membership_plan_price || sub.local_membership_plan || {};
+          const plan =
+            sub.membership_plan_price || sub.local_membership_plan || {};
           return {
             id: sub.id,
             documentId: sub.documentId || null,
@@ -1984,7 +2287,9 @@ export default factories.createCoreController(
             clubAddress: club.clubAddress || club.address || null,
             logo: extractLogoUrl(club.logo),
             planName: getPlanTitle(plan),
-            startDate: sub.startDate ? String(sub.startDate).split("T")[0] : null,
+            startDate: sub.startDate
+              ? String(sub.startDate).split("T")[0]
+              : null,
             endDate: sub.endDate || null,
             claimStatus: "unclaimed",
             membershipStatus: "active",
@@ -2019,11 +2324,17 @@ export default factories.createCoreController(
         }
 
         const targetId = ctx.params.id;
-        const isNum = !isNaN(Number(targetId)) && /^\d+$/.test(String(targetId));
+        const isNum =
+          !isNaN(Number(targetId)) && /^\d+$/.test(String(targetId));
 
         const sub: any = await strapi.db.query(LOCAL_SUB_UID).findOne({
           where: isNum
-            ? { $or: [{ id: Number(targetId) }, { documentId: String(targetId) }] }
+            ? {
+                $or: [
+                  { id: Number(targetId) },
+                  { documentId: String(targetId) },
+                ],
+              }
             : { documentId: String(targetId) },
           populate: {
             club_owner: true,
@@ -2051,20 +2362,31 @@ export default factories.createCoreController(
         const userPhoneDigits = (user.phoneNumber || client.phoneNumber || "")
           .replace(/\D/g, "")
           .slice(-10);
-        const subPhoneDigits = (sub.invitedPhone || sub.client_detail?.phoneNumber || "")
+        const subPhoneDigits = (
+          sub.invitedPhone ||
+          sub.client_detail?.phoneNumber ||
+          ""
+        )
           .replace(/\D/g, "")
           .slice(-10);
 
-        if (userPhoneDigits && subPhoneDigits && userPhoneDigits !== subPhoneDigits) {
+        if (
+          userPhoneDigits &&
+          subPhoneDigits &&
+          userPhoneDigits !== subPhoneDigits
+        ) {
           return ctx.forbidden(
-            "This membership was issued to a different mobile number."
+            "This membership was issued to a different mobile number.",
           );
         }
 
-        // Link client_detail and update claimStatus to claimed
+        // Link client_detail and update claimStatus to claimed with paymentStatus: "pay_at_gym"
         const updatePayload: any = {
           client_detail: client.documentId || client.id,
           claimStatus: "claimed",
+          paymentType: "pay_at_gym",
+          paymentStatus: "pay_at_gym",
+          subscriptionStatus: "active",
         };
 
         if ((strapi as any).documents && sub.documentId) {
@@ -2079,13 +2401,167 @@ export default factories.createCoreController(
           });
         }
 
+        // Auto-create / resolve gym contract and gym-membership record
+        let createdGymMembership: any = null;
+        try {
+          const clubOwnerId = sub.club_owner?.id;
+          let gymContract: any = null;
+
+          if (clubOwnerId) {
+            gymContract = await strapi.db.query(GYM_CONTRACT_UID).findOne({
+              where: { club_owner: clubOwnerId },
+            });
+
+            if (!gymContract) {
+              const contractData = {
+                contractId: `CON-${Date.now()}`,
+                club_owner: sub.club_owner.documentId || sub.club_owner.id,
+                contractStatus: "active",
+                startDate: new Date().toISOString().slice(0, 10),
+              };
+              if ((strapi as any).documents) {
+                try {
+                  gymContract = await (strapi as any)
+                    .documents(GYM_CONTRACT_UID)
+                    .create({
+                      data: contractData,
+                    });
+                } catch (_) {}
+              }
+              if (!gymContract) {
+                gymContract = await strapi.db.query(GYM_CONTRACT_UID).create({
+                  data: {
+                    ...contractData,
+                    club_owner: sub.club_owner.id,
+                  },
+                });
+              }
+            }
+          }
+
+          if (gymContract) {
+            createdGymMembership = await strapi.db
+              .query(GYM_MEMBERSHIP_UID)
+              .findOne({
+                where: {
+                  client_detail: client.id,
+                  gym_contract: gymContract.id,
+                  membershipStatus: "active",
+                },
+              });
+
+            if (!createdGymMembership) {
+              let durationEnum: "monthly" | "six_months" | "twelve_months" =
+                "monthly";
+              let durationMonths = 1;
+
+              if (sub.membership_plan_price?.duration) {
+                durationEnum = sub.membership_plan_price.duration;
+                durationMonths =
+                  sub.membership_plan_price.durationMonths ||
+                  (durationEnum === "twelve_months"
+                    ? 12
+                    : durationEnum === "six_months"
+                    ? 6
+                    : 1);
+              } else if (sub.startDate && sub.endDate) {
+                const start = new Date(sub.startDate);
+                const end = new Date(sub.endDate);
+                const diffMonths = Math.round(
+                  (end.getTime() - start.getTime()) /
+                    (1000 * 60 * 60 * 24 * 30),
+                );
+                if (diffMonths >= 10) {
+                  durationEnum = "twelve_months";
+                  durationMonths = 12;
+                } else if (diffMonths >= 5) {
+                  durationEnum = "six_months";
+                  durationMonths = 6;
+                } else {
+                  durationEnum = "monthly";
+                  durationMonths = Math.max(1, diffMonths);
+                }
+              }
+
+              const startDateStr = sub.startDate
+                ? String(sub.startDate).split("T")[0]
+                : new Date().toISOString().slice(0, 10);
+              const endDateStr = sub.endDate
+                ? String(sub.endDate).split("T")[0]
+                : null;
+
+              const membershipPayload: any = {
+                membershipId: `MEM-${Date.now()}-${Math.floor(
+                  1000 + Math.random() * 9000,
+                )}`,
+                client_detail: client.documentId || client.id,
+                gym_contract: gymContract.documentId || gymContract.id,
+                duration: durationEnum,
+                durationMonths: durationMonths,
+                customerPriceSnapshot: Number(
+                  sub.amountDue != null
+                    ? sub.amountDue
+                    : sub.membership_plan_price?.customerPrice || 0,
+                ),
+                currency: "INR",
+                membershipStatus: "active",
+                paymentStatus: "pay_at_gym",
+                paymentProvider: "pay_at_gym",
+                startDate: startDateStr,
+                endDate: endDateStr,
+                paidAt: new Date().toISOString(),
+              };
+
+              if (sub.membership_plan_price) {
+                membershipPayload.membership_plan_price =
+                  sub.membership_plan_price.documentId ||
+                  sub.membership_plan_price.id;
+              }
+
+              if ((strapi as any).documents) {
+                try {
+                  createdGymMembership = await (strapi as any)
+                    .documents(GYM_MEMBERSHIP_UID)
+                    .create({
+                      data: membershipPayload,
+                    });
+                } catch (docErr) {
+                  strapi.log.warn(
+                    "[ClaimMembership] documents create gym-membership error:",
+                    docErr,
+                  );
+                }
+              }
+
+              if (!createdGymMembership) {
+                createdGymMembership = await strapi.db
+                  .query(GYM_MEMBERSHIP_UID)
+                  .create({
+                    data: {
+                      ...membershipPayload,
+                      client_detail: client.id,
+                      gym_contract: gymContract.id,
+                      membership_plan_price:
+                        sub.membership_plan_price?.id || undefined,
+                    },
+                  });
+              }
+            }
+          }
+        } catch (memErr) {
+          strapi.log.error(
+            "[ClaimMembership] Error creating client membership plan:",
+            memErr,
+          );
+        }
+
         // Log Activity
         const planTitle = getPlanTitle(
-          sub.membership_plan_price || sub.local_membership_plan
+          sub.membership_plan_price || sub.local_membership_plan,
         );
         try {
           const activityLogService: any = strapi.service(
-            "api::activity-log.activity-log"
+            "api::activity-log.activity-log",
           );
           if (activityLogService?.createActivityLog) {
             await activityLogService.createActivityLog({
@@ -2094,7 +2570,9 @@ export default factories.createCoreController(
               actionType: "update",
               entityName: "local-subscription",
               entityId: sub.documentId || sub.id,
-              description: `Claimed active membership for '${planTitle}' at '${sub.club_owner?.clubName || "Gym"}'`,
+              description: `Claimed active membership for '${planTitle}' at '${
+                sub.club_owner?.clubName || "Gym"
+              }' (Payment: Pay at gym)`,
             });
           }
         } catch (actErr) {
@@ -2103,17 +2581,23 @@ export default factories.createCoreController(
 
         return ctx.send({
           success: true,
-          message: "Membership claimed successfully! Your digital Entry QR is ready.",
+          message:
+            "Membership claimed successfully! Your digital Entry QR is ready.",
           data: {
             id: sub.id,
             documentId: sub.documentId || null,
             gymName: sub.club_owner?.clubName || "Gym",
             planName: planTitle,
-            startDate: sub.startDate ? String(sub.startDate).split("T")[0] : null,
+            startDate: sub.startDate
+              ? String(sub.startDate).split("T")[0]
+              : null,
             endDate: sub.endDate,
             claimStatus: "claimed",
             membershipStatus: "active",
+            paymentStatus: "pay_at_gym",
+            paymentType: "pay_at_gym",
             clientId: client.clientId,
+            membershipId: createdGymMembership?.membershipId || null,
           },
         });
       } catch (error) {
@@ -2139,22 +2623,34 @@ export default factories.createCoreController(
         }
 
         const body = (ctx.request.body as any)?.data || ctx.request.body || {};
-        const { club_owner, local_membership_plan, planId, membership_plan_price } =
-          body;
+        const {
+          club_owner,
+          local_membership_plan,
+          planId,
+          membership_plan_price,
+        } = body;
 
         if (!club_owner) {
           return ctx.badRequest("Gym (club_owner) is required");
         }
 
         const planInput =
-          membership_plan_price ||
-          planId ||
-          body.membershipPlanPriceId ||
-          local_membership_plan;
+          membership_plan_price ??
+          body.membershipPlanPrice ??
+          body.membership_plan_price_id ??
+          planId ??
+          body.plan_id ??
+          body.plan ??
+          body.membership_plan ??
+          body.membershipPlan ??
+          body.membershipPlanPriceId ??
+          local_membership_plan ??
+          body.localMembershipPlan ??
+          body.duration;
 
         if (!planInput) {
           return ctx.badRequest(
-            "Membership plan (membership_plan_price or planId) is required"
+            "Membership plan (membership_plan_price, planId, or duration) is required",
           );
         }
 
@@ -2163,9 +2659,23 @@ export default factories.createCoreController(
           return ctx.notFound("Gym not found");
         }
 
-        const resolvedPlan = await resolveMembershipPlanPrice(planInput);
+        const resolvedPlan = await resolveMembershipPlanPrice(
+          planInput,
+          resolvedOwner,
+        );
         if (!resolvedPlan) {
-          return ctx.notFound("Membership plan not found");
+          strapi.log.warn("[requestPayAtGym] Plan could not be resolved:", {
+            planInput,
+            body,
+            gymId: resolvedOwner.id,
+          });
+          return ctx.notFound(
+            `Membership plan not found for '${
+              typeof planInput === "object"
+                ? JSON.stringify(planInput)
+                : planInput
+            }'. Please provide a valid plan ID, rate ID, or duration (monthly, six_months, twelve_months).`,
+          );
         }
 
         // Anti-duplicate check: block if customer already has a pending approval request at this gym
@@ -2179,7 +2689,7 @@ export default factories.createCoreController(
 
         if (existingPending) {
           return ctx.badRequest(
-            "You already have a pending 'Pay at Gym' request waiting for approval at this gym. Please pay at the front desk or cancel the existing request."
+            "You already have a pending 'Pay at Gym' request waiting for approval at this gym. Please pay at the front desk or cancel the existing request.",
           );
         }
 
@@ -2189,7 +2699,7 @@ export default factories.createCoreController(
         const planPrice = getPlanPriceAmount(resolvedPlan);
         const endDateStr = calculateEndDate(
           new Date(`${todayStr}T00:00:00Z`),
-          monthDuration
+          monthDuration,
         );
 
         const subPayload: any = {
@@ -2263,13 +2773,16 @@ export default factories.createCoreController(
             amount: subPayload.amountDue,
           });
         } catch (pushErr) {
-          strapi.log.warn("[PayAtGym] Failed to dispatch owner push notification:", pushErr);
+          strapi.log.warn(
+            "[PayAtGym] Failed to dispatch owner push notification:",
+            pushErr,
+          );
         }
 
         // Log Activity
         try {
           const activityLogService: any = strapi.service(
-            "api::activity-log.activity-log"
+            "api::activity-log.activity-log",
           );
           if (activityLogService?.createActivityLog) {
             await activityLogService.createActivityLog({
@@ -2278,7 +2791,9 @@ export default factories.createCoreController(
               actionType: "create",
               entityName: "local-subscription",
               entityId: createdSub.documentId || createdSub.id,
-              description: `Submitted 'Pay at Gym' request for ${planTitle} (₹${subPayload.amountDue}) at ${resolvedOwner.clubName || "Gym"}`,
+              description: `Submitted 'Pay at Gym' request for ${planTitle} (₹${
+                subPayload.amountDue
+              }) at ${resolvedOwner.clubName || "Gym"}`,
             });
           }
         } catch (actErr) {
@@ -2324,11 +2839,17 @@ export default factories.createCoreController(
         }
 
         const targetId = ctx.params.id;
-        const isNum = !isNaN(Number(targetId)) && /^\d+$/.test(String(targetId));
+        const isNum =
+          !isNaN(Number(targetId)) && /^\d+$/.test(String(targetId));
 
         const sub: any = await strapi.db.query(LOCAL_SUB_UID).findOne({
           where: isNum
-            ? { $or: [{ id: Number(targetId) }, { documentId: String(targetId) }] }
+            ? {
+                $or: [
+                  { id: Number(targetId) },
+                  { documentId: String(targetId) },
+                ],
+              }
             : { documentId: String(targetId) },
           populate: { client_detail: true, club_owner: true },
         });
@@ -2347,7 +2868,7 @@ export default factories.createCoreController(
 
         if (sub.paymentStatus !== "pending_approval") {
           return ctx.badRequest(
-            `Cannot cancel request with paymentStatus '${sub.paymentStatus}'`
+            `Cannot cancel request with paymentStatus '${sub.paymentStatus}'`,
           );
         }
 
@@ -2397,7 +2918,7 @@ export default factories.createCoreController(
           clubOwner = await getClubOwnerForUser(user);
         } else if (isAdmin && (ctx.query.clubOwnerId || ctx.query.ownerDocId)) {
           clubOwner = await resolveClubOwner(
-            (ctx.query.clubOwnerId || ctx.query.ownerDocId) as string | number
+            (ctx.query.clubOwnerId || ctx.query.ownerDocId) as string | number,
           );
         }
 
@@ -2426,10 +2947,14 @@ export default factories.createCoreController(
 
         const formatted = (pendingRequests || []).map((req: any) => {
           const client = req.client_detail || {};
-          const plan = req.membership_plan_price || req.local_membership_plan || {};
+          const plan =
+            req.membership_plan_price || req.local_membership_plan || {};
           const planTitle = getPlanTitle(plan);
           const customerName =
-            client.name || client.fullName || req.invitedName || "Guest Customer";
+            client.name ||
+            client.fullName ||
+            req.invitedName ||
+            "Guest Customer";
           const phone = client.phoneNumber || req.invitedPhone || "";
           const amountDue =
             req.amountDue != null
@@ -2485,11 +3010,17 @@ export default factories.createCoreController(
         }
 
         const targetId = ctx.params.id;
-        const isNum = !isNaN(Number(targetId)) && /^\d+$/.test(String(targetId));
+        const isNum =
+          !isNaN(Number(targetId)) && /^\d+$/.test(String(targetId));
 
         const sub: any = await strapi.db.query(LOCAL_SUB_UID).findOne({
           where: isNum
-            ? { $or: [{ id: Number(targetId) }, { documentId: String(targetId) }] }
+            ? {
+                $or: [
+                  { id: Number(targetId) },
+                  { documentId: String(targetId) },
+                ],
+              }
             : { documentId: String(targetId) },
           populate: {
             club_owner: true,
@@ -2514,14 +3045,14 @@ export default factories.createCoreController(
             sub.club_owner?.documentId || sub.club_owner?.id;
           if (String(ownerDocId) !== String(subOwnerDocId)) {
             return ctx.forbidden(
-              "Access denied. You can only approve requests for your own gym."
+              "Access denied. You can only approve requests for your own gym.",
             );
           }
         }
 
         if (sub.paymentStatus !== "pending_approval") {
           return ctx.badRequest(
-            `Request is not pending approval (Current status: ${sub.paymentStatus})`
+            `Request is not pending approval (Current status: ${sub.paymentStatus})`,
           );
         }
 
@@ -2529,13 +3060,14 @@ export default factories.createCoreController(
         const paymentMode =
           body.paymentMode || body.collectedPaymentMode || "cash";
 
-        const plan = sub.membership_plan_price || sub.local_membership_plan || {};
+        const plan =
+          sub.membership_plan_price || sub.local_membership_plan || {};
         const planTitle = getPlanTitle(plan);
         const todayStr = getISTDateString(0);
         const monthDuration = getPlanDurationMonths(plan);
         const endDateStr = calculateEndDate(
           new Date(`${todayStr}T00:00:00Z`),
-          monthDuration
+          monthDuration,
         );
 
         const updatePayload: any = {
@@ -2575,7 +3107,7 @@ export default factories.createCoreController(
         // Log Activity
         try {
           const activityLogService: any = strapi.service(
-            "api::activity-log.activity-log"
+            "api::activity-log.activity-log",
           );
           if (activityLogService?.createActivityLog) {
             const customerName =
@@ -2595,7 +3127,8 @@ export default factories.createCoreController(
 
         return ctx.send({
           success: true,
-          message: "Membership activated successfully and Customer Entry QR unlocked!",
+          message:
+            "Membership activated successfully and Customer Entry QR unlocked!",
           data: {
             id: sub.id,
             documentId: sub.documentId || null,
@@ -2638,11 +3171,17 @@ export default factories.createCoreController(
         }
 
         const targetId = ctx.params.id;
-        const isNum = !isNaN(Number(targetId)) && /^\d+$/.test(String(targetId));
+        const isNum =
+          !isNaN(Number(targetId)) && /^\d+$/.test(String(targetId));
 
         const sub: any = await strapi.db.query(LOCAL_SUB_UID).findOne({
           where: isNum
-            ? { $or: [{ id: Number(targetId) }, { documentId: String(targetId) }] }
+            ? {
+                $or: [
+                  { id: Number(targetId) },
+                  { documentId: String(targetId) },
+                ],
+              }
             : { documentId: String(targetId) },
           populate: {
             club_owner: true,
@@ -2671,14 +3210,15 @@ export default factories.createCoreController(
 
         if (sub.paymentStatus !== "pending_approval") {
           return ctx.badRequest(
-            `Request is not pending approval (Current status: ${sub.paymentStatus})`
+            `Request is not pending approval (Current status: ${sub.paymentStatus})`,
           );
         }
 
         const body = (ctx.request.body as any)?.data || ctx.request.body || {};
         const reason = body.reason || "Payment not received at front desk";
 
-        const plan = sub.membership_plan_price || sub.local_membership_plan || {};
+        const plan =
+          sub.membership_plan_price || sub.local_membership_plan || {};
         const planTitle = getPlanTitle(plan);
 
         const updatePayload: any = {
@@ -2716,7 +3256,7 @@ export default factories.createCoreController(
         // Log Activity
         try {
           const activityLogService: any = strapi.service(
-            "api::activity-log.activity-log"
+            "api::activity-log.activity-log",
           );
           if (activityLogService?.createActivityLog) {
             const customerName =

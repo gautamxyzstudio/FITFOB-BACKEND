@@ -247,25 +247,42 @@ export default {
           select: ["id", "documentId", "contractId"],
         });
 
-      if (!contracts || contracts.length === 0) {
-        return ctx.send({
-          summary: {
-            totalMembers: 0,
-            activeMembers: 0,
-            inactiveMembers: 0,
-          },
-          data: [],
-        });
-      }
-
-      const contractIds = contracts.map((c: any) => c.id);
+      const contractIds = (contracts || []).map((c: any) => c.id);
 
       // 2. Fetch all gym memberships under this club owner's contracts
-      const memberships: any[] = await strapi.db
-        .query("api::gym-membership.gym-membership")
+      let memberships: any[] = [];
+      if (contractIds.length > 0) {
+        memberships = await strapi.db
+          .query("api::gym-membership.gym-membership")
+          .findMany({
+            where: {
+              gym_contract: { id: { $in: contractIds } },
+            },
+            populate: {
+              client_detail: {
+                populate: {
+                  selfieUpload: true,
+                  user: {
+                    select: ["id", "username", "email", "phoneNumber"],
+                  },
+                },
+              },
+              membership_plan_price: {
+                populate: { membership_tier: true },
+              },
+              commission_transactions: true,
+            },
+            orderBy: { id: "desc" },
+          });
+      }
+
+      // Also fetch local subscriptions for this club owner (offline / claimed / pay_at_gym members)
+      const localSubs: any[] = await strapi.db
+        .query("api::local-subscription.local-subscription")
         .findMany({
           where: {
-            gym_contract: { id: { $in: contractIds } },
+            club_owner: clubOwner.id,
+            subscriptionStatus: "active",
           },
           populate: {
             client_detail: {
@@ -276,7 +293,10 @@ export default {
                 },
               },
             },
-            commission_transactions: true,
+            local_membership_plan: true,
+            membership_plan_price: {
+              populate: { membership_tier: true },
+            },
           },
           orderBy: { id: "desc" },
         });
@@ -312,6 +332,48 @@ export default {
         clientMap.get(key)!.memberships.push(m);
       }
 
+      // Merge local_subscriptions into clientMap so offline/claimed members always appear in club member list
+      for (const sub of localSubs || []) {
+        if (!sub.client_detail) continue;
+        const client = sub.client_detail;
+        const key = client.id || client.documentId || client.clientId;
+        if (!key) continue;
+
+        const planTitle =
+          sub.membership_plan_price?.planTitle ||
+          sub.membership_plan_price?.membership_tier?.tierName ||
+          sub.local_membership_plan?.planName ||
+          sub.membership_plan_price?.duration ||
+          "monthly";
+
+        const pseudoMembership = {
+          id: sub.id,
+          documentId: sub.documentId,
+          membershipStatus: sub.subscriptionStatus || "active",
+          paymentStatus:
+            sub.paymentStatus ||
+            (sub.paymentType === "pay_at_gym" ? "pay_at_gym" : "paid"),
+          startDate: sub.startDate,
+          endDate: sub.endDate,
+          paidAt: sub.updatedAt || sub.createdAt,
+          duration: sub.membership_plan_price?.duration || planTitle,
+          planTitle,
+          client_detail: client,
+        };
+
+        if (!clientMap.has(key)) {
+          clientMap.set(key, { client, memberships: [pseudoMembership] });
+        } else {
+          const entry = clientMap.get(key)!;
+          const hasActive = entry.memberships.some(
+            (m) => m.membershipStatus === "active",
+          );
+          if (!hasActive) {
+            entry.memberships.push(pseudoMembership);
+          }
+        }
+      }
+
       // 5. Build member records
       const allMembers: any[] = [];
 
@@ -344,6 +406,7 @@ export default {
           selfieUrl: getMediaUrl(client.selfieUpload),
           status,
           duration: latestMembership.duration || null,
+          paymentStatus: latestMembership.paymentStatus || "paid",
           // Internal flags retained for query filtering
           _isCommissionCharged: comm.commissionCharged,
           _email: client.email || client.user?.email || "",
@@ -448,6 +511,7 @@ export default {
         selfieUrl: m.selfieUrl,
         status: m.status,
         plan: m.duration,
+        paymentStatus: m.paymentStatus || "paid",
       }));
 
       // 7. Optional Pagination
@@ -578,40 +642,78 @@ export default {
           select: ["id", "documentId", "contractId"],
         });
 
-      if (!contracts || contracts.length === 0) {
-        return ctx.send({
-          client: {
-            name: client.name || client.user?.username || null,
-            selfieUrl: getMediaUrl(client.selfieUpload),
-            clientId: client.clientId || null,
-            gender: client.gender || null,
-            phoneNumber: client.phoneNumber || client.user?.phoneNumber || null,
-          },
-          memberships: [],
-          checkins: formattedCheckins,
-        });
+      const contractIds = (contracts || []).map((c: any) => c.id);
+
+      // 4. Fetch all paid / pay_at_gym gym memberships for this client under this owner's contracts
+      let memberships: any[] = [];
+      if (contractIds.length > 0) {
+        memberships = await strapi.db
+          .query("api::gym-membership.gym-membership")
+          .findMany({
+            where: {
+              client_detail: client.id,
+              gym_contract: { id: { $in: contractIds } },
+              $or: [
+                { paymentStatus: "paid" },
+                { paymentStatus: "pay_at_gym" },
+                { paidAt: { $notNull: true } },
+              ],
+            },
+            populate: {
+              commission_transactions: true,
+              membership_plan_price: true,
+              gym_contract: {
+                select: ["id", "contractId"],
+              },
+            },
+            orderBy: { id: "desc" },
+          });
       }
 
-      const contractIds = contracts.map((c: any) => c.id);
-
-      // 4. Fetch all paid gym memberships for this client under this owner's contracts
-      const memberships: any[] = await strapi.db
-        .query("api::gym-membership.gym-membership")
+      // Also check local subscriptions for this client at this gym
+      const clientLocalSubs: any[] = await strapi.db
+        .query("api::local-subscription.local-subscription")
         .findMany({
           where: {
             client_detail: client.id,
-            gym_contract: { id: { $in: contractIds } },
-            $or: [{ paymentStatus: "paid" }, { paidAt: { $notNull: true } }],
+            club_owner: clubOwner.id,
           },
           populate: {
-            commission_transactions: true,
             membership_plan_price: true,
-            gym_contract: {
-              select: ["id", "contractId"],
-            },
+            local_membership_plan: true,
           },
           orderBy: { id: "desc" },
         });
+
+      for (const ls of clientLocalSubs || []) {
+        const alreadyPresent = memberships.some(
+          (m: any) =>
+            (m.startDate &&
+              String(m.startDate).slice(0, 10) ===
+                String(ls.startDate).slice(0, 10)) ||
+            (m.endDate &&
+              String(m.endDate).slice(0, 10) ===
+                String(ls.endDate).slice(0, 10)),
+        );
+        if (!alreadyPresent) {
+          memberships.push({
+            id: ls.id,
+            membershipId: `LS-${ls.id}`,
+            membershipStatus: ls.subscriptionStatus || "active",
+            startDate: ls.startDate ? String(ls.startDate).slice(0, 10) : null,
+            endDate: ls.endDate ? String(ls.endDate).slice(0, 10) : null,
+            paymentStatus:
+              ls.paymentStatus ||
+              (ls.paymentType === "pay_at_gym" ? "pay_at_gym" : "paid"),
+            duration:
+              ls.membership_plan_price?.duration ||
+              ls.local_membership_plan?.planName ||
+              "monthly",
+            durationMonths: ls.membership_plan_price?.durationMonths || 1,
+            commission_transactions: [],
+          });
+        }
+      }
 
       // 4b. Fallback: resolve missing commission transactions if any
       const membershipIdsWithoutComm = memberships
@@ -675,6 +777,7 @@ export default {
         return {
           membershipId: m.membershipId || null,
           membershipStatus: m.membershipStatus || null,
+          paymentStatus: m.paymentStatus || "paid",
           startDate: m.startDate || null,
           endDate: m.endDate || null,
           commissionCharged: comm.commissionCharged,

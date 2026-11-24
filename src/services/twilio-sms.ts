@@ -2,7 +2,7 @@ import Twilio from "twilio";
 
 const client = Twilio(
   process.env.TWILIO_ACCOUNT_SID as string,
-  process.env.TWILIO_AUTH_TOKEN as string
+  process.env.TWILIO_AUTH_TOKEN as string,
 );
 
 export const sendTwilioOtp = async (phone: string, otp: string) => {
@@ -29,7 +29,9 @@ export interface TwilioInvitePayload {
   channel?: "sms" | "whatsapp" | "both";
 }
 
-export const sendTwilioOfflineMemberInvite = async (payload: TwilioInvitePayload) => {
+export const sendTwilioOfflineMemberInvite = async (
+  payload: TwilioInvitePayload,
+) => {
   const {
     phone,
     memberName,
@@ -40,15 +42,18 @@ export const sendTwilioOfflineMemberInvite = async (payload: TwilioInvitePayload
     channel = "both",
   } = payload;
 
-  const validPhone = phone.startsWith("+") ? phone : `+91${phone.replace(/\D/g, "").slice(-10)}`;
+  const validPhone = phone.startsWith("+")
+    ? phone
+    : `+91${phone.replace(/\D/g, "").slice(-10)}`;
   const cleanExpiry = expiryDate ? ` (Valid till: ${expiryDate})` : "";
   const messageBody = `Hi ${memberName}! Good news: ${gymName} has linked your ${planName} membership to Fitfob${cleanExpiry}. Claim your digital gym entry pass here: ${inviteLink}`;
 
-  const results: { smsSent: boolean; whatsappSent: boolean; errors: string[] } = {
-    smsSent: false,
-    whatsappSent: false,
-    errors: [],
-  };
+  const results: { smsSent: boolean; whatsappSent: boolean; errors: string[] } =
+    {
+      smsSent: false,
+      whatsappSent: false,
+      errors: [],
+    };
 
   // 1. Send SMS if requested
   if (channel === "sms" || channel === "both") {
@@ -60,12 +65,17 @@ export const sendTwilioOfflineMemberInvite = async (payload: TwilioInvitePayload
           to: validPhone,
         });
         results.smsSent = true;
-        strapi.log.info(`[Twilio SMS] Invite sent successfully to ${validPhone}`);
+        strapi.log.info(
+          `[Twilio SMS] Invite sent successfully to ${validPhone}`,
+        );
       } else {
         results.errors.push("TWILIO_PHONE_NUMBER is not set");
       }
     } catch (smsError: any) {
-      strapi.log.warn(`[Twilio SMS] Failed to send invite to ${validPhone}:`, smsError?.message || smsError);
+      strapi.log.warn(
+        `[Twilio SMS] Failed to send invite to ${validPhone}:`,
+        smsError?.message || smsError,
+      );
       results.errors.push(`SMS: ${smsError?.message || "Failed to send SMS"}`);
     }
   }
@@ -73,11 +83,16 @@ export const sendTwilioOfflineMemberInvite = async (payload: TwilioInvitePayload
   // 2. Send WhatsApp if requested
   if (channel === "whatsapp" || channel === "both") {
     try {
-      const whatsappFrom =
+      const rawWhatsapp =
+        process.env.TWILIO_WHATSAPP_NUMBER ||
         process.env.TWILIO_WHATSAPP_FROM ||
-        (process.env.TWILIO_PHONE_NUMBER?.startsWith("whatsapp:")
-          ? process.env.TWILIO_PHONE_NUMBER
-          : `whatsapp:${process.env.TWILIO_PHONE_NUMBER}`);
+        process.env.TWILIO_PHONE_NUMBER;
+
+      const whatsappFrom = rawWhatsapp
+        ? rawWhatsapp.startsWith("whatsapp:")
+          ? rawWhatsapp
+          : `whatsapp:${rawWhatsapp}`
+        : null;
 
       if (whatsappFrom) {
         await client.messages.create({
@@ -86,13 +101,20 @@ export const sendTwilioOfflineMemberInvite = async (payload: TwilioInvitePayload
           to: `whatsapp:${validPhone}`,
         });
         results.whatsappSent = true;
-        strapi.log.info(`[Twilio WhatsApp] Invite sent successfully to ${validPhone}`);
+        strapi.log.info(
+          `[Twilio WhatsApp] Invite sent successfully to ${validPhone}`,
+        );
       } else {
-        results.errors.push("Twilio WhatsApp sender is not set");
+        results.errors.push("TWILIO_WHATSAPP_NUMBER is not set");
       }
     } catch (waError: any) {
-      strapi.log.warn(`[Twilio WhatsApp] Failed to send invite to ${validPhone}:`, waError?.message || waError);
-      results.errors.push(`WhatsApp: ${waError?.message || "Failed to send WhatsApp message"}`);
+      strapi.log.warn(
+        `[Twilio WhatsApp] Failed to send invite to ${validPhone}:`,
+        waError?.message || waError,
+      );
+      results.errors.push(
+        `WhatsApp: ${waError?.message || "Failed to send WhatsApp message"}`,
+      );
     }
   }
 
