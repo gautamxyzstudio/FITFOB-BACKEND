@@ -75,6 +75,16 @@ function formatTimeAgo(dateVal: any): string {
   return `${diffDays} day${diffDays > 1 ? "s" : ""} ago`;
 }
 
+function getClientAppInviteLink(): string {
+  // Allows overriding via CLIENT_APP_INVITE_URL in .env (e.g. for Expo Go, Staging APK download link, or fitfob-client://)
+  if (process.env.CLIENT_APP_INVITE_URL) {
+    return process.env.CLIENT_APP_INVITE_URL;
+  }
+  const appPackage =
+    process.env.CLIENT_APP_PACKAGE || "com.xyzstudio.fitfob.client";
+  return `https://play.google.com/store/apps/details?id=${appPackage}`;
+}
+
 /* ---------- ROLE HELPER ---------- */
 async function getUserRole(user: any): Promise<string> {
   if (!user) return "";
@@ -1706,6 +1716,7 @@ export default factories.createCoreController(
 
         // Resolve or create client detail placeholder
         let client = await resolveClientDetail(cleanPhone);
+        const isNewClient = !client;
         if (!client) {
           const newClientId = await generateClientId();
           client = await strapi.db.query(CLIENT_UID).create({
@@ -1749,7 +1760,44 @@ export default factories.createCoreController(
           );
         }
 
-        // Create local subscription
+        // Build app invite link
+        const inviteLink = getClientAppInviteLink();
+
+        // Send Twilio Invite (SMS / WhatsApp) FIRST
+        const inviteResult = await sendTwilioOfflineMemberInvite({
+          phone: cleanPhone,
+          memberName,
+          gymName: clubOwner.clubName || "your gym",
+          planName: planTitle,
+          expiryDate: finalEndDateStr,
+          inviteLink,
+          channel: channel || "both",
+        });
+
+        // Do not create local subscription if both SMS and WhatsApp delivery failed
+        if (!inviteResult.smsSent && !inviteResult.whatsappSent) {
+          if (isNewClient && client?.id) {
+            try {
+              await strapi.db
+                .query(CLIENT_UID)
+                .delete({ where: { id: client.id } });
+            } catch (_) {}
+          }
+          const errorMsg =
+            inviteResult.errors && inviteResult.errors.length > 0
+              ? inviteResult.errors.join("; ")
+              : "Failed to deliver invitation via SMS and WhatsApp";
+
+          return ctx.badRequest(
+            `Failed to send invite to ${cleanPhone}. Local subscription was not created. (${errorMsg})`,
+            {
+              success: false,
+              inviteResult,
+            },
+          );
+        }
+
+        // Create local subscription only after invite was successfully delivered
         const subData: any = {
           client_detail: client.documentId || client.id,
           club_owner: clubOwner.documentId || clubOwner.id,
@@ -1812,21 +1860,6 @@ export default factories.createCoreController(
             },
           });
         }
-
-        // Build app invite link
-        const appPackage = "com.xyzstudio.fitfob.cleint";
-        const inviteLink = `https://play.google.com/store/apps/details?id=${appPackage}`;
-
-        // Send Twilio Invite (SMS / WhatsApp)
-        const inviteResult = await sendTwilioOfflineMemberInvite({
-          phone: cleanPhone,
-          memberName,
-          gymName: clubOwner.clubName || "your gym",
-          planName: planTitle,
-          expiryDate: finalEndDateStr,
-          inviteLink,
-          channel: channel || "both",
-        });
 
         // Log Activity
         try {
@@ -2121,8 +2154,7 @@ export default factories.createCoreController(
         let inviteResult = null;
         if (body.resendInvite || body.phoneNumber) {
           // Build app invite link
-          const appPackage = "com.xyzstudio.fitfob.cleint";
-          const inviteLink = `https://play.google.com/store/apps/details?id=${appPackage}`;
+          const inviteLink = getClientAppInviteLink();
 
           inviteResult = await sendTwilioOfflineMemberInvite({
             phone: newPhone,

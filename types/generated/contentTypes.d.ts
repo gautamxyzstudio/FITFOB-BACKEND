@@ -1218,6 +1218,69 @@ export interface ApiGymContractGymContract extends Struct.CollectionTypeSchema {
   };
 }
 
+export interface ApiGymEnquiryGymEnquiry extends Struct.CollectionTypeSchema {
+  collectionName: 'gym_enquiries';
+  info: {
+    description: 'Enquiries submitted from the fitfob.com website "Enquire now" form';
+    displayName: 'Gym Enquiry';
+    pluralName: 'gym-enquiries';
+    singularName: 'gym-enquiry';
+  };
+  options: {
+    draftAndPublish: false;
+  };
+  attributes: {
+    city: Schema.Attribute.String;
+    club_owner: Schema.Attribute.Relation<
+      'manyToOne',
+      'api::club-owner.club-owner'
+    >;
+    clubName: Schema.Attribute.String;
+    createdAt: Schema.Attribute.DateTime;
+    createdBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
+      Schema.Attribute.Private;
+    distanceKm: Schema.Attribute.Decimal;
+    email: Schema.Attribute.Email & Schema.Attribute.Required;
+    enquiryStatus: Schema.Attribute.Enumeration<
+      ['new', 'contacted', 'converted', 'closed']
+    > &
+      Schema.Attribute.Required &
+      Schema.Attribute.DefaultTo<'new'>;
+    fullName: Schema.Attribute.String &
+      Schema.Attribute.Required &
+      Schema.Attribute.SetMinMaxLength<{
+        maxLength: 120;
+      }>;
+    gymAddress: Schema.Attribute.String;
+    gymSource: Schema.Attribute.Enumeration<['partner', 'listing']> &
+      Schema.Attribute.Required &
+      Schema.Attribute.DefaultTo<'partner'>;
+    latitude: Schema.Attribute.Decimal & Schema.Attribute.Private;
+    listingId: Schema.Attribute.String;
+    locale: Schema.Attribute.String & Schema.Attribute.Private;
+    localizations: Schema.Attribute.Relation<
+      'oneToMany',
+      'api::gym-enquiry.gym-enquiry'
+    > &
+      Schema.Attribute.Private;
+    locationMethod: Schema.Attribute.Enumeration<['gps', 'manual']> &
+      Schema.Attribute.DefaultTo<'manual'>;
+    longitude: Schema.Attribute.Decimal & Schema.Attribute.Private;
+    notes: Schema.Attribute.Text;
+    phone: Schema.Attribute.String &
+      Schema.Attribute.Required &
+      Schema.Attribute.SetMinMaxLength<{
+        maxLength: 20;
+      }>;
+    publishedAt: Schema.Attribute.DateTime;
+    searchRadiusKm: Schema.Attribute.Integer;
+    source: Schema.Attribute.String & Schema.Attribute.DefaultTo<'website'>;
+    updatedAt: Schema.Attribute.DateTime;
+    updatedBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
+      Schema.Attribute.Private;
+  };
+}
+
 export interface ApiGymMembershipGymMembership
   extends Struct.CollectionTypeSchema {
   collectionName: 'gym_memberships';
@@ -2617,6 +2680,7 @@ declare module '@strapi/strapi' {
       'api::gemini-api-key.gemini-api-key': ApiGeminiApiKeyGeminiApiKey;
       'api::gym-contract-plan-rate.gym-contract-plan-rate': ApiGymContractPlanRateGymContractPlanRate;
       'api::gym-contract.gym-contract': ApiGymContractGymContract;
+      'api::gym-enquiry.gym-enquiry': ApiGymEnquiryGymEnquiry;
       'api::gym-membership.gym-membership': ApiGymMembershipGymMembership;
       'api::gym-promotion.gym-promotion': ApiGymPromotionGymPromotion;
       'api::gym-trial.gym-trial': ApiGymTrialGymTrial;
