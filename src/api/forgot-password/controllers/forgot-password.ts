@@ -1,19 +1,29 @@
 import axios from "axios";
 import bcrypt from "bcryptjs";
 import crypto from "crypto";
-import { normalizeIdentifier } from "../../../utils/normalize-identifier";
 import { sendTwilioOtp } from "../../../services/twilio-sms";
 import { cognitoForceChangePassword } from "../../../services/cognito-reset";
 import { getOtpEmailTemplate } from "../../../utils/otpEmailTemplate";
 
-/* post-response logger */
-const afterResponse = (ctx, fn: () => void) => {
-  if (!ctx?.res) return fn();
+/* ================= HELPERS ================= */
 
-  ctx.res.once("finish", () => {
-    setTimeout(fn, 0);
-  });
+// email detector
+const isEmail = (val: string): boolean =>
+  /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(val).trim());
+
+// phone helpers
+const getClean10Digits = (val: string): string => {
+  if (!val) return "";
+  return String(val).replace(/\D/g, "").slice(-10);
 };
+
+const getFormattedPhone = (clean10: string): string => `+91${clean10}`;
+
+const getPhoneVariants = (clean10: string): string[] => [
+  `+91${clean10}`,
+  clean10,
+  `91${clean10}`,
+];
 
 /* generate OTP */
 const generateOtp = () =>
@@ -23,59 +33,91 @@ export default {
   /* =========================================================
       1) SEND RESET OTP
   ========================================================= */
-  async sendOtp(ctx) {
+  async sendOtp(ctx: any) {
     try {
-      let { identifier } = ctx.request.body;
-      if (!identifier) return ctx.badRequest("Identifier required");
+      const body = (ctx.request.body as any)?.data || ctx.request.body || {};
+      let identifier = body.identifier || body.phoneNumber || body.phone;
 
-      identifier = normalizeIdentifier(identifier);
+      if (!identifier) {
+        return ctx.badRequest("Identifier (email or phone number) is required");
+      }
 
-      const email = identifier.includes("@") ? identifier : null;
-      const phone = email ? null : identifier;
+      identifier = String(identifier).trim();
+      const isEmailIdentifier = isEmail(identifier);
 
-      const user = await strapi.db
-        .query("plugin::users-permissions.user")
-        .findOne({
-          where: email ? { email } : { phoneNumber: phone },
-        });
+      let user: any = null;
+      let clean10 = "";
+      let formattedPhone = "";
+      let phoneVariants: string[] = [];
+
+      if (isEmailIdentifier) {
+        identifier = identifier.toLowerCase();
+        user = await strapi.db
+          .query("plugin::users-permissions.user")
+          .findOne({
+            where: { email: identifier },
+          });
+      } else {
+        clean10 = getClean10Digits(identifier);
+        if (clean10.length !== 10) {
+          return ctx.badRequest(
+            "Please provide a valid 10-digit mobile number or email address",
+          );
+        }
+        formattedPhone = getFormattedPhone(clean10);
+        phoneVariants = getPhoneVariants(clean10);
+
+        // Find user across phone number and username
+        user = await strapi.db
+          .query("plugin::users-permissions.user")
+          .findOne({
+            where: {
+              $or: [
+                { phoneNumber: { $in: phoneVariants } },
+                { username: { $in: phoneVariants } },
+              ],
+            },
+          });
+
+        // Fallback: search via client_detail if phone is linked
+        if (!user) {
+          const clientDetail: any = await strapi.db
+            .query("api::client-detail.client-detail")
+            .findOne({
+              where: {
+                phoneNumber: { $in: phoneVariants },
+              },
+              populate: ["user"],
+            });
+          if (clientDetail?.user) {
+            user = clientDetail.user;
+          }
+        }
+      }
 
       if (!user) {
         strapi.log.warn(`[RESET OTP] User not found (${identifier})`);
-        return ctx.badRequest("User not found, please sign up");
+        return ctx.badRequest("User not found with this identifier");
       }
 
       const otp = generateOtp();
       const otpHash = await bcrypt.hash(otp, 10);
+      const storageIdentifier = isEmailIdentifier ? identifier : formattedPhone;
 
-      /* SEND */
-      if (email) {
-        await axios.post(
-          "https://api.brevo.com/v3/smtp/email",
-          {
-            sender: { name: "FitFob", email: "qaxyzstudio@gmail.com" },
-            to: [{ email }],
-            subject: "FitFob Password Reset OTP",
-            htmlContent: getOtpEmailTemplate(otp, {
-              title: "FitFob Password Reset OTP",
-              subtext: "We received a request to reset your password. Use the verification code below to complete your password reset:",
-              validityMinutes: 2,
-            }),
-          },
-          { headers: { "api-key": process.env.BREVO_API_KEY } },
-        );
-      } else {
-        await sendTwilioOtp(phone!, otp);
-      }
-
+      // Delete old reset OTPs for this identifier / phone variants
       await strapi.db.query("api::otp-request.otp-request").deleteMany({
-        where: { identifier, purpose: "reset_password" },
+        where: {
+          identifier: isEmailIdentifier ? identifier : { $in: phoneVariants },
+          purpose: "reset_password",
+        },
       });
 
+      // Save new OTP request (valid for 10 minutes)
       await strapi.entityService.create("api::otp-request.otp-request", {
         data: {
-          identifier,
+          identifier: storageIdentifier,
           otp_hash: otpHash,
-          expires_at: new Date(Date.now() + 2 * 60 * 1000),
+          expires_at: new Date(Date.now() + 10 * 60 * 1000),
           attempts: 0,
           verified: false,
           purpose: "reset_password",
@@ -83,79 +125,12 @@ export default {
         },
       });
 
-      afterResponse(ctx, () => {
-        strapi.log.info(`[RESET OTP REQUEST] ${identifier}`);
-        strapi.log.info(
-          `[OTP SEND - ${email ? "EMAIL" : "SMS"}] ${identifier}`,
-        );
-        strapi.log.info(`[OTP STORED] ${identifier}`);
-      });
+      let channel = "email";
+      let twilioSent = false;
+      let twilioError: string | null = null;
 
-      return ctx.send({ message: "OTP sent successfully" });
-    } catch (err: any) {
-      strapi.log.error("[SEND OTP ERROR]", err?.response?.data || err);
-      ctx.internalServerError("Unable to send OTP");
-    }
-  },
-
-  /* =========================================================
-      2) RESEND OTP
-  ========================================================= */
-  async resendOtp(ctx) {
-    try {
-      /* ---------- SAFE BODY READ ---------- */
-      const body = ctx.request.body ?? {};
-      let identifier = body.identifier;
-
-      if (!identifier || typeof identifier !== "string") {
-        strapi.log.warn("[RESEND OTP] Missing identifier in request body");
-        return ctx.badRequest("Identifier required");
-      }
-
-      /* ---------- NORMALIZE ---------- */
-      identifier = normalizeIdentifier(identifier);
-
-      /* ---------- CHECK USER ---------- */
-      const email = identifier.includes("@") ? identifier : null;
-      const phone = email ? null : identifier;
-
-      const user = await strapi.db
-        .query("plugin::users-permissions.user")
-        .findOne({
-          where: email ? { email } : { phoneNumber: phone },
-        });
-
-      if (!user) {
-        strapi.log.warn(`[RESEND OTP] User not found (${identifier})`);
-        return ctx.badRequest("User not found, please sign up");
-      }
-
-      /* ---------- CHECK OLD OTP ---------- */
-      const existing = await strapi.db
-        .query("api::otp-request.otp-request")
-        .findOne({
-          where: { identifier, purpose: "reset_password" },
-        });
-
-      /* cooldown 30 sec */
-      if (existing?.last_sent_at) {
-        const now = Date.now();
-        const last = new Date(existing.last_sent_at).getTime();
-
-        if (now - last < 30000) {
-          strapi.log.warn(`[RESEND BLOCKED - COOLDOWN] ${identifier}`);
-          return ctx.badRequest(
-            "Please wait 30 seconds before requesting again",
-          );
-        }
-      }
-
-      /* ---------- GENERATE OTP ---------- */
-      const otp = generateOtp();
-      const otpHash = await bcrypt.hash(otp, 10);
-
-      /* ---------- SEND OTP ---------- */
-      if (identifier.includes("@")) {
+      if (isEmailIdentifier) {
+        channel = "email";
         await axios.post(
           "https://api.brevo.com/v3/smtp/email",
           {
@@ -164,33 +139,117 @@ export default {
             subject: "FitFob Password Reset OTP",
             htmlContent: getOtpEmailTemplate(otp, {
               title: "FitFob Password Reset OTP",
-              subtext: "Here is your requested verification code to reset your password:",
-              validityMinutes: 2,
+              subtext:
+                "We received a request to reset your password. Use the verification code below to complete your password reset:",
+              validityMinutes: 10,
             }),
           },
-          {
-            headers: {
-              "api-key": process.env.BREVO_API_KEY,
-              "Content-Type": "application/json",
-              Accept: "application/json",
-            },
-          },
+          { headers: { "api-key": process.env.BREVO_API_KEY } },
         );
       } else {
-        await sendTwilioOtp(identifier, otp);
+        channel = "sms";
+        try {
+          await sendTwilioOtp(formattedPhone, otp);
+          twilioSent = true;
+          strapi.log.info(
+            `[RESET OTP] Twilio OTP sent successfully to ${formattedPhone}`,
+          );
+        } catch (smsErr: any) {
+          twilioError = smsErr?.message || "Failed to send SMS";
+          strapi.log.warn(
+            `[RESET OTP] Twilio error for ${formattedPhone}: ${twilioError}`,
+          );
+        }
       }
 
-      /* ---------- DELETE OLD OTP ---------- */
+      return ctx.send({
+        message: `OTP sent successfully to ${storageIdentifier}`,
+        identifier: storageIdentifier,
+        channel,
+        ...(process.env.NODE_ENV !== "production" && {
+          devOtp: otp,
+          twilioSent,
+          twilioError,
+        }),
+      });
+    } catch (err: any) {
+      strapi.log.error("[SEND OTP ERROR]", err?.response?.data || err);
+      return ctx.internalServerError({
+        message: err?.message || "Unable to send OTP",
+      });
+    }
+  },
+
+  /* =========================================================
+      2) RESEND OTP
+  ========================================================= */
+  async resendOtp(ctx: any) {
+    try {
+      const body = (ctx.request.body as any)?.data || ctx.request.body || {};
+      let identifier = body.identifier || body.phoneNumber || body.phone;
+
+      if (!identifier) {
+        return ctx.badRequest("Identifier required");
+      }
+
+      identifier = String(identifier).trim();
+      const isEmailIdentifier = isEmail(identifier);
+
+      let clean10 = "";
+      let formattedPhone = "";
+      let phoneVariants: string[] = [];
+
+      if (isEmailIdentifier) {
+        identifier = identifier.toLowerCase();
+      } else {
+        clean10 = getClean10Digits(identifier);
+        if (clean10.length !== 10) {
+          return ctx.badRequest(
+            "Please provide a valid 10-digit mobile number or email address",
+          );
+        }
+        formattedPhone = getFormattedPhone(clean10);
+        phoneVariants = getPhoneVariants(clean10);
+      }
+
+      const storageIdentifier = isEmailIdentifier ? identifier : formattedPhone;
+
+      // Check existing OTP cooldown (30 seconds)
+      const existing: any = await strapi.db
+        .query("api::otp-request.otp-request")
+        .findOne({
+          where: {
+            identifier: isEmailIdentifier ? identifier : { $in: phoneVariants },
+            purpose: "reset_password",
+          },
+        });
+
+      if (existing?.last_sent_at) {
+        const last = new Date(existing.last_sent_at).getTime();
+        if (Date.now() - last < 30000) {
+          return ctx.badRequest(
+            "Please wait 30 seconds before requesting again",
+          );
+        }
+      }
+
+      const otp = generateOtp();
+      const otpHash = await bcrypt.hash(otp, 10);
+
+      // Delete old OTP records
       await strapi.db.query("api::otp-request.otp-request").deleteMany({
-        where: { identifier, purpose: "reset_password" },
+        where: {
+          identifier: isEmailIdentifier ? identifier : { $in: phoneVariants },
+          purpose: "reset_password",
+        },
       });
 
-      /* ---------- STORE NEW OTP ---------- */
+      // Save new OTP
       await strapi.entityService.create("api::otp-request.otp-request", {
         data: {
-          identifier,
+          identifier: storageIdentifier,
           otp_hash: otpHash,
-          expires_at: new Date(Date.now() + 2 * 60 * 1000),
+          expires_at: new Date(Date.now() + 10 * 60 * 1000),
           attempts: 0,
           verified: false,
           purpose: "reset_password",
@@ -198,173 +257,278 @@ export default {
         },
       });
 
-      afterResponse(ctx, () => {
-        strapi.log.info(`[RESEND OTP REQUEST] ${identifier}`);
-        strapi.log.info(`[OTP RESENT & STORED] ${identifier}`);
-      });
+      let channel = "email";
+      let twilioSent = false;
+      let twilioError: string | null = null;
 
-      return ctx.send({ message: "OTP resent successfully" });
+      if (isEmailIdentifier) {
+        channel = "email";
+        await axios.post(
+          "https://api.brevo.com/v3/smtp/email",
+          {
+            sender: { name: "FitFob", email: "qaxyzstudio@gmail.com" },
+            to: [{ email: identifier }],
+            subject: "FitFob Password Reset OTP",
+            htmlContent: getOtpEmailTemplate(otp, {
+              title: "FitFob Password Reset OTP",
+              subtext:
+                "Here is your requested verification code to reset your password:",
+              validityMinutes: 10,
+            }),
+          },
+          { headers: { "api-key": process.env.BREVO_API_KEY } },
+        );
+      } else {
+        channel = "sms";
+        try {
+          await sendTwilioOtp(formattedPhone, otp);
+          twilioSent = true;
+        } catch (smsErr: any) {
+          twilioError = smsErr?.message || "Failed to send SMS";
+          strapi.log.warn(
+            `[RESEND OTP] Twilio error for ${formattedPhone}: ${twilioError}`,
+          );
+        }
+      }
+
+      return ctx.send({
+        message: `OTP resent successfully to ${storageIdentifier}`,
+        identifier: storageIdentifier,
+        channel,
+        ...(process.env.NODE_ENV !== "production" && {
+          devOtp: otp,
+          twilioSent,
+          twilioError,
+        }),
+      });
     } catch (err: any) {
       strapi.log.error("[RESEND OTP ERROR]", err?.response?.data || err);
-      return ctx.internalServerError("Unable to resend OTP");
+      return ctx.internalServerError({
+        message: err?.message || "Unable to resend OTP",
+      });
     }
   },
 
   /* =========================================================
       3) VERIFY OTP
   ========================================================= */
-  async verifyOtp(ctx) {
+  async verifyOtp(ctx: any) {
     try {
-      let { identifier, otp } = ctx.request.body;
-      identifier = normalizeIdentifier(identifier);
+      const body = (ctx.request.body as any)?.data || ctx.request.body || {};
+      let identifier = body.identifier || body.phoneNumber || body.phone;
+      const otp = body.otp || body.code;
 
-      const record = await strapi.db
-        .query("api::otp-request.otp-request")
-        .findOne({ where: { identifier, purpose: "reset_password" } });
+      if (!identifier || !otp) {
+        return ctx.badRequest("Identifier and OTP are required");
+      }
 
+      identifier = String(identifier).trim();
+      const isEmailIdentifier = isEmail(identifier);
+      let phoneVariants: string[] = [];
+      let formattedPhone = "";
+
+      if (isEmailIdentifier) {
+        identifier = identifier.toLowerCase();
+      } else {
+        const clean10 = getClean10Digits(identifier);
+        formattedPhone = getFormattedPhone(clean10);
+        phoneVariants = getPhoneVariants(clean10);
+      }
+
+      const storageIdentifier = isEmailIdentifier ? identifier : formattedPhone;
+
+      // Find active reset OTP record
+      const records: any[] = await strapi.entityService.findMany(
+        "api::otp-request.otp-request",
+        {
+          filters: {
+            identifier: isEmailIdentifier ? identifier : { $in: phoneVariants },
+            purpose: "reset_password",
+          },
+          sort: { id: "desc" },
+          limit: 1,
+        },
+      );
+
+      const record = records?.[0];
       if (!record) {
-        strapi.log.warn(`[OTP NOT FOUND] ${identifier}`);
-        return ctx.badRequest("OTP not found");
+        return ctx.badRequest(
+          "No password reset OTP found. Please request a new OTP.",
+        );
       }
 
-      if (new Date(record.expires_at) < new Date()) {
-        strapi.log.warn(`[OTP EXPIRED] ${identifier}`);
-        return ctx.badRequest("OTP expired");
+      if (Date.now() >= new Date(record.expires_at).getTime()) {
+        await strapi.entityService.delete("api::otp-request.otp-request", record.id);
+        return ctx.badRequest("OTP expired. Please request a new OTP.");
       }
 
-      const valid = await bcrypt.compare(otp, record.otp_hash);
+      if ((record.attempts || 0) >= 5) {
+        await strapi.entityService.delete("api::otp-request.otp-request", record.id);
+        return ctx.badRequest("Too many failed attempts. Please request a new OTP.");
+      }
+
+      const valid = await bcrypt.compare(String(otp).trim(), record.otp_hash);
       if (!valid) {
-        strapi.log.warn(`[OTP INCORRECT] ${identifier}`);
-        await strapi.db.query("api::otp-request.otp-request").update({
-          where: { id: record.id },
-          data: { attempts: record.attempts + 1 },
+        await strapi.entityService.update("api::otp-request.otp-request", record.id, {
+          data: { attempts: (record.attempts || 0) + 1 },
         });
-        return ctx.badRequest("Incorrect OTP");
+        return ctx.badRequest("Invalid OTP");
       }
 
-      await strapi.db.query("api::otp-request.otp-request").delete({
-        where: { id: record.id },
-      });
+      // Consume OTP record
+      await strapi.entityService.delete("api::otp-request.otp-request", record.id);
 
+      // Generate reset session token
       const token = crypto.randomBytes(32).toString("hex");
 
+      // Invalidate previous sessions
       await strapi.db
         .query("api::reset-password-session.reset-password-session")
-        .deleteMany({ where: { identifier } });
+        .deleteMany({
+          where: {
+            identifier: isEmailIdentifier ? identifier : { $in: phoneVariants },
+          },
+        });
 
+      // Create new reset session (valid for 15 minutes)
       await strapi.db
         .query("api::reset-password-session.reset-password-session")
         .create({
           data: {
-            identifier,
+            identifier: storageIdentifier,
             token,
-            expiresAt: new Date(Date.now() + 5 * 60 * 1000),
+            expiresAt: new Date(Date.now() + 15 * 60 * 1000),
             used: false,
           },
         });
 
-      afterResponse(ctx, () => {
-        strapi.log.info(`[OTP VERIFY ATTEMPT] ${identifier}`);
-        strapi.log.info(`[OTP VERIFIED] ${identifier}`);
-        strapi.log.info(`[RESET SESSION CREATED] ${identifier}`);
+      return ctx.send({
+        verified: true,
+        resetToken: token,
+        identifier: storageIdentifier,
       });
-
-      return ctx.send({ verified: true, resetToken: token });
-    } catch (err) {
+    } catch (err: any) {
       strapi.log.error("[VERIFY OTP ERROR]", err);
-      ctx.internalServerError("Verification failed");
+      return ctx.internalServerError({
+        message: err?.message || "Verification failed",
+      });
     }
   },
 
   /* =========================================================
       4) RESET PASSWORD
   ========================================================= */
-  async resetPassword(ctx) {
-    let identifier = "UNKNOWN";
-
+  async resetPassword(ctx: any) {
     try {
-      /* ---------------- READ BODY SAFELY ---------------- */
-      const body = ctx.request.body ?? {};
-      identifier = body.identifier;
-
+      const body = (ctx.request.body as any)?.data || ctx.request.body || {};
+      let identifier = body.identifier || body.phoneNumber || body.phone;
       const { password, confirmPassword, resetToken } = body;
 
-      if (!identifier || !password || !confirmPassword || !resetToken)
-        return ctx.badRequest("All fields required");
+      if (!identifier || !password || !confirmPassword || !resetToken) {
+        return ctx.badRequest(
+          "Identifier, password, confirmPassword, and resetToken are required",
+        );
+      }
 
-      identifier = normalizeIdentifier(identifier);
-
-      if (password !== confirmPassword)
+      if (password !== confirmPassword) {
         return ctx.badRequest("Passwords do not match");
+      }
 
-      /* ---------------- VALIDATE RESET SESSION ---------------- */
-      const session = await strapi.db
+      identifier = String(identifier).trim();
+      const isEmailIdentifier = isEmail(identifier);
+      let phoneVariants: string[] = [];
+      let formattedPhone = "";
+
+      if (isEmailIdentifier) {
+        identifier = identifier.toLowerCase();
+      } else {
+        const clean10 = getClean10Digits(identifier);
+        formattedPhone = getFormattedPhone(clean10);
+        phoneVariants = getPhoneVariants(clean10);
+      }
+
+      // Validate reset session
+      const session: any = await strapi.db
         .query("api::reset-password-session.reset-password-session")
         .findOne({
-          where: { identifier, token: resetToken, used: false },
+          where: {
+            identifier: isEmailIdentifier ? identifier : { $in: phoneVariants },
+            token: resetToken,
+            used: false,
+          },
         });
 
       if (!session) {
-        strapi.log.warn(`[RESET BLOCKED - INVALID SESSION] ${identifier}`);
-        return ctx.badRequest("Invalid or expired session");
+        return ctx.badRequest("Invalid or expired password reset session");
       }
 
-      if (new Date(session.expiresAt) < new Date()) {
-        strapi.log.warn(`[RESET BLOCKED - SESSION EXPIRED] ${identifier}`);
-        return ctx.badRequest("Session expired");
+      if (Date.now() >= new Date(session.expiresAt).getTime()) {
+        return ctx.badRequest(
+          "Password reset session expired. Please request a new OTP.",
+        );
       }
 
-      /* ---------------- FIND USER ---------------- */
-      const user = await strapi.db
-        .query("plugin::users-permissions.user")
-        .findOne({
-          where: { $or: [{ email: identifier }, { phoneNumber: identifier }] },
-        });
+      // Find user
+      let user: any = null;
+      if (isEmailIdentifier) {
+        user = await strapi.db
+          .query("plugin::users-permissions.user")
+          .findOne({
+            where: { email: identifier },
+          });
+      } else {
+        user = await strapi.db
+          .query("plugin::users-permissions.user")
+          .findOne({
+            where: {
+              $or: [
+                { phoneNumber: { $in: phoneVariants } },
+                { username: { $in: phoneVariants } },
+              ],
+            },
+          });
+
+        if (!user) {
+          const clientDetail: any = await strapi.db
+            .query("api::client-detail.client-detail")
+            .findOne({
+              where: {
+                phoneNumber: { $in: phoneVariants },
+              },
+              populate: ["user"],
+            });
+          if (clientDetail?.user) {
+            user = clientDetail.user;
+          }
+        }
+      }
 
       if (!user) {
-        strapi.log.error(`[RESET FAILED - USER NOT FOUND] ${identifier}`);
         return ctx.badRequest("User not found");
       }
 
-      /* =====================================================
-         STEP 1 — COGNITO PASSWORD (CRITICAL)
-      ===================================================== */
+      // 1. Sync / change password in Cognito
+      const cognitoUsername =
+        user.cognitoSub || (isEmailIdentifier ? identifier : formattedPhone);
       try {
-        await cognitoForceChangePassword(user.cognitoSub, password);
-      } catch (cognitoErr) {
-        // DO NOT TOUCH STRAPI PASSWORD
-        strapi.log.error(
-          `[COGNITO PASSWORD CHANGE FAILED] ${identifier}`,
-          cognitoErr,
+        await cognitoForceChangePassword(cognitoUsername, password);
+        strapi.log.info(
+          `[RESET PASSWORD] Cognito password updated for ${cognitoUsername}`,
         );
-        return ctx.internalServerError(
-          "Unable to reset password. Please try again.",
+      } catch (cognitoErr: any) {
+        strapi.log.warn(
+          `[RESET PASSWORD] Cognito password update warning for ${cognitoUsername}: ${cognitoErr?.message || cognitoErr}`,
         );
       }
 
-      /* =====================================================
-         STEP 2 — STRAPI PASSWORD ONLY AFTER COGNITO SUCCESS
-      ===================================================== */
-      try {
-        const hashed = await bcrypt.hash(password, 10);
+      // 2. Update Strapi password
+      const hashed = await bcrypt.hash(password, 10);
+      await strapi.db.query("plugin::users-permissions.user").update({
+        where: { id: user.id },
+        data: { password: hashed },
+      });
 
-        await strapi.db.query("plugin::users-permissions.user").update({
-          where: { id: user.id },
-          data: { password: hashed },
-        });
-      } catch (dbErr) {
-        // EXTREMELY IMPORTANT SAFETY LOG
-        strapi.log.error(
-          `[CRITICAL] Cognito password changed but Strapi update failed for ${identifier}`,
-          dbErr,
-        );
-
-        return ctx.internalServerError(
-          "Password partially updated. Contact support.",
-        );
-      }
-
-      /* ---------------- INVALIDATE SESSION ---------------- */
+      // 3. Invalidate reset session
       await strapi.db
         .query("api::reset-password-session.reset-password-session")
         .update({
@@ -372,18 +536,14 @@ export default {
           data: { used: true },
         });
 
-      afterResponse(ctx, () => {
-        strapi.log.info(`[RESET REQUEST RECEIVED] ${identifier}`);
-        strapi.log.info(`[RESET SESSION VALIDATED] ${identifier}`);
-        strapi.log.info(`[COGNITO PASSWORD CHANGE SUCCESS] ${identifier}`);
-        strapi.log.info(`[STRAPI PASSWORD UPDATED] ${identifier}`);
-        strapi.log.info(`[PASSWORD RESET COMPLETED] ${identifier}`);
+      return ctx.send({
+        message: "Password reset successfully. You can now login with your new password.",
       });
-
-      return ctx.send({ message: "Password reset successful" });
-    } catch (err) {
-      strapi.log.error(`[RESET PASSWORD FATAL ERROR] ${identifier}`, err);
-      return ctx.internalServerError("Password reset failed");
+    } catch (err: any) {
+      strapi.log.error("[RESET PASSWORD ERROR]", err);
+      return ctx.internalServerError({
+        message: err?.message || "Password reset failed",
+      });
     }
   },
 };

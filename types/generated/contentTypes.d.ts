@@ -1274,7 +1274,7 @@ export interface ApiGymMembershipGymMembership
     paymentIdempotencyKey: Schema.Attribute.String & Schema.Attribute.Unique;
     paymentProvider: Schema.Attribute.String;
     paymentStatus: Schema.Attribute.Enumeration<
-      ['pending', 'paid', 'failed', 'refunded']
+      ['pending', 'paid', 'pay_at_gym', 'failed', 'refunded']
     >;
     providerOrderId: Schema.Attribute.String & Schema.Attribute.Unique;
     providerPaymentId: Schema.Attribute.String;
@@ -1461,6 +1461,11 @@ export interface ApiLocalSubscriptionLocalSubscription
     draftAndPublish: false;
   };
   attributes: {
+    amountDue: Schema.Attribute.Decimal;
+    claimStatus: Schema.Attribute.Enumeration<
+      ['unclaimed', 'claimed', 'not_applicable']
+    > &
+      Schema.Attribute.DefaultTo<'not_applicable'>;
     client_detail: Schema.Attribute.Relation<
       'manyToOne',
       'api::client-detail.client-detail'
@@ -1469,10 +1474,15 @@ export interface ApiLocalSubscriptionLocalSubscription
       'manyToOne',
       'api::club-owner.club-owner'
     >;
+    collectedPaymentMode: Schema.Attribute.Enumeration<
+      ['cash', 'upi', 'card', 'online']
+    >;
     createdAt: Schema.Attribute.DateTime;
     createdBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
       Schema.Attribute.Private;
     endDate: Schema.Attribute.Date;
+    invitedName: Schema.Attribute.String;
+    invitedPhone: Schema.Attribute.String;
     local_membership_plan: Schema.Attribute.Relation<
       'manyToOne',
       'api::local-membership-plan.local-membership-plan'
@@ -1487,12 +1497,32 @@ export interface ApiLocalSubscriptionLocalSubscription
       'oneToOne',
       'api::membership-payment.membership-payment'
     >;
+    membership_plan_price: Schema.Attribute.Relation<
+      'manyToOne',
+      'api::membership-plan-price.membership-plan-price'
+    >;
     membershipType: Schema.Attribute.Enumeration<['local', 'app']> &
       Schema.Attribute.DefaultTo<'app'>;
+    paymentStatus: Schema.Attribute.Enumeration<
+      [
+        'pending_approval',
+        'paid',
+        'pay_at_gym',
+        'failed',
+        'rejected',
+        'cancelled',
+      ]
+    > &
+      Schema.Attribute.DefaultTo<'paid'>;
+    paymentType: Schema.Attribute.Enumeration<
+      ['online', 'pay_at_gym', 'offline_manual']
+    > &
+      Schema.Attribute.DefaultTo<'online'>;
     publishedAt: Schema.Attribute.DateTime;
+    rejectionReason: Schema.Attribute.String;
     startDate: Schema.Attribute.DateTime;
     subscriptionStatus: Schema.Attribute.Enumeration<
-      ['active', 'expired', 'cancelled']
+      ['active', 'pending', 'expired', 'cancelled', 'rejected']
     > &
       Schema.Attribute.DefaultTo<'active'>;
     updatedAt: Schema.Attribute.DateTime;
@@ -1592,6 +1622,10 @@ export interface ApiMembershipPlanPriceMembershipPlanPrice
       'api::gym-membership.gym-membership'
     >;
     isActive: Schema.Attribute.Boolean & Schema.Attribute.DefaultTo<true>;
+    local_subscriptions: Schema.Attribute.Relation<
+      'oneToMany',
+      'api::local-subscription.local-subscription'
+    >;
     locale: Schema.Attribute.String & Schema.Attribute.Private;
     localizations: Schema.Attribute.Relation<
       'oneToMany',
@@ -1713,6 +1747,7 @@ export interface ApiOtpRequestOtpRequest extends Struct.CollectionTypeSchema {
     purpose: Schema.Attribute.Enumeration<
       [
         'register',
+        'login',
         'reset_password',
         'club_owner_verification',
         'client_verification',

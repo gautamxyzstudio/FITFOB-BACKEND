@@ -29,6 +29,12 @@
       "target": "api::local-membership-plan.local-membership-plan",
       "inversedBy": "local_subscriptions"
     },
+    "membership_plan_price": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::membership-plan-price.membership-plan-price",
+      "inversedBy": "local_subscriptions"
+    },
     "membershipType": {
       "type": "enumeration",
       "default": "app",
@@ -48,9 +54,62 @@
       "default": "active",
       "enum": [
         "active",
+        "pending",
         "expired",
+        "cancelled",
+        "rejected"
+      ]
+    },
+    "claimStatus": {
+      "type": "enumeration",
+      "default": "not_applicable",
+      "enum": [
+        "unclaimed",
+        "claimed",
+        "not_applicable"
+      ]
+    },
+    "paymentType": {
+      "type": "enumeration",
+      "default": "online",
+      "enum": [
+        "online",
+        "pay_at_gym",
+        "offline_manual"
+      ]
+    },
+    "paymentStatus": {
+      "type": "enumeration",
+      "default": "paid",
+      "enum": [
+        "pending_approval",
+        "paid",
+        "pay_at_gym",
+        "failed",
+        "rejected",
         "cancelled"
       ]
+    },
+    "collectedPaymentMode": {
+      "type": "enumeration",
+      "enum": [
+        "cash",
+        "upi",
+        "card",
+        "online"
+      ]
+    },
+    "invitedPhone": {
+      "type": "string"
+    },
+    "invitedName": {
+      "type": "string"
+    },
+    "amountDue": {
+      "type": "decimal"
+    },
+    "rejectionReason": {
+      "type": "string"
     },
     "membership_payment": {
       "type": "relation",

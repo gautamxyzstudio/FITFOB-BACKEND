@@ -31,6 +31,7 @@
       "type": "enumeration",
       "enum": [
         "register",
+        "login",
         "reset_password",
         "club_owner_verification",
         "client_verification"

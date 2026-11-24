@@ -55,6 +55,12 @@
       "relation": "oneToMany",
       "target": "api::gym-membership.gym-membership",
       "mappedBy": "membership_plan_price"
+    },
+    "local_subscriptions": {
+      "type": "relation",
+      "relation": "oneToMany",
+      "target": "api::local-subscription.local-subscription",
+      "mappedBy": "membership_plan_price"
     }
   }
 }

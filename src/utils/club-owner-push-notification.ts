@@ -605,3 +605,100 @@ export async function sendClubOwnerTrialRescheduledNotification(
     };
   }
 }
+
+export interface ClubOwnerPayAtGymRequestInfo {
+  subscription: any;
+  client: any;
+  planName: string;
+  amount: number | string;
+}
+
+/**
+ * Specifically dispatches a push notification to gym owner when a customer requests to Pay at Gym
+ */
+export async function sendClubOwnerPayAtGymNotification(
+  clubOwner: any,
+  info: ClubOwnerPayAtGymRequestInfo
+) {
+  try {
+    const { client, planName, amount } = info;
+    const rawClientName =
+      client?.name ||
+      client?.fullName ||
+      client?.user?.username ||
+      client?.email ||
+      "A customer";
+
+    const clientName = toTitleCase(rawClientName);
+    const title = 'New "Pay at Gym" Request 💵';
+    const body = `${clientName} has requested to pay ₹${amount} at reception for ${planName}.`;
+
+    const data = {
+      screen: "PendingApprovalsScreen",
+      type: "MEMBERSHIP_PAY_AT_GYM",
+      clientName: String(clientName),
+      planName: String(planName),
+      amount: String(amount),
+    };
+
+    return await sendClubOwnerPushNotification(clubOwner, {
+      title,
+      body,
+      data,
+    });
+  } catch (err) {
+    strapi.log.error(
+      "[ClubOwnerPush] sendClubOwnerPayAtGymNotification error:",
+      err
+    );
+    return {
+      success: false,
+      sent: 0,
+      message: "Failed to dispatch pay at gym push notification",
+    };
+  }
+}
+
+/**
+ * Specifically dispatches a push notification to client when Pay at Gym request is approved or rejected
+ */
+export async function sendClientMembershipDecisionPush(
+  userId: number,
+  decision: "approved" | "rejected",
+  details: { gymName: string; planName: string; reason?: string }
+) {
+  if (!userId) return;
+  try {
+    const { gymName, planName, reason } = details;
+    let title = "";
+    let body = "";
+
+    if (decision === "approved") {
+      title = "Membership Approved! 🏋️";
+      body = `Your ${planName} membership at ${gymName} is now active! Your entry QR pass is unlocked.`;
+    } else {
+      title = "Payment Request Declined";
+      body = `Your request at ${gymName} was declined${
+        reason ? ` (${reason})` : ""
+      }. You can try again or pay online.`;
+    }
+
+    const { sendPushNotification } = await import("./push-notification");
+    return await sendPushNotification(userId, {
+      title,
+      body,
+      data: {
+        type:
+          decision === "approved"
+            ? "MEMBERSHIP_APPROVED"
+            : "MEMBERSHIP_REJECTED",
+        screen: decision === "approved" ? "QRScreen" : "GymDetailScreen",
+      },
+    });
+  } catch (err) {
+    strapi.log.warn(
+      "[Push] Failed to dispatch decision notification to client:",
+      err
+    );
+  }
+}
