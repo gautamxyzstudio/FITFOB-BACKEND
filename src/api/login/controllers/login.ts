@@ -405,7 +405,7 @@ export default {
           provider: "local",
           role: clientRole.id,
           isVerified: true,
-          verification_status: "verified",
+          verification_status: "approved",
         });
 
         strapi.log.info(
@@ -485,6 +485,7 @@ export default {
           data: {
             name: user.fullName || "Client",
             phoneNumber: formattedPhone,
+            email:user.email,
             user: user.id,
             clientId: newClientId,
           },

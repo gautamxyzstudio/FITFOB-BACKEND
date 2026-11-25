@@ -76,13 +76,23 @@ function formatTimeAgo(dateVal: any): string {
 }
 
 function getClientAppInviteLink(): string {
-  // Allows overriding via CLIENT_APP_INVITE_URL in .env (e.g. for Expo Go, Staging APK download link, or fitfob-client://)
-  if (process.env.CLIENT_APP_INVITE_URL) {
-    return process.env.CLIENT_APP_INVITE_URL;
+  const envUrl = process.env.CLIENT_APP_INVITE_URL;
+
+  // 1. If explicitly set to an HTTP/HTTPS URL, use it directly (e.g. direct APK link or custom landing)
+  if (
+    envUrl &&
+    (envUrl.startsWith("http://") || envUrl.startsWith("https://"))
+  ) {
+    return envUrl;
   }
-  const appPackage =
-    process.env.CLIENT_APP_PACKAGE || "com.xyzstudio.fitfob.client";
-  return `https://play.google.com/store/apps/details?id=${appPackage}`;
+
+  // 2. Otherwise default to the smart app-invite landing page on this backend
+  const backendUrl =
+    process.env.BACKEND_URL ||
+    process.env.PUBLIC_URL ||
+    "https://backend.fitfob.com";
+
+  return `${backendUrl}/api/app-invite`;
 }
 
 /* ---------- ROLE HELPER ---------- */
@@ -1761,7 +1771,10 @@ export default factories.createCoreController(
         }
 
         // Build app invite link
-        const inviteLink = getClientAppInviteLink();
+        const baseUrl = strapi.config.get("server.url") || "https://fitfob.com";
+        const inviteLink = `${baseUrl}/invite?phone=${encodeURIComponent(
+          cleanPhone,
+        )}`;
 
         // Send Twilio Invite (SMS / WhatsApp) FIRST
         const inviteResult = await sendTwilioOfflineMemberInvite({
@@ -1790,10 +1803,6 @@ export default factories.createCoreController(
 
           return ctx.badRequest(
             `Failed to send invite to ${cleanPhone}. Local subscription was not created. (${errorMsg})`,
-            {
-              success: false,
-              inviteResult,
-            },
           );
         }
 
@@ -2154,7 +2163,10 @@ export default factories.createCoreController(
         let inviteResult = null;
         if (body.resendInvite || body.phoneNumber) {
           // Build app invite link
-          const inviteLink = getClientAppInviteLink();
+           const baseUrl = strapi.config.get("server.url") || "https://fitfob.com";
+        const inviteLink = `${baseUrl}/invite?phone=${encodeURIComponent(
+     newPhone   
+        )}`;
 
           inviteResult = await sendTwilioOfflineMemberInvite({
             phone: newPhone,
@@ -3314,6 +3326,149 @@ export default factories.createCoreController(
         strapi.log.error("REJECT PAY AT GYM ERROR:", error);
         return ctx.internalServerError("Failed to decline request");
       }
+    },
+
+    /* =======================================================
+       12. PUBLIC: APP INVITE SMART LANDING & REDIRECT PAGE
+       Endpoint: GET /api/app-invite
+    ======================================================= */
+    async renderAppInviteLanding(ctx: Context) {
+      const appPackage =
+        process.env.CLIENT_APP_PACKAGE || "com.xyzstudio.fitfob.client";
+      const customScheme =
+        process.env.CLIENT_APP_SCHEME || "fitfob-client://";
+      const apkUrl =
+        process.env.CLIENT_APP_APK_URL ||
+        process.env.STAGING_APK_URL ||
+        "";
+      const expoGoUrl = process.env.CLIENT_EXPO_GO_URL || "";
+      const playStoreUrl = `https://play.google.com/store/apps/details?id=${appPackage}`;
+
+      const phone = (ctx.query.phone as string) || "";
+      const deepLink = phone
+        ? `${customScheme}?phone=${encodeURIComponent(phone)}`
+        : customScheme;
+
+      ctx.type = "html";
+      ctx.body = `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>FitFob - Open App</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      background: #0B0E14;
+      color: #FFFFFF;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 24px;
+      text-align: center;
+    }
+    .card {
+      background: #161B22;
+      border: 1px solid #30363D;
+      border-radius: 20px;
+      padding: 32px 24px;
+      max-width: 400px;
+      width: 100%;
+      box-shadow: 0 8px 24px rgba(0,0,0,0.4);
+    }
+    .logo-badge {
+      width: 72px;
+      height: 72px;
+      border-radius: 18px;
+      background: linear-gradient(135deg, #10B981, #059669);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 32px;
+      font-weight: 800;
+      color: #fff;
+      margin: 0 auto 20px;
+      box-shadow: 0 4px 14px rgba(16, 185, 129, 0.35);
+    }
+    h1 { font-size: 24px; font-weight: 700; margin-bottom: 8px; color: #FFFFFF; }
+    p { font-size: 14px; color: #9CA3AF; margin-bottom: 24px; line-height: 1.5; }
+    .btn {
+      display: block;
+      width: 100%;
+      padding: 14px 20px;
+      border-radius: 12px;
+      font-size: 15px;
+      font-weight: 600;
+      text-decoration: none;
+      margin-bottom: 12px;
+      transition: all 0.2s ease;
+      cursor: pointer;
+      border: none;
+    }
+    .btn-primary {
+      background: #10B981;
+      color: #FFFFFF;
+      box-shadow: 0 4px 12px rgba(16, 185, 129, 0.3);
+    }
+    .btn-secondary {
+      background: #21262D;
+      color: #E5E7EB;
+      border: 1px solid #30363D;
+    }
+    .btn-tertiary {
+      background: transparent;
+      color: #9CA3AF;
+      font-size: 13px;
+      padding: 8px;
+    }
+    .hint {
+      font-size: 12px;
+      color: #6B7280;
+      margin-top: 16px;
+    }
+  </style>
+  <script>
+    window.addEventListener("DOMContentLoaded", function() {
+      // Auto-trigger deep link into the app if installed on device
+      setTimeout(function() {
+        window.location.href = "${deepLink}";
+      }, 400);
+    });
+  </script>
+</head>
+<body>
+  <div class="card">
+    <div class="logo-badge">FF</div>
+    <h1>Welcome to FitFob</h1>
+    <p>Your gym membership is ready. Open the app to claim your digital gym entry pass.</p>
+
+    <a href="${deepLink}" class="btn btn-primary">Open FitFob App</a>
+
+    ${
+      apkUrl
+        ? '<a href="' +
+          apkUrl +
+          '" class="btn btn-secondary">Download Android App (APK)</a>'
+        : ""
+    }
+
+    ${
+      expoGoUrl
+        ? '<a href="' +
+          expoGoUrl +
+          '" class="btn btn-secondary">Open in Expo Go</a>'
+        : ""
+    }
+
+    <a href="${playStoreUrl}" class="btn btn-tertiary">View on Google Play</a>
+
+    <div class="hint">Already have the build installed? Click "Open FitFob App".</div>
+  </div>
+</body>
+</html>`;
     },
   }),
 );
