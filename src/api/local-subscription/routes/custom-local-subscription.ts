@@ -147,15 +147,5 @@ export default {
         auth: false,
       },
     },
-
-    // 12. Public App Invite Smart Landing & Redirect
-    {
-      method: "GET",
-      path: "/app-invite",
-      handler: "local-subscription.renderAppInviteLanding",
-      config: {
-        auth: false,
-      },
-    },
   ],
 };

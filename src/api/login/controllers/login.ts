@@ -34,7 +34,11 @@ const extract10Digits = (value: string): string => {
 };
 
 /* ================= CLIENT DETAIL DATA POPULATOR ================= */
-async function getClientDetailData(userId: number, userEmail?: string, userPhone?: string) {
+async function getClientDetailData(
+  userId: number,
+  userEmail?: string,
+  userPhone?: string,
+) {
   try {
     const userWithClientDetail: any = await strapi.db
       .query("plugin::users-permissions.user")
@@ -44,129 +48,36 @@ async function getClientDetailData(userId: number, userEmail?: string, userPhone
           client_detail: {
             populate: {
               selfieUpload: true,
-              local_subscriptions: {
-                populate: {
-                  local_membership_plan: {
-                    populate: ["club_owner"],
-                  },
-                  membership_plan_price: {
-                    populate: ["membership_tier"],
-                  },
-                  club_owner: true,
-                },
-              },
-              outdoor_subscriptions: true,
             },
           },
         },
       });
 
-    const detail = userWithClientDetail?.client_detail;
+    let detail = userWithClientDetail?.client_detail;
+    if (!detail) {
+      const clean10 = userPhone ? userPhone.replace(/\D/g, "").slice(-10) : "";
+      const phoneVariants = clean10
+        ? [`+91${clean10}`, clean10, `91${clean10}`]
+        : [];
+      detail = await strapi.db
+        .query("api::client-detail.client-detail")
+        .findOne({
+          where: {
+            $or: [
+              { user: userId },
+              ...(phoneVariants.length > 0
+                ? [{ phoneNumber: { $in: phoneVariants } }]
+                : []),
+              ...(userEmail ? [{ email: userEmail }] : []),
+            ],
+          },
+          populate: {
+            selfieUpload: true,
+          },
+        });
+    }
+
     if (!detail) return null;
-
-    const getUniqueSubscriptions = (subscriptions: any[] = []) => {
-      const uniqueMap = new Map<string, any>();
-      for (const subscription of subscriptions) {
-        const key = subscription.documentId ?? String(subscription.id);
-        const existing = uniqueMap.get(key);
-        if (!existing) {
-          uniqueMap.set(key, subscription);
-          continue;
-        }
-        if (!existing.publishedAt && subscription.publishedAt) {
-          uniqueMap.set(key, subscription);
-        }
-      }
-      return Array.from(uniqueMap.values());
-    };
-
-    const localSubscriptions = await Promise.all(
-      getUniqueSubscriptions(detail.local_subscriptions).map(
-        async (sub: any) => {
-          let clubName =
-            sub.local_membership_plan?.club_owner?.clubName ||
-            sub.local_membership_plan?.club_owner?.club_name ||
-            sub.club_owner?.clubName ||
-            sub.club_owner?.club_name ||
-            null;
-
-          if (!clubName && (sub.local_membership_plan || sub.id)) {
-            const planId =
-              typeof sub.local_membership_plan === "object"
-                ? sub.local_membership_plan?.id ||
-                  sub.local_membership_plan?.documentId
-                : sub.local_membership_plan;
-
-            if (planId) {
-              const plan: any = await strapi.db
-                .query("api::local-membership-plan.local-membership-plan")
-                .findOne({
-                  where:
-                    typeof planId === "number"
-                      ? { id: planId }
-                      : { documentId: planId },
-                  populate: ["club_owner"],
-                });
-
-              clubName =
-                plan?.club_owner?.clubName ||
-                plan?.club_owner?.club_name ||
-                null;
-            }
-
-            if (!clubName && sub.id) {
-              const fullSub: any = await strapi.db
-                .query("api::local-subscription.local-subscription")
-                .findOne({
-                  where: { id: sub.id },
-                  populate: {
-                    local_membership_plan: {
-                      populate: ["club_owner"],
-                    },
-                    club_owner: true,
-                  },
-                });
-
-              clubName =
-                fullSub?.local_membership_plan?.club_owner?.clubName ||
-                fullSub?.local_membership_plan?.club_owner?.club_name ||
-                fullSub?.club_owner?.clubName ||
-                fullSub?.club_owner?.club_name ||
-                null;
-            }
-          }
-
-          const planTitle =
-            sub.membership_plan_price?.title ||
-            sub.membership_plan_price?.membership_tier?.name ||
-            sub.local_membership_plan?.name ||
-            sub.local_membership_plan?.title ||
-            null;
-
-          return {
-            id: sub.id,
-            documentId: sub.documentId,
-            startDate: sub.startDate,
-            endDate: sub.endDate,
-            subscriptionStatus: sub.subscriptionStatus,
-            claimStatus: sub.claimStatus,
-            paymentStatus: sub.paymentStatus,
-            planTitle,
-            clubName,
-          };
-        },
-      ),
-    );
-
-    const outdoorSubscriptions = getUniqueSubscriptions(
-      detail.outdoor_subscriptions,
-    ).map((sub: any) => ({
-      totalVisitsAllowed: sub.totalVisitsAllowed,
-      totalVisits: sub.totalVisitsAllowed,
-      usedVisits: sub.usedVisits,
-      remainingVisits: sub.remainingVisits,
-      subscriptionStatus: sub.subscriptionStatus,
-    }));
 
     return {
       email: detail.email ?? userEmail,
@@ -174,11 +85,12 @@ async function getClientDetailData(userId: number, userEmail?: string, userPhone
       selfieUrl: detail.selfieUpload?.url ?? null,
       clientId: detail.clientId,
       name: detail.name ?? null,
-      outdoor_subscriptions: outdoorSubscriptions,
-      local_subscriptions: localSubscriptions,
     };
   } catch (err) {
-    strapi.log.error("[getClientDetailData] Error fetching client detail:", err);
+    strapi.log.error(
+      "[getClientDetailData] Error fetching client detail:",
+      err,
+    );
     return null;
   }
 }
@@ -206,7 +118,9 @@ export default {
       }
 
       const formattedPhone = `+91${clean10}`;
-      strapi.log.info(`[LOGIN SEND-OTP] Processing OTP request for: ${formattedPhone}`);
+      strapi.log.info(
+        `[LOGIN SEND-OTP] Processing OTP request for: ${formattedPhone}`,
+      );
 
       // Check if client detail or offline member exists
       const phoneVariants = [formattedPhone, clean10, `91${clean10}`];
@@ -249,7 +163,9 @@ export default {
       try {
         await sendTwilioOtp(formattedPhone, otp);
         twilioSent = true;
-        strapi.log.info(`[LOGIN SEND-OTP] Twilio OTP sent to ${formattedPhone}`);
+        strapi.log.info(
+          `[LOGIN SEND-OTP] Twilio OTP sent to ${formattedPhone}`,
+        );
       } catch (smsErr: any) {
         twilioError = smsErr?.message || "Twilio dispatch error";
         strapi.log.warn(
@@ -302,7 +218,9 @@ export default {
       const formattedPhone = `+91${clean10}`;
       const phoneVariants = [formattedPhone, clean10, `91${clean10}`];
 
-      strapi.log.info(`[LOGIN VERIFY-OTP] Verifying OTP for: ${formattedPhone}`);
+      strapi.log.info(
+        `[LOGIN VERIFY-OTP] Verifying OTP for: ${formattedPhone}`,
+      );
 
       // Fetch latest active OTP request for this phone
       const records: any[] = await strapi.entityService.findMany(
@@ -318,32 +236,49 @@ export default {
 
       const record = records?.[0];
       if (!record) {
-        return ctx.badRequest("No OTP request found. Please request a new OTP.");
+        return ctx.badRequest(
+          "No OTP request found. Please request a new OTP.",
+        );
       }
 
       // Check expiry
       if (Date.now() >= new Date(record.expires_at).getTime()) {
-        await strapi.entityService.delete("api::otp-request.otp-request", record.id);
+        await strapi.entityService.delete(
+          "api::otp-request.otp-request",
+          record.id,
+        );
         return ctx.badRequest("OTP expired. Please request a new OTP.");
       }
 
       // Check max attempts
       if ((record.attempts || 0) >= 5) {
-        await strapi.entityService.delete("api::otp-request.otp-request", record.id);
-        return ctx.badRequest("Too many failed attempts. Please request a new OTP.");
+        await strapi.entityService.delete(
+          "api::otp-request.otp-request",
+          record.id,
+        );
+        return ctx.badRequest(
+          "Too many failed attempts. Please request a new OTP.",
+        );
       }
 
       // Validate OTP hash
       const isValid = await bcrypt.compare(String(otp).trim(), record.otp_hash);
       if (!isValid) {
-        await strapi.entityService.update("api::otp-request.otp-request", record.id, {
-          data: { attempts: (record.attempts || 0) + 1 },
-        });
+        await strapi.entityService.update(
+          "api::otp-request.otp-request",
+          record.id,
+          {
+            data: { attempts: (record.attempts || 0) + 1 },
+          },
+        );
         return ctx.badRequest("Invalid OTP");
       }
 
       // OTP is valid -> delete consumed record
-      await strapi.entityService.delete("api::otp-request.otp-request", record.id);
+      await strapi.entityService.delete(
+        "api::otp-request.otp-request",
+        record.id,
+      );
 
       // Check if Strapi user exists
       let user: any = await strapi.db
@@ -388,11 +323,31 @@ export default {
         }
 
         if (!clientRole) {
-          strapi.log.error("[LOGIN VERIFY-OTP] Client role not found in Strapi");
-          return ctx.internalServerError("Client role configuration not found.");
+          strapi.log.error(
+            "[LOGIN VERIFY-OTP] Client role not found in Strapi",
+          );
+          return ctx.internalServerError(
+            "Client role configuration not found.",
+          );
         }
 
-        const memberName = clientDetail?.name || "Client";
+        // Check if there is an offline subscription or pending invite with the invited name
+        let initialName = clientDetail?.name;
+        if (!initialName || initialName === "Client") {
+          const offlineSub: any = await strapi.db
+            .query("api::local-subscription.local-subscription")
+            .findOne({
+              where: {
+                invitedPhone: { $in: phoneVariants },
+              },
+              orderBy: { id: "desc" },
+            });
+          if (offlineSub?.invitedName) {
+            initialName = offlineSub.invitedName;
+          }
+        }
+
+        const memberName = initialName || "Client";
         const userService = strapi.plugin("users-permissions").service("user");
 
         user = await userService.add({
@@ -434,7 +389,9 @@ export default {
           }
         } catch (cognitoErr: any) {
           strapi.log.warn(
-            `[LOGIN VERIFY-OTP] Cognito creation error: ${cognitoErr?.message || cognitoErr}`,
+            `[LOGIN VERIFY-OTP] Cognito creation error: ${
+              cognitoErr?.message || cognitoErr
+            }`,
           );
         }
       } else if (!user.cognitoSub) {
@@ -457,7 +414,9 @@ export default {
           }
         } catch (cognitoErr: any) {
           strapi.log.warn(
-            `[LOGIN VERIFY-OTP] Cognito sync warning: ${cognitoErr?.message || cognitoErr}`,
+            `[LOGIN VERIFY-OTP] Cognito sync warning: ${
+              cognitoErr?.message || cognitoErr
+            }`,
           );
         }
       }
@@ -473,30 +432,95 @@ export default {
           updateData.clientId = newClientId;
           clientDetail.clientId = newClientId;
         }
+        if (
+          (!clientDetail.name || clientDetail.name === "Client") &&
+          user.fullName &&
+          user.fullName !== "Client"
+        ) {
+          updateData.name = user.fullName;
+          clientDetail.name = user.fullName;
+        }
         if (Object.keys(updateData).length > 0) {
           await strapi.db.query("api::client-detail.client-detail").update({
             where: { id: clientDetail.id },
             data: updateData,
           });
         }
+        try {
+          await strapi.db.query("plugin::users-permissions.user").update({
+            where: { id: user.id },
+            data: {
+              client_detail: clientDetail.documentId || clientDetail.id,
+            },
+          });
+        } catch (_) {}
       } else {
         const newClientId = await generateClientId();
-        clientDetail = await strapi.db.query("api::client-detail.client-detail").create({
-          data: {
-            name: user.fullName || "Client",
-            phoneNumber: formattedPhone,
-            email:user.email,
-            user: user.id,
-            clientId: newClientId,
-          },
-        });
+        clientDetail = await strapi.db
+          .query("api::client-detail.client-detail")
+          .create({
+            data: {
+              name: user.fullName || "Client",
+              phoneNumber: formattedPhone,
+              email: user.email,
+              user: user.id,
+              clientId: newClientId,
+            },
+          });
+        try {
+          await strapi.db.query("plugin::users-permissions.user").update({
+            where: { id: user.id },
+            data: {
+              client_detail: clientDetail.documentId || clientDetail.id,
+            },
+          });
+        } catch (_) {}
+      }
+
+      // Link any offline subscriptions matching phoneVariants to this clientDetail
+      try {
+        const unlinkedSubs: any[] = await strapi.db
+          .query("api::local-subscription.local-subscription")
+          .findMany({
+            where: {
+              invitedPhone: { $in: phoneVariants },
+              client_detail: null,
+            },
+          });
+
+        for (const unlinked of unlinkedSubs) {
+          if ((strapi as any).documents && unlinked.documentId) {
+            await (strapi as any)
+              .documents("api::local-subscription.local-subscription")
+              .update({
+                documentId: unlinked.documentId,
+                data: {
+                  client_detail: clientDetail.documentId || clientDetail.id,
+                },
+              });
+          } else {
+            await strapi.db
+              .query("api::local-subscription.local-subscription")
+              .update({
+                where: { id: unlinked.id },
+                data: {
+                  client_detail: clientDetail.id,
+                },
+              });
+          }
+        }
+      } catch (linkErr) {
+        strapi.log.warn(
+          "[LOGIN VERIFY-OTP] Linking offline subscriptions warning:",
+          linkErr,
+        );
       }
 
       // Issue Strapi JWT
       const jwtService = strapi.plugin("users-permissions").service("jwt");
       const strapiJwt = jwtService.issue({ id: user.id }) as string;
 
-      // Populate full clientDetail
+      // Populate full clientDetail (now includes linked offline subscription & clientId)
       const fullClientDetail = await getClientDetailData(
         user.id,
         user.email,
@@ -525,6 +549,27 @@ export default {
 
       let pendingClaim: any = null;
       if (pendingSub) {
+        // If pendingSub has invitedName and clientDetail/user name is still default 'Client', sync name
+        if (
+          pendingSub.invitedName &&
+          (!clientDetail.name || clientDetail.name === "Client")
+        ) {
+          try {
+            clientDetail.name = pendingSub.invitedName;
+            await strapi.db.query("api::client-detail.client-detail").update({
+              where: { id: clientDetail.id },
+              data: { name: pendingSub.invitedName },
+            });
+            if (!user.fullName || user.fullName === "Client") {
+              user.fullName = pendingSub.invitedName;
+              await strapi.db.query("plugin::users-permissions.user").update({
+                where: { id: user.id },
+                data: { fullName: pendingSub.invitedName },
+              });
+            }
+          } catch (_) {}
+        }
+
         const gymName =
           pendingSub.club_owner?.clubName ||
           pendingSub.club_owner?.club_name ||
@@ -543,7 +588,9 @@ export default {
           startDate: pendingSub.startDate,
           endDate: pendingSub.endDate,
           claimStatus: pendingSub.claimStatus,
-          claimUrl: `/api/client/claim-membership/${pendingSub.documentId || pendingSub.id}`,
+          claimUrl: `/api/client/claim-membership/${
+            pendingSub.documentId || pendingSub.id
+          }`,
         };
       }
 
@@ -563,7 +610,9 @@ export default {
         },
         pendingClaim,
         message: pendingClaim
-          ? `Welcome ${clientDetail?.name || ""}! ${pendingClaim.gymName} has linked your active membership.`
+          ? `Welcome ${clientDetail?.name || ""}! ${
+              pendingClaim.gymName
+            } has linked your active membership.`
           : "Login successful",
       });
     } catch (err: any) {
@@ -740,17 +789,6 @@ export default {
               client_detail: {
                 populate: {
                   selfieUpload: true,
-                  local_subscriptions: {
-                    populate: {
-                      local_membership_plan: {
-                        populate: {
-                          club_owner: true,
-                        },
-                      },
-                      club_owner: true,
-                    },
-                  },
-                  outdoor_subscriptions: true,
                 },
               },
             },
@@ -759,117 +797,13 @@ export default {
         const detail = userWithClientDetail?.client_detail;
 
         if (detail) {
-          const getUniqueSubscriptions = (subscriptions: any[] = []) => {
-            const uniqueMap = new Map<string, any>();
-
-            for (const subscription of subscriptions) {
-              const key = subscription.documentId ?? String(subscription.id);
-
-              const existing = uniqueMap.get(key);
-
-              if (!existing) {
-                uniqueMap.set(key, subscription);
-                continue;
-              }
-
-              if (!existing.publishedAt && subscription.publishedAt) {
-                uniqueMap.set(key, subscription);
-              }
-            }
-
-            return Array.from(uniqueMap.values());
-          };
-
-          const localSubscriptions = await Promise.all(
-            getUniqueSubscriptions(detail.local_subscriptions).map(
-              async (sub: any) => {
-                let clubName =
-                  sub.local_membership_plan?.club_owner?.clubName ||
-                  sub.local_membership_plan?.club_owner?.club_name ||
-                  sub.club_owner?.clubName ||
-                  sub.club_owner?.club_name ||
-                  null;
-
-                if (!clubName && (sub.local_membership_plan || sub.id)) {
-                  const planId =
-                    typeof sub.local_membership_plan === "object"
-                      ? sub.local_membership_plan?.id ||
-                        sub.local_membership_plan?.documentId
-                      : sub.local_membership_plan;
-
-                  if (planId) {
-                    const plan: any = await strapi.db
-                      .query("api::local-membership-plan.local-membership-plan")
-                      .findOne({
-                        where:
-                          typeof planId === "number"
-                            ? { id: planId }
-                            : { documentId: planId },
-                        populate: ["club_owner"],
-                      });
-
-                    clubName =
-                      plan?.club_owner?.clubName ||
-                      plan?.club_owner?.club_name ||
-                      null;
-                  }
-
-                  if (!clubName && sub.id) {
-                    const fullSub: any = await strapi.db
-                      .query("api::local-subscription.local-subscription")
-                      .findOne({
-                        where: { id: sub.id },
-                        populate: {
-                          local_membership_plan: {
-                            populate: ["club_owner"],
-                          },
-                          club_owner: true,
-                        },
-                      });
-
-                    clubName =
-                      fullSub?.local_membership_plan?.club_owner?.clubName ||
-                      fullSub?.local_membership_plan?.club_owner?.club_name ||
-                      fullSub?.club_owner?.clubName ||
-                      fullSub?.club_owner?.club_name ||
-                      null;
-                  }
-                }
-
-                return {
-                  startDate: sub.startDate,
-                  endDate: sub.endDate,
-                  subscriptionStatus: sub.subscriptionStatus,
-                  clubName,
-                };
-              },
-            ),
-          );
-
-          const outdoorSubscriptions = getUniqueSubscriptions(
-            detail.outdoor_subscriptions,
-          ).map((sub: any) => ({
-            totalVisitsAllowed: sub.totalVisitsAllowed,
-            totalVisits: sub.totalVisitsAllowed,
-            usedVisits: sub.usedVisits,
-            remainingVisits: sub.remainingVisits,
-            subscriptionStatus: sub.subscriptionStatus,
-          }));
 
           clientDetail = {
             email: detail.email ?? user.email,
-
             phone: detail.phoneNumber ?? user.phoneNumber,
-
             selfieUrl: detail.selfieUpload?.url ?? null,
-
             clientId: detail.clientId,
-
             name: detail.name ?? null,
-
-            outdoor_subscriptions: outdoorSubscriptions,
-
-            local_subscriptions: localSubscriptions,
           };
         }
       } else if (roleName === "clubowner") {

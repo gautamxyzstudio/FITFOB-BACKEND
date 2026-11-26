@@ -1,7 +1,6 @@
 import { factories } from "@strapi/strapi";
 import { Context } from "koa";
 import { sendTwilioOfflineMemberInvite } from "../../../services/twilio-sms";
-import { generateClientId } from "../../../utils/generateClientId";
 import {
   sendClubOwnerPayAtGymNotification,
   sendClientMembershipDecisionPush,
@@ -16,7 +15,6 @@ const MEMBERSHIP_PLAN_PRICE_UID =
   "api::membership-plan-price.membership-plan-price" as any;
 const GYM_MEMBERSHIP_UID = "api::gym-membership.gym-membership" as any;
 const GYM_CONTRACT_UID = "api::gym-contract.gym-contract" as any;
-import { createMembershipOrder } from "../../../utils/razorpay";
 
 /* ---------- AUTH USER HELPER ---------- */
 async function getAuthUser(ctx: Context) {
@@ -85,14 +83,7 @@ function getClientAppInviteLink(): string {
   ) {
     return envUrl;
   }
-
-  // 2. Otherwise default to the smart app-invite landing page on this backend
-  const backendUrl =
-    process.env.BACKEND_URL ||
-    process.env.PUBLIC_URL ||
-    "https://backend.fitfob.com";
-
-  return `${backendUrl}/api/app-invite`;
+  return null;
 }
 
 /* ---------- ROLE HELPER ---------- */
@@ -1724,44 +1715,113 @@ export default factories.createCoreController(
           ? String(endDate).split("T")[0]
           : calculatedEndDateStr;
 
-        // Resolve or create client detail placeholder
-        let client = await resolveClientDetail(cleanPhone);
-        const isNewClient = !client;
-        if (!client) {
-          const newClientId = await generateClientId();
-          client = await strapi.db.query(CLIENT_UID).create({
-            data: {
-              name: memberName,
-              phoneNumber: cleanPhone,
-              clientId: newClientId,
-            },
-          });
-        } else if (!client.clientId) {
-          const newClientId = await generateClientId();
-          await strapi.db.query(CLIENT_UID).update({
-            where: { id: client.id },
-            data: {
-              clientId: newClientId,
-            },
-          });
-          client.clientId = newClientId;
+        // Check if client detail already exists for this phone number (DO NOT create new client or user here)
+        const client = await resolveClientDetail(cleanPhone);
+
+        // Check if member already has an active membership of ANY OTHER club owner
+        const phoneVariants = [
+          cleanPhone,
+          rawDigits.slice(-10),
+          `91${rawDigits.slice(-10)}`,
+        ];
+        const userMatchOr: any[] = [{ invitedPhone: { $in: phoneVariants } }];
+        if (client?.id) {
+          userMatchOr.push({ client_detail: client.id });
         }
 
-        // Check if client already has an active subscription for this plan at this gym
-        const existingActiveWhere: any = {
-          client_detail: client.id,
-          club_owner: clubOwner.id,
-          subscriptionStatus: "active",
-          endDate: { $gte: todayStr },
+        // 1. Check active local-subscription across other clubs
+        const otherActiveLocalSub: any = await strapi.db
+          .query(LOCAL_SUB_UID)
+          .findOne({
+            where: {
+              $and: [
+                { $or: userMatchOr },
+                { club_owner: { $ne: clubOwner.id } },
+                { subscriptionStatus: "active" },
+                {
+                  $or: [
+                    { endDate: { $gte: todayStr } },
+                    { endDate: { $null: true } },
+                  ],
+                },
+              ],
+            },
+            populate: { club_owner: true },
+          });
+
+        if (otherActiveLocalSub) {
+          const otherClubName =
+            otherActiveLocalSub.club_owner?.clubName ||
+            otherActiveLocalSub.club_owner?.name ||
+            "another gym";
+          return ctx.badRequest(
+            `Member ${memberName} (${cleanPhone}) already has an active membership at another club (${otherClubName}) expiring on ${
+              otherActiveLocalSub.endDate || "active"
+            }.`,
+          );
+        }
+
+        // 2. Check active app gym-membership across other clubs
+        if (client?.id) {
+          const otherActiveGymMem: any = await strapi.db
+            .query(GYM_MEMBERSHIP_UID)
+            .findOne({
+              where: {
+                client_detail: client.id,
+                membershipStatus: "active",
+                $or: [
+                  { endDate: { $gte: todayStr } },
+                  { endDate: { $null: true } },
+                ],
+              },
+              populate: {
+                gym_contract: {
+                  populate: { club_owner: true },
+                },
+              },
+            });
+
+          if (otherActiveGymMem) {
+            const memClubOwnerId =
+              otherActiveGymMem.gym_contract?.club_owner?.id;
+            if (
+              memClubOwnerId &&
+              Number(memClubOwnerId) !== Number(clubOwner.id)
+            ) {
+              const otherClubName =
+                otherActiveGymMem.gym_contract?.club_owner?.clubName ||
+                "another gym";
+              return ctx.badRequest(
+                `Member ${memberName} (${cleanPhone}) already has an active membership at another club (${otherClubName}) expiring on ${
+                  otherActiveGymMem.endDate || "active"
+                }.`,
+              );
+            }
+          }
+        }
+
+        // 3. Check if member already has an active subscription for this plan at this gym
+        const currentGymWhere: any = {
+          $and: [
+            { $or: userMatchOr },
+            { club_owner: clubOwner.id },
+            { subscriptionStatus: "active" },
+            {
+              $or: [
+                { endDate: { $gte: todayStr } },
+                { endDate: { $null: true } },
+              ],
+            },
+          ],
         };
         if (plan.isPlanPrice) {
-          existingActiveWhere.membership_plan_price = plan.id;
+          currentGymWhere.$and.push({ membership_plan_price: plan.id });
         } else {
-          existingActiveWhere.local_membership_plan = plan.id;
+          currentGymWhere.$and.push({ local_membership_plan: plan.id });
         }
 
         const existingActive = await strapi.db.query(LOCAL_SUB_UID).findOne({
-          where: existingActiveWhere,
+          where: currentGymWhere,
         });
 
         if (existingActive) {
@@ -1771,10 +1831,10 @@ export default factories.createCoreController(
         }
 
         // Build app invite link
-        const baseUrl = strapi.config.get("server.url") || "https://fitfob.com";
-        const inviteLink = `${baseUrl}/invite?phone=${encodeURIComponent(
-          cleanPhone,
-        )}`;
+        const inviteBase = getClientAppInviteLink();
+        const inviteLink = `${inviteBase}${
+          inviteBase.includes("?") ? "&" : "?"
+        }phone=${encodeURIComponent(cleanPhone)}`;
 
         // Send Twilio Invite (SMS / WhatsApp) FIRST
         const inviteResult = await sendTwilioOfflineMemberInvite({
@@ -1787,28 +1847,53 @@ export default factories.createCoreController(
           channel: channel || "both",
         });
 
-        // Do not create local subscription if both SMS and WhatsApp delivery failed
-        if (!inviteResult.smsSent && !inviteResult.whatsappSent) {
-          if (isNewClient && client?.id) {
-            try {
-              await strapi.db
-                .query(CLIENT_UID)
-                .delete({ where: { id: client.id } });
-            } catch (_) {}
+        // Channel delivery validation:
+        // If channel is "both" and ONE of SMS or WhatsApp failed, show error and do not create local subscription!
+        const selectedChannel = (channel || "both").toLowerCase().trim();
+        let deliveryFailed = false;
+        let channelFailMessage = "";
+
+        if (selectedChannel === "both") {
+          if (!inviteResult.smsSent || !inviteResult.whatsappSent) {
+            deliveryFailed = true;
+            if (!inviteResult.smsSent && !inviteResult.whatsappSent) {
+              channelFailMessage =
+                "Both SMS and WhatsApp invitations failed to send.";
+            } else if (!inviteResult.smsSent) {
+              channelFailMessage = "SMS invitation failed to send.";
+            } else {
+              channelFailMessage = "WhatsApp invitation failed to send.";
+            }
           }
-          const errorMsg =
+        } else if (selectedChannel === "sms") {
+          if (!inviteResult.smsSent) {
+            deliveryFailed = true;
+            channelFailMessage = "SMS invitation failed to send.";
+          }
+        } else if (selectedChannel === "whatsapp") {
+          if (!inviteResult.whatsappSent) {
+            deliveryFailed = true;
+            channelFailMessage = "WhatsApp invitation failed to send.";
+          }
+        }
+
+        if (deliveryFailed) {
+          const detailStr =
             inviteResult.errors && inviteResult.errors.length > 0
               ? inviteResult.errors.join("; ")
-              : "Failed to deliver invitation via SMS and WhatsApp";
+              : channelFailMessage;
 
           return ctx.badRequest(
-            `Failed to send invite to ${cleanPhone}. Local subscription was not created. (${errorMsg})`,
+            `Failed to send invite to ${cleanPhone}. Local subscription was not created. (${channelFailMessage} ${detailStr})`,
+            {
+              success: false,
+              inviteResult,
+            },
           );
         }
 
         // Create local subscription only after invite was successfully delivered
         const subData: any = {
-          client_detail: client.documentId || client.id,
           club_owner: clubOwner.documentId || clubOwner.id,
           membershipType: "local",
           subscriptionStatus: "active",
@@ -1822,6 +1907,10 @@ export default factories.createCoreController(
           endDate: finalEndDateStr,
           amountDue: planPrice != null ? planPrice : 0,
         };
+
+        if (client) {
+          subData.client_detail = client.documentId || client.id;
+        }
 
         if (plan.isPlanPrice) {
           subData.membership_plan_price = plan.documentId || plan.id;
@@ -1849,7 +1938,7 @@ export default factories.createCoreController(
         if (!createdSub) {
           const entityData: any = {
             ...subData,
-            client_detail: client.id,
+            client_detail: client ? client.id : null,
             club_owner: clubOwner.id,
           };
           if (plan.isPlanPrice) {
@@ -2163,10 +2252,10 @@ export default factories.createCoreController(
         let inviteResult = null;
         if (body.resendInvite || body.phoneNumber) {
           // Build app invite link
-           const baseUrl = strapi.config.get("server.url") || "https://fitfob.com";
-        const inviteLink = `${baseUrl}/invite?phone=${encodeURIComponent(
-     newPhone   
-        )}`;
+          const inviteBase = getClientAppInviteLink();
+          const inviteLink = `${inviteBase}${
+            inviteBase.includes("?") ? "&" : "?"
+          }phone=${encodeURIComponent(newPhone)}`;
 
           inviteResult = await sendTwilioOfflineMemberInvite({
             phone: newPhone,
@@ -2448,18 +2537,27 @@ export default factories.createCoreController(
         // Auto-create / resolve gym contract and gym-membership record
         let createdGymMembership: any = null;
         try {
-          const clubOwnerId = sub.club_owner?.id;
+          const clubOwnerObj = sub.club_owner;
+          const clubOwnerId =
+            typeof clubOwnerObj === "object" ? clubOwnerObj?.id : clubOwnerObj;
           let gymContract: any = null;
 
           if (clubOwnerId) {
             gymContract = await strapi.db.query(GYM_CONTRACT_UID).findOne({
-              where: { club_owner: clubOwnerId },
+              where: {
+                $or: [
+                  { club_owner: clubOwnerId },
+                  ...(clubOwnerObj?.documentId
+                    ? [{ club_owner: { documentId: clubOwnerObj.documentId } }]
+                    : []),
+                ],
+              },
             });
 
             if (!gymContract) {
               const contractData = {
                 contractId: `CON-${Date.now()}`,
-                club_owner: sub.club_owner.documentId || sub.club_owner.id,
+                club_owner: clubOwnerObj?.documentId || clubOwnerId,
                 contractStatus: "active",
                 startDate: new Date().toISOString().slice(0, 10),
               };
@@ -2476,7 +2574,7 @@ export default factories.createCoreController(
                 gymContract = await strapi.db.query(GYM_CONTRACT_UID).create({
                   data: {
                     ...contractData,
-                    club_owner: sub.club_owner.id,
+                    club_owner: clubOwnerId,
                   },
                 });
               }
@@ -3326,149 +3424,6 @@ export default factories.createCoreController(
         strapi.log.error("REJECT PAY AT GYM ERROR:", error);
         return ctx.internalServerError("Failed to decline request");
       }
-    },
-
-    /* =======================================================
-       12. PUBLIC: APP INVITE SMART LANDING & REDIRECT PAGE
-       Endpoint: GET /api/app-invite
-    ======================================================= */
-    async renderAppInviteLanding(ctx: Context) {
-      const appPackage =
-        process.env.CLIENT_APP_PACKAGE || "com.xyzstudio.fitfob.client";
-      const customScheme =
-        process.env.CLIENT_APP_SCHEME || "fitfob-client://";
-      const apkUrl =
-        process.env.CLIENT_APP_APK_URL ||
-        process.env.STAGING_APK_URL ||
-        "";
-      const expoGoUrl = process.env.CLIENT_EXPO_GO_URL || "";
-      const playStoreUrl = `https://play.google.com/store/apps/details?id=${appPackage}`;
-
-      const phone = (ctx.query.phone as string) || "";
-      const deepLink = phone
-        ? `${customScheme}?phone=${encodeURIComponent(phone)}`
-        : customScheme;
-
-      ctx.type = "html";
-      ctx.body = `<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>FitFob - Open App</title>
-  <style>
-    * { box-sizing: border-box; margin: 0; padding: 0; }
-    body {
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-      background: #0B0E14;
-      color: #FFFFFF;
-      min-height: 100vh;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      justify-content: center;
-      padding: 24px;
-      text-align: center;
-    }
-    .card {
-      background: #161B22;
-      border: 1px solid #30363D;
-      border-radius: 20px;
-      padding: 32px 24px;
-      max-width: 400px;
-      width: 100%;
-      box-shadow: 0 8px 24px rgba(0,0,0,0.4);
-    }
-    .logo-badge {
-      width: 72px;
-      height: 72px;
-      border-radius: 18px;
-      background: linear-gradient(135deg, #10B981, #059669);
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      font-size: 32px;
-      font-weight: 800;
-      color: #fff;
-      margin: 0 auto 20px;
-      box-shadow: 0 4px 14px rgba(16, 185, 129, 0.35);
-    }
-    h1 { font-size: 24px; font-weight: 700; margin-bottom: 8px; color: #FFFFFF; }
-    p { font-size: 14px; color: #9CA3AF; margin-bottom: 24px; line-height: 1.5; }
-    .btn {
-      display: block;
-      width: 100%;
-      padding: 14px 20px;
-      border-radius: 12px;
-      font-size: 15px;
-      font-weight: 600;
-      text-decoration: none;
-      margin-bottom: 12px;
-      transition: all 0.2s ease;
-      cursor: pointer;
-      border: none;
-    }
-    .btn-primary {
-      background: #10B981;
-      color: #FFFFFF;
-      box-shadow: 0 4px 12px rgba(16, 185, 129, 0.3);
-    }
-    .btn-secondary {
-      background: #21262D;
-      color: #E5E7EB;
-      border: 1px solid #30363D;
-    }
-    .btn-tertiary {
-      background: transparent;
-      color: #9CA3AF;
-      font-size: 13px;
-      padding: 8px;
-    }
-    .hint {
-      font-size: 12px;
-      color: #6B7280;
-      margin-top: 16px;
-    }
-  </style>
-  <script>
-    window.addEventListener("DOMContentLoaded", function() {
-      // Auto-trigger deep link into the app if installed on device
-      setTimeout(function() {
-        window.location.href = "${deepLink}";
-      }, 400);
-    });
-  </script>
-</head>
-<body>
-  <div class="card">
-    <div class="logo-badge">FF</div>
-    <h1>Welcome to FitFob</h1>
-    <p>Your gym membership is ready. Open the app to claim your digital gym entry pass.</p>
-
-    <a href="${deepLink}" class="btn btn-primary">Open FitFob App</a>
-
-    ${
-      apkUrl
-        ? '<a href="' +
-          apkUrl +
-          '" class="btn btn-secondary">Download Android App (APK)</a>'
-        : ""
-    }
-
-    ${
-      expoGoUrl
-        ? '<a href="' +
-          expoGoUrl +
-          '" class="btn btn-secondary">Open in Expo Go</a>'
-        : ""
-    }
-
-    <a href="${playStoreUrl}" class="btn btn-tertiary">View on Google Play</a>
-
-    <div class="hint">Already have the build installed? Click "Open FitFob App".</div>
-  </div>
-</body>
-</html>`;
     },
   }),
 );
