@@ -79,6 +79,14 @@ export default {
         auth: false,
       },
     },
+    {
+      method: "GET",
+      path: "/client/pending-approvals",
+      handler: "local-subscription.getClientPendingApprovals",
+      config: {
+        auth: false,
+      },
+    },
 
     // 5. Club Owner - Approving "Pay at Gym" Requests (Part 4 & Flowchart 3)
     {

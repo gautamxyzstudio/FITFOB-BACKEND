@@ -87,6 +87,32 @@ export default {
         return ctx.badRequest("Customer profile was not found.");
       }
 
+      // Block online purchase if client has any pending 'Pay at Gym' approval
+      const existingPendingApproval: any = await strapi.db
+        .query("api::local-subscription.local-subscription")
+        .findOne({
+          where: {
+            $or: [
+              { client_detail: client.id },
+              ...(client.document_id
+                ? [{ client_detail: { documentId: client.document_id } }]
+                : []),
+            ],
+            paymentStatus: "pending_approval",
+          },
+          populate: { club_owner: true },
+        });
+
+      if (existingPendingApproval) {
+        const gymName =
+          existingPendingApproval.club_owner?.clubName ||
+          existingPendingApproval.club_owner?.name ||
+          "the gym";
+        return ctx.badRequest(
+          `You have a pending 'Pay at Gym' approval request waiting at ${gymName}. You cannot purchase a new membership online until the existing request is approved, rejected, or cancelled.`,
+        );
+      }
+
       const planRate = await (strapi.documents(
         CONTRACT_PLAN_RATE_UID as any
       ) as any).findOne({

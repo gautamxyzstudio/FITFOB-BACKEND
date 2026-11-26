@@ -2404,7 +2404,6 @@ export default factories.createCoreController(
             },
             orderBy: { id: "desc" },
           });
-
         if (!pendingSubs || pendingSubs.length === 0) {
           return ctx.send({ hasPendingClaim: false, pendingMemberships: [] });
         }
@@ -2820,22 +2819,84 @@ export default factories.createCoreController(
           );
         }
 
-        // Anti-duplicate check: block if customer already has a pending approval request at this gym
-        const existingPending = await strapi.db.query(LOCAL_SUB_UID).findOne({
-          where: {
-            client_detail: client.id,
-            club_owner: resolvedOwner.id,
-            paymentStatus: "pending_approval",
-          },
-        });
+        const todayStr = getISTDateString(0);
+
+        // 1. Anti-duplicate check: block if customer already has a pending approval request at ANY gym
+        const existingPending: any = await strapi.db
+          .query(LOCAL_SUB_UID)
+          .findOne({
+            where: {
+              client_detail: client.id,
+              paymentStatus: "pending_approval",
+            },
+            populate: { club_owner: true },
+          });
 
         if (existingPending) {
+          const pendingGymName =
+            existingPending.club_owner?.clubName ||
+            existingPending.club_owner?.name ||
+            "a gym";
           return ctx.badRequest(
-            "You already have a pending 'Pay at Gym' request waiting for approval at this gym. Please pay at the front desk or cancel the existing request.",
+            `You already have a pending 'Pay at Gym' request waiting for approval at ${pendingGymName}. You cannot apply for another membership until your current request is approved, rejected, or cancelled.`,
           );
         }
 
-        const todayStr = getISTDateString(0);
+        // 2. Active membership check: block if customer already has an active local subscription
+        const activeSub: any = await strapi.db.query(LOCAL_SUB_UID).findOne({
+          where: {
+            client_detail: client.id,
+            subscriptionStatus: "active",
+            $or: [
+              { endDate: { $gte: todayStr } },
+              { endDate: { $null: true } },
+            ],
+          },
+          populate: { club_owner: true },
+        });
+
+        if (activeSub) {
+          const activeGymName =
+            activeSub.club_owner?.clubName ||
+            activeSub.club_owner?.name ||
+            "a gym";
+          return ctx.badRequest(
+            `You already have an active membership at ${activeGymName} expiring on ${
+              activeSub.endDate || "active"
+            }. You cannot apply for a new membership while another membership is active.`,
+          );
+        }
+
+        // 3. Active gym-membership check: block if customer has an active app gym membership
+        const activeGymMem: any = await strapi.db
+          .query(GYM_MEMBERSHIP_UID)
+          .findOne({
+            where: {
+              client_detail: client.id,
+              membershipStatus: "active",
+              $or: [
+                { endDate: { $gte: todayStr } },
+                { endDate: { $null: true } },
+              ],
+            },
+            populate: {
+              gym_contract: {
+                populate: { club_owner: true },
+              },
+            },
+          });
+
+        if (activeGymMem) {
+          const gymName =
+            activeGymMem.gym_contract?.club_owner?.clubName ||
+            activeGymMem.gym_contract?.club_owner?.name ||
+            "a gym";
+          return ctx.badRequest(
+            `You already have an active membership at ${gymName} expiring on ${
+              activeGymMem.endDate || "active"
+            }. You cannot apply for a new membership while another membership is active.`,
+          );
+        }
         const monthDuration = getPlanDurationMonths(resolvedPlan);
         const planTitle = getPlanTitle(resolvedPlan);
         const planPrice = getPlanPriceAmount(resolvedPlan);
@@ -3042,6 +3103,106 @@ export default factories.createCoreController(
     },
 
     /* =======================================================
+       8.1 CUSTOMER: GET MY PENDING APPROVAL REQUESTS LIST
+       Endpoint: GET /api/client/pending-approvals
+    ======================================================= */
+    async getClientPendingApprovals(ctx: Context) {
+      try {
+        const user = await getAuthUser(ctx);
+        if (!user) {
+          return ctx.unauthorized("Authentication required");
+        }
+
+        const client = await getClientDetailForUser(user);
+        if (!client) {
+          return ctx.send({
+            hasPendingApproval: false,
+            count: 0,
+            pendingApprovals: [],
+          });
+        }
+
+        const userPhone = user.phoneNumber || client?.phoneNumber || "";
+        const clean10 = userPhone.replace(/\D/g, "").slice(-10);
+        const phoneVariants = clean10
+          ? [`+91${clean10}`, clean10, `91${clean10}`]
+          : [];
+
+        const whereOr: any[] = [{ client_detail: client.id }];
+        if (phoneVariants.length > 0) {
+          whereOr.push({ invitedPhone: { $in: phoneVariants } });
+        }
+
+        const pendingRequests: any[] = await strapi.db
+          .query(LOCAL_SUB_UID)
+          .findMany({
+            where: {
+              $or: whereOr,
+              paymentStatus: "pending_approval",
+            },
+            populate: {
+              club_owner: {
+                populate: { logo: true },
+              },
+              local_membership_plan: true,
+              membership_plan_price: {
+                populate: { membership_tier: true },
+              },
+            },
+            orderBy: { id: "desc" },
+          });
+
+        if (!pendingRequests || pendingRequests.length === 0) {
+          return ctx.send({
+            hasPendingApproval: false,
+            count: 0,
+            pendingApprovals: [],
+          });
+        }
+
+        const formatted = pendingRequests.map((req: any) => {
+          const club = req.club_owner || {};
+          const plan =
+            req.membership_plan_price || req.local_membership_plan || {};
+          const planTitle = getPlanTitle(plan);
+          const amountDue =
+            req.amountDue != null
+              ? Number(req.amountDue)
+              : getPlanPriceAmount(plan) ?? 0;
+
+          return {
+            id: req.id,
+            documentId: req.documentId || null,
+            gymName: club.clubName || club.name || "Gym",
+            gymAddress: club.clubAddress || club.address || null,
+            gymLocation: [club.longitude, club.latitude],
+            planName: planTitle,
+            amountDue,
+            currency: "INR",
+            paymentStatus: req.paymentStatus,
+            subscriptionStatus: req.subscriptionStatus,
+            startDate: req.startDate
+              ? String(req.startDate).split("T")[0]
+              : null,
+            endDate: req.endDate || null,
+            requestedAt: req.createdAt || null,
+            timeAgo: formatTimeAgo(req.createdAt),
+          };
+        });
+
+        return ctx.send({
+          hasPendingApproval: true,
+          pendingApprovals: formatted[0],
+        });
+      } catch (error) {
+        strapi.log.error("GET CLIENT PENDING APPROVALS ERROR:", error);
+        return ctx.internalServerError(
+          "Failed to fetch client pending approvals",
+        );
+      }
+    },
+
+    /* =======================================================
        9. GYM OWNER: GET PENDING APPROVALS LIST
        Endpoint: GET /api/club-owner/pending-approvals
     ======================================================= */
@@ -3233,6 +3394,157 @@ export default factories.createCoreController(
           });
         }
 
+        // Auto-create / resolve gym contract and gym-membership record
+        let createdGymMembership: any = null;
+        try {
+          const clubOwnerObj = sub.club_owner;
+          const clubOwnerId =
+            typeof clubOwnerObj === "object" ? clubOwnerObj?.id : clubOwnerObj;
+          let gymContract: any = null;
+
+          if (clubOwnerId) {
+            gymContract = await strapi.db.query(GYM_CONTRACT_UID).findOne({
+              where: {
+                $or: [
+                  { club_owner: clubOwnerId },
+                  ...(clubOwnerObj?.documentId
+                    ? [{ club_owner: { documentId: clubOwnerObj.documentId } }]
+                    : []),
+                ],
+              },
+            });
+
+            if (!gymContract) {
+              const contractData = {
+                contractId: `CON-${Date.now()}`,
+                club_owner: clubOwnerObj?.documentId || clubOwnerId,
+                contractStatus: "active",
+                startDate: todayStr,
+              };
+              if ((strapi as any).documents) {
+                try {
+                  gymContract = await (strapi as any)
+                    .documents(GYM_CONTRACT_UID)
+                    .create({
+                      data: contractData,
+                    });
+                } catch (_) {}
+              }
+              if (!gymContract) {
+                gymContract = await strapi.db.query(GYM_CONTRACT_UID).create({
+                  data: {
+                    ...contractData,
+                    club_owner: clubOwnerId,
+                  },
+                });
+              }
+            }
+          }
+
+          if (gymContract && sub.client_detail) {
+            const client = sub.client_detail;
+            createdGymMembership = await strapi.db
+              .query(GYM_MEMBERSHIP_UID)
+              .findOne({
+                where: {
+                  client_detail: client.id,
+                  gym_contract: gymContract.id,
+                  membershipStatus: "active",
+                },
+              });
+
+            if (!createdGymMembership) {
+              let durationEnum: "monthly" | "six_months" | "twelve_months" =
+                "monthly";
+              let durationMonths = monthDuration || 1;
+
+              if (sub.membership_plan_price?.duration) {
+                durationEnum = sub.membership_plan_price.duration;
+                durationMonths =
+                  sub.membership_plan_price.durationMonths ||
+                  (durationEnum === "twelve_months"
+                    ? 12
+                    : durationEnum === "six_months"
+                    ? 6
+                    : 1);
+              } else if (monthDuration) {
+                if (monthDuration >= 10) {
+                  durationEnum = "twelve_months";
+                  durationMonths = 12;
+                } else if (monthDuration >= 5) {
+                  durationEnum = "six_months";
+                  durationMonths = 6;
+                } else {
+                  durationEnum = "monthly";
+                  durationMonths = Math.max(1, monthDuration);
+                }
+              }
+
+              const membershipPayload: any = {
+                membershipId: `MEM-${Date.now()}-${Math.floor(
+                  1000 + Math.random() * 9000,
+                )}`,
+                client_detail: client.documentId || client.id,
+                gym_contract: gymContract.documentId || gymContract.id,
+                duration: durationEnum,
+                durationMonths: durationMonths,
+                customerPriceSnapshot: Number(
+                  sub.amountDue != null
+                    ? sub.amountDue
+                    : sub.membership_plan_price?.customerPrice || 0,
+                ),
+                currency: "INR",
+                membershipStatus: "active",
+                paymentStatus: "paid",
+                paymentProvider: paymentMode,
+                startDate: todayStr,
+                endDate: endDateStr,
+                paidAt: new Date().toISOString(),
+              };
+
+              if (sub.membership_plan_price) {
+                membershipPayload.membership_plan_price =
+                  sub.membership_plan_price.documentId ||
+                  sub.membership_plan_price.id;
+              }
+
+              if ((strapi as any).documents) {
+                try {
+                  createdGymMembership = await (strapi as any)
+                    .documents(GYM_MEMBERSHIP_UID)
+                    .create({
+                      data: membershipPayload,
+                    });
+                } catch (docErr) {
+                  strapi.log.warn(
+                    "[ApprovePayAtGym] documents create gym-membership error:",
+                    docErr,
+                  );
+                }
+              }
+
+              if (!createdGymMembership) {
+                createdGymMembership = await strapi.db
+                  .query(GYM_MEMBERSHIP_UID)
+                  .create({
+                    data: {
+                      ...membershipPayload,
+                      client_detail: client.id,
+                      gym_contract: gymContract.id,
+                      membership_plan_price:
+                        sub.membership_plan_price?.id || undefined,
+                    },
+                  });
+              }
+            }
+          }
+        } catch (memErr) {
+          strapi.log.error(
+            "[ApprovePayAtGym] Error creating client gym-membership:",
+            memErr,
+          );
+        }
+
         // Notify client via push notification
         const clientUserId = sub.client_detail?.user?.id;
         if (clientUserId) {
@@ -3279,6 +3591,7 @@ export default factories.createCoreController(
             collectedPaymentMode: paymentMode,
             startDate: todayStr,
             endDate: endDateStr,
+            membershipId: createdGymMembership?.membershipId || null,
           },
         });
       } catch (error) {
