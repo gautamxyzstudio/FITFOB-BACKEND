@@ -1866,42 +1866,40 @@ export default factories.createCoreController(
                 );
               if (isSmsCancelled) {
                 channelFailMessage =
-                  "WhatsApp invitation failed to send. SMS invite was cancelled to prevent sending an invalid invite link.";
+                  "WhatsApp invite failed. Subscription was not created.";
               } else {
                 channelFailMessage =
-                  "Both SMS and WhatsApp invitations failed to send.";
+                  "SMS & WhatsApp failed. Subscription was not created.";
               }
             } else if (!inviteResult.smsSent) {
-              channelFailMessage = "SMS invitation failed to send.";
+              channelFailMessage =
+                "SMS invite failed. Subscription was not created.";
             } else {
-              channelFailMessage = "WhatsApp invitation failed to send.";
+              channelFailMessage =
+                "WhatsApp invite failed. Subscription was not created.";
             }
           }
         } else if (selectedChannel === "sms") {
           if (!inviteResult.smsSent) {
             deliveryFailed = true;
-            channelFailMessage = "SMS invitation failed to send.";
+            channelFailMessage =
+              "SMS invite failed. Subscription was not created.";
           }
         } else if (selectedChannel === "whatsapp") {
           if (!inviteResult.whatsappSent) {
             deliveryFailed = true;
-            channelFailMessage = "WhatsApp invitation failed to send.";
+            channelFailMessage =
+              "WhatsApp invite failed. Subscription was not created.";
           }
         }
 
         if (deliveryFailed) {
-          const detailStr =
-            inviteResult.errors && inviteResult.errors.length > 0
-              ? inviteResult.errors.join("; ")
-              : channelFailMessage;
+          const finalErrorMsg = (
+            channelFailMessage ||
+            "Failed to send invite. Subscription was not created."
+          ).slice(0, 70);
 
-          return ctx.badRequest(
-            `Failed to send invite to ${cleanPhone}. Local subscription was not created. (${channelFailMessage} ${detailStr})`,
-            {
-              success: false,
-              inviteResult,
-            },
-          );
+          return ctx.badRequest(finalErrorMsg);
         }
 
         // Create local subscription only after invite was successfully delivered
@@ -2571,27 +2569,13 @@ export default factories.createCoreController(
             if (!gymContract) {
               const contractData = {
                 contractId: `CON-${Date.now()}`,
-                club_owner: clubOwnerObj?.documentId || clubOwnerId,
+                club_owner: clubOwnerId,
                 contractStatus: "active",
                 startDate: new Date().toISOString().slice(0, 10),
               };
-              if ((strapi as any).documents) {
-                try {
-                  gymContract = await (strapi as any)
-                    .documents(GYM_CONTRACT_UID)
-                    .create({
-                      data: contractData,
-                    });
-                } catch (_) {}
-              }
-              if (!gymContract) {
-                gymContract = await strapi.db.query(GYM_CONTRACT_UID).create({
-                  data: {
-                    ...contractData,
-                    club_owner: clubOwnerId,
-                  },
-                });
-              }
+              gymContract = await strapi.db.query(GYM_CONTRACT_UID).create({
+                data: contractData,
+              });
             }
           }
 
@@ -2650,8 +2634,8 @@ export default factories.createCoreController(
                 membershipId: `MEM-${Date.now()}-${Math.floor(
                   1000 + Math.random() * 9000,
                 )}`,
-                client_detail: client.documentId || client.id,
-                gym_contract: gymContract.documentId || gymContract.id,
+                client_detail: client.id,
+                gym_contract: gymContract.id,
                 duration: durationEnum,
                 durationMonths: durationMonths,
                 customerPriceSnapshot: Number(
@@ -2668,40 +2652,16 @@ export default factories.createCoreController(
                 paidAt: new Date().toISOString(),
               };
 
-              if (sub.membership_plan_price) {
+              if (sub.membership_plan_price?.id) {
                 membershipPayload.membership_plan_price =
-                  sub.membership_plan_price.documentId ||
                   sub.membership_plan_price.id;
               }
 
-              if ((strapi as any).documents) {
-                try {
-                  createdGymMembership = await (strapi as any)
-                    .documents(GYM_MEMBERSHIP_UID)
-                    .create({
-                      data: membershipPayload,
-                    });
-                } catch (docErr) {
-                  strapi.log.warn(
-                    "[ClaimMembership] documents create gym-membership error:",
-                    docErr,
-                  );
-                }
-              }
-
-              if (!createdGymMembership) {
-                createdGymMembership = await strapi.db
-                  .query(GYM_MEMBERSHIP_UID)
-                  .create({
-                    data: {
-                      ...membershipPayload,
-                      client_detail: client.id,
-                      gym_contract: gymContract.id,
-                      membership_plan_price:
-                        sub.membership_plan_price?.id || undefined,
-                    },
-                  });
-              }
+              createdGymMembership = await strapi.db
+                .query(GYM_MEMBERSHIP_UID)
+                .create({
+                  data: membershipPayload,
+                });
             }
           }
         } catch (memErr) {
@@ -3432,27 +3392,13 @@ export default factories.createCoreController(
             if (!gymContract) {
               const contractData = {
                 contractId: `CON-${Date.now()}`,
-                club_owner: clubOwnerObj?.documentId || clubOwnerId,
+                club_owner: clubOwnerId,
                 contractStatus: "active",
                 startDate: todayStr,
               };
-              if ((strapi as any).documents) {
-                try {
-                  gymContract = await (strapi as any)
-                    .documents(GYM_CONTRACT_UID)
-                    .create({
-                      data: contractData,
-                    });
-                } catch (_) {}
-              }
-              if (!gymContract) {
-                gymContract = await strapi.db.query(GYM_CONTRACT_UID).create({
-                  data: {
-                    ...contractData,
-                    club_owner: clubOwnerId,
-                  },
-                });
-              }
+              gymContract = await strapi.db.query(GYM_CONTRACT_UID).create({
+                data: contractData,
+              });
             }
           }
 
@@ -3499,8 +3445,8 @@ export default factories.createCoreController(
                 membershipId: `MEM-${Date.now()}-${Math.floor(
                   1000 + Math.random() * 9000,
                 )}`,
-                client_detail: client.documentId || client.id,
-                gym_contract: gymContract.documentId || gymContract.id,
+                client_detail: client.id,
+                gym_contract: gymContract.id,
                 duration: durationEnum,
                 durationMonths: durationMonths,
                 customerPriceSnapshot: Number(
@@ -3517,40 +3463,16 @@ export default factories.createCoreController(
                 paidAt: new Date().toISOString(),
               };
 
-              if (sub.membership_plan_price) {
+              if (sub.membership_plan_price?.id) {
                 membershipPayload.membership_plan_price =
-                  sub.membership_plan_price.documentId ||
                   sub.membership_plan_price.id;
               }
 
-              if ((strapi as any).documents) {
-                try {
-                  createdGymMembership = await (strapi as any)
-                    .documents(GYM_MEMBERSHIP_UID)
-                    .create({
-                      data: membershipPayload,
-                    });
-                } catch (docErr) {
-                  strapi.log.warn(
-                    "[ApprovePayAtGym] documents create gym-membership error:",
-                    docErr,
-                  );
-                }
-              }
-
-              if (!createdGymMembership) {
-                createdGymMembership = await strapi.db
-                  .query(GYM_MEMBERSHIP_UID)
-                  .create({
-                    data: {
-                      ...membershipPayload,
-                      client_detail: client.id,
-                      gym_contract: gymContract.id,
-                      membership_plan_price:
-                        sub.membership_plan_price?.id || undefined,
-                    },
-                  });
-              }
+              createdGymMembership = await strapi.db
+                .query(GYM_MEMBERSHIP_UID)
+                .create({
+                  data: membershipPayload,
+                });
             }
           }
         } catch (memErr) {

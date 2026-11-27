@@ -12,7 +12,8 @@
   "pluginOptions": {},
   "attributes": {
     "membershipId": {
-      "type": "uid"
+      "type": "string",
+      "unique": true
     },
     "client_detail": {
       "type": "relation",

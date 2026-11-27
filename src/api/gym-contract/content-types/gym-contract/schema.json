@@ -12,7 +12,8 @@
   "pluginOptions": {},
   "attributes": {
     "contractId": {
-      "type": "uid"
+      "type": "string",
+      "unique": true
     },
     "club_owner": {
       "type": "relation",

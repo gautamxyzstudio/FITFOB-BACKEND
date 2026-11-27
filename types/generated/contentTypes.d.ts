@@ -1178,7 +1178,7 @@ export interface ApiGymContractGymContract extends Struct.CollectionTypeSchema {
       'oneToMany',
       'api::commission-transaction.commission-transaction'
     >;
-    contractId: Schema.Attribute.UID;
+    contractId: Schema.Attribute.String & Schema.Attribute.Unique;
     contractStatus: Schema.Attribute.Enumeration<
       ['draft', 'active', 'expired', 'cancelled']
     >;
@@ -1329,7 +1329,7 @@ export interface ApiGymMembershipGymMembership
       'manyToOne',
       'api::membership-plan-price.membership-plan-price'
     >;
-    membershipId: Schema.Attribute.UID;
+    membershipId: Schema.Attribute.String & Schema.Attribute.Unique;
     membershipStatus: Schema.Attribute.Enumeration<
       ['pending', 'active', 'expired', 'cancelled']
     >;
