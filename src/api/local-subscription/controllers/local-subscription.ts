@@ -2037,6 +2037,9 @@ export default factories.createCoreController(
             where: {
               club_owner: clubOwner.id,
               membershipType: "local",
+              subscriptionStatus: {
+                $contains: ["active", "pending", "expired"],
+              },
             },
             populate: {
               client_detail: {
