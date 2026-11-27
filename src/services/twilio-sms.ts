@@ -55,22 +55,75 @@ export const sendTwilioOfflineMemberInvite = async (
       errors: [],
     };
 
-  // 1. Send SMS if requested
-  if (channel === "sms" || channel === "both") {
+  const rawWhatsapp =
+    process.env.TWILIO_WHATSAPP_NUMBER ||
+    process.env.TWILIO_WHATSAPP_FROM ||
+    process.env.TWILIO_PHONE_NUMBER;
+
+  const whatsappFrom = rawWhatsapp
+    ? rawWhatsapp.startsWith("whatsapp:")
+      ? rawWhatsapp
+      : `whatsapp:${rawWhatsapp}`
+    : null;
+
+  const smsFrom = process.env.TWILIO_PHONE_NUMBER || null;
+
+  // 1. If channel is "both": both SMS and WhatsApp are required.
+  // We execute WhatsApp first because WhatsApp has stricter delivery constraints (Twilio sandbox opt-in '+14155238886' or business template).
+  // If WhatsApp fails, we DO NOT send SMS so no orphan invite link is delivered to the customer when the subscription will not be created.
+  if (channel === "both") {
+    // Upfront check for environment configurations
+    if (!smsFrom) {
+      results.errors.push("TWILIO_PHONE_NUMBER is not set");
+    }
+    if (!whatsappFrom) {
+      results.errors.push("TWILIO_WHATSAPP_NUMBER is not set");
+    }
+    if (results.errors.length > 0) {
+      return results;
+    }
+
+    // Attempt WhatsApp first
     try {
-      if (process.env.TWILIO_PHONE_NUMBER) {
-        await client.messages.create({
-          body: messageBody,
-          from: process.env.TWILIO_PHONE_NUMBER,
-          to: validPhone,
-        });
-        results.smsSent = true;
-        strapi.log.info(
-          `[Twilio SMS] Invite sent successfully to ${validPhone}`,
+      await client.messages.create({
+        body: messageBody,
+        from: whatsappFrom,
+        to: `whatsapp:${validPhone}`,
+      });
+      results.whatsappSent = true;
+      strapi.log.info(
+        `[Twilio WhatsApp] Invite sent successfully to ${validPhone}`,
+      );
+    } catch (waError: any) {
+      const errMsg = waError?.message || "Failed to send WhatsApp message";
+      strapi.log.warn(
+        `[Twilio WhatsApp] Failed to send invite to ${validPhone}:`,
+        errMsg,
+      );
+      results.errors.push(`WhatsApp: ${errMsg}`);
+      if (rawWhatsapp && rawWhatsapp.includes("+14155238886")) {
+        results.errors.push(
+          "Notice: Twilio Sandbox (+14155238886) requires recipient to join first, or send via channel 'sms'.",
         );
-      } else {
-        results.errors.push("TWILIO_PHONE_NUMBER is not set");
       }
+      // CRITICAL: Abort SMS delivery so that no partial invite link is delivered to the customer
+      results.errors.push(
+        "SMS invite was cancelled because WhatsApp delivery failed (preventing orphan invite link delivery).",
+      );
+      return results;
+    }
+
+    // WhatsApp succeeded, now attempt SMS
+    try {
+      await client.messages.create({
+        body: messageBody,
+        from: smsFrom,
+        to: validPhone,
+      });
+      results.smsSent = true;
+      strapi.log.info(
+        `[Twilio SMS] Invite sent successfully to ${validPhone}`,
+      );
     } catch (smsError: any) {
       strapi.log.warn(
         `[Twilio SMS] Failed to send invite to ${validPhone}:`,
@@ -78,44 +131,66 @@ export const sendTwilioOfflineMemberInvite = async (
       );
       results.errors.push(`SMS: ${smsError?.message || "Failed to send SMS"}`);
     }
+
+    return results;
   }
 
-  // 2. Send WhatsApp if requested
-  if (channel === "whatsapp" || channel === "both") {
+  // 2. If channel is "sms" only
+  if (channel === "sms") {
+    if (!smsFrom) {
+      results.errors.push("TWILIO_PHONE_NUMBER is not set");
+      return results;
+    }
     try {
-      const rawWhatsapp =
-        process.env.TWILIO_WHATSAPP_NUMBER ||
-        process.env.TWILIO_WHATSAPP_FROM ||
-        process.env.TWILIO_PHONE_NUMBER;
+      await client.messages.create({
+        body: messageBody,
+        from: smsFrom,
+        to: validPhone,
+      });
+      results.smsSent = true;
+      strapi.log.info(
+        `[Twilio SMS] Invite sent successfully to ${validPhone}`,
+      );
+    } catch (smsError: any) {
+      strapi.log.warn(
+        `[Twilio SMS] Failed to send invite to ${validPhone}:`,
+        smsError?.message || smsError,
+      );
+      results.errors.push(`SMS: ${smsError?.message || "Failed to send SMS"}`);
+    }
+    return results;
+  }
 
-      const whatsappFrom = rawWhatsapp
-        ? rawWhatsapp.startsWith("whatsapp:")
-          ? rawWhatsapp
-          : `whatsapp:${rawWhatsapp}`
-        : null;
-
-      if (whatsappFrom) {
-        await client.messages.create({
-          body: messageBody,
-          from: whatsappFrom,
-          to: `whatsapp:${validPhone}`,
-        });
-        results.whatsappSent = true;
-        strapi.log.info(
-          `[Twilio WhatsApp] Invite sent successfully to ${validPhone}`,
-        );
-      } else {
-        results.errors.push("TWILIO_WHATSAPP_NUMBER is not set");
-      }
+  // 3. If channel is "whatsapp" only
+  if (channel === "whatsapp") {
+    if (!whatsappFrom) {
+      results.errors.push("TWILIO_WHATSAPP_NUMBER is not set");
+      return results;
+    }
+    try {
+      await client.messages.create({
+        body: messageBody,
+        from: whatsappFrom,
+        to: `whatsapp:${validPhone}`,
+      });
+      results.whatsappSent = true;
+      strapi.log.info(
+        `[Twilio WhatsApp] Invite sent successfully to ${validPhone}`,
+      );
     } catch (waError: any) {
+      const errMsg = waError?.message || "Failed to send WhatsApp message";
       strapi.log.warn(
         `[Twilio WhatsApp] Failed to send invite to ${validPhone}:`,
-        waError?.message || waError,
+        errMsg,
       );
-      results.errors.push(
-        `WhatsApp: ${waError?.message || "Failed to send WhatsApp message"}`,
-      );
+      results.errors.push(`WhatsApp: ${errMsg}`);
+      if (rawWhatsapp && rawWhatsapp.includes("+14155238886")) {
+        results.errors.push(
+          "Notice: Twilio Sandbox (+14155238886) requires recipient to join first, or send via channel 'sms'.",
+        );
+      }
     }
+    return results;
   }
 
   return results;

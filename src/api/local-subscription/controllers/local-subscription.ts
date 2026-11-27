@@ -1857,8 +1857,20 @@ export default factories.createCoreController(
           if (!inviteResult.smsSent || !inviteResult.whatsappSent) {
             deliveryFailed = true;
             if (!inviteResult.smsSent && !inviteResult.whatsappSent) {
-              channelFailMessage =
-                "Both SMS and WhatsApp invitations failed to send.";
+              const isSmsCancelled =
+                inviteResult.errors &&
+                inviteResult.errors.some(
+                  (e: string) =>
+                    e.includes("SMS invite was cancelled") ||
+                    e.includes("preventing orphan invite"),
+                );
+              if (isSmsCancelled) {
+                channelFailMessage =
+                  "WhatsApp invitation failed to send. SMS invite was cancelled to prevent sending an invalid invite link.";
+              } else {
+                channelFailMessage =
+                  "Both SMS and WhatsApp invitations failed to send.";
+              }
             } else if (!inviteResult.smsSent) {
               channelFailMessage = "SMS invitation failed to send.";
             } else {
@@ -2038,7 +2050,7 @@ export default factories.createCoreController(
               club_owner: clubOwner.id,
               membershipType: "local",
               subscriptionStatus: {
-                $contains: ["active", "pending", "expired"],
+                $contains: ["active", "expired"],
               },
             },
             populate: {
